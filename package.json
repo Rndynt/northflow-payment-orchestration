@@ -1,0 +1,25 @@
+{
+  "name": "northflow-payment-orchestration",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Northflow Payment Orchestration — standalone payment orchestration service",
+  "packageManager": "pnpm@10.26.1",
+  "scripts": {
+    "check": "pnpm type-check",
+    "build": "turbo run build",
+    "dev": "turbo run dev --filter=@northflow/payment-orchestration-service",
+    "dev:service": "pnpm --filter @northflow/payment-orchestration-service dev",
+    "start:service": "pnpm --filter @northflow/payment-orchestration-service start",
+    "type-check": "turbo run type-check",
+    "test": "npx tsx --tsconfig tests/tsconfig.json --test tests/*.test.ts",
+    "db:migrate": "pnpm --filter @northflow/payment-orchestration-service db:migrate",
+    "db:generate": "pnpm --filter @northflow/payment-orchestration-service db:generate",
+    "worker": "pnpm --filter @northflow/payment-orchestration-service worker",
+    "extraction-check": "npx tsx --tsconfig tests/tsconfig.json scripts/extraction-check.ts"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "tsx": "^4.21.0",
+    "@types/node": "20.16.11"
+  }
+}

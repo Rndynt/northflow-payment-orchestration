@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "baseUrl": ".",
+    "paths": {
+      "@northflow/payment-orchestration-core": ["../../packages/core/src"],
+      "@northflow/payment-orchestration-core/*": ["../../packages/core/src/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "../../packages/core/src/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}
