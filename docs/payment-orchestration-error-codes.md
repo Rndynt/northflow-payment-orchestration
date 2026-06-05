@@ -1,7 +1,7 @@
 # Payment Orchestration — Public Error Codes
 
-**Phase:** 8K — SDK/API Contract Freeze  
-**Status:** FROZEN  
+**Phase:** 8F — Refund, Void, and Manual Provider Parity  
+**Status:** STABLE  
 **Last updated:** 2026-06-05
 
 All error responses from the standalone payment-orchestration-service use the following envelope:
@@ -82,6 +82,27 @@ All error responses from the standalone payment-orchestration-service use the fo
 
 ---
 
+### Refund Errors (Phase 8F)
+
+| Code | HTTP | Description |
+|------|------|-------------|
+| `TRANSACTION_NOT_REFUNDABLE` | 422 | Transaction is not refundable. Must be `direction=incoming`, `status=succeeded`, and `transactionType` in `[payment, deposit, settlement]`. |
+| `REFUND_EXCEEDS_REFUNDABLE` | 422 | Refund `amount` exceeds the remaining refundable amount (original amount minus prior refunds). |
+| `PROVIDER_REFUND_UNSUPPORTED` | 422 | The payment provider does not support programmatic refunds. Use manual/offline refund process. |
+| `PROVIDER_REFUND_FAILED` | 502 | The payment provider rejected the refund request. See `message` for the provider's failure reason. |
+
+---
+
+### Void / Cancel Errors (Phase 8F)
+
+| Code | HTTP | Description |
+|------|------|-------------|
+| `TRANSACTION_NOT_VOIDABLE` | 422 | Transaction cannot be voided. Must be `direction=incoming` and `status` in `[pending, requires_action]`. |
+| `PROVIDER_CANCEL_UNSUPPORTED` | 422 | The payment provider does not support programmatic cancellation. Void may still be possible via manual process. |
+| `PROVIDER_CANCEL_FAILED` | 502 | The payment provider rejected the cancellation request. See `message` for the provider's failure reason. |
+
+---
+
 ### Idempotency Errors
 
 | Code | HTTP | Description |
@@ -122,7 +143,8 @@ The following endpoints are **outside** the error envelope contract and are used
 
 ## Backward Compatibility Notes
 
-- Error codes are **additive only** — existing codes will not be removed or renamed in Phase 8K+.
+- Error codes are **additive only** — existing codes will not be removed or renamed.
+- Phase 8F adds refund/void codes; Phase 8K base codes are unchanged.
 - The `details` field is always present (`null` when not applicable).
 - The `message` field is human-readable and may change between releases; callers MUST switch on `code`, not `message`.
 
@@ -147,6 +169,15 @@ try {
         break;
       case 'OVERPAYMENT_REJECTED':
         // handle 422
+        break;
+      case 'TRANSACTION_NOT_REFUNDABLE':
+        // transaction cannot be refunded in current state
+        break;
+      case 'REFUND_EXCEEDS_REFUNDABLE':
+        // requested refund amount too large
+        break;
+      case 'TRANSACTION_NOT_VOIDABLE':
+        // transaction cannot be voided in current state
         break;
       default:
         throw err;

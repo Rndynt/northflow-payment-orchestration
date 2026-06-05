@@ -3,6 +3,7 @@
  *
  * Phase 8H: service-token protected provider status refresh endpoint.
  * Phase 8K: use frozen error envelope via apiErrorResponse().
+ * Phase 8F: added POST /:id/refund and POST /:id/void for legacy parity.
  */
 
 import { Router } from 'express';
@@ -43,6 +44,107 @@ export function createTransactionsRouter(container: ServiceContainer): Router {
           intent: result.intent ? serializeIntent(result.intent) : null,
           providerStatus: result.providerStatus,
           changed: result.changed,
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * POST /v1/payment-transactions/:id/refund
+   *
+   * Refund a succeeded payment transaction (full or partial).
+   *
+   * Body:
+   *   merchantId    string  — owner merchant (or x-payment-merchant-id header)
+   *   amount        number  — refund amount in smallest currency unit (must be > 0)
+   *   reason        string? — optional human-readable reason
+   *   idempotencyKey string? — optional caller-supplied idempotency key
+   */
+  router.post('/:id/refund', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const transactionId = req.params['id'];
+      if (!transactionId) {
+        res.status(400).json(apiErrorResponse('VALIDATION_ERROR', 'id is required'));
+        return;
+      }
+
+      const body = req.body as Record<string, unknown>;
+      const merchantId = resolveMerchantId(req, body['merchantId']);
+      if (!merchantId) {
+        res.status(400).json(apiErrorResponse('VALIDATION_ERROR', 'merchantId is required (body or x-payment-merchant-id header)'));
+        return;
+      }
+
+      const amount = body['amount'];
+      if (typeof amount !== 'number' || !Number.isInteger(amount) || amount <= 0) {
+        res.status(400).json(apiErrorResponse('VALIDATION_ERROR', 'amount must be a positive integer'));
+        return;
+      }
+
+      const reason = typeof body['reason'] === 'string' ? body['reason'] : null;
+      const idempotencyKey = typeof body['idempotencyKey'] === 'string' ? body['idempotencyKey'] : null;
+
+      const result = await container.useCases.refundPaymentTransaction.execute({
+        merchantId,
+        transactionId,
+        amount,
+        reason,
+        idempotencyKey,
+      });
+
+      res.status(201).json({
+        ok: true,
+        data: {
+          refundTransaction: serializeTransaction(result.refundTransaction),
+          intent: serializeIntent(result.intent),
+          providerRefunded: result.providerRefunded,
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  /**
+   * POST /v1/payment-transactions/:id/void
+   *
+   * Void (cancel) a pending or requires_action payment transaction.
+   *
+   * Body:
+   *   merchantId  string  — owner merchant (or x-payment-merchant-id header)
+   *   reason      string? — optional human-readable reason
+   */
+  router.post('/:id/void', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const transactionId = req.params['id'];
+      if (!transactionId) {
+        res.status(400).json(apiErrorResponse('VALIDATION_ERROR', 'id is required'));
+        return;
+      }
+
+      const body = req.body as Record<string, unknown>;
+      const merchantId = resolveMerchantId(req, body['merchantId']);
+      if (!merchantId) {
+        res.status(400).json(apiErrorResponse('VALIDATION_ERROR', 'merchantId is required (body or x-payment-merchant-id header)'));
+        return;
+      }
+
+      const reason = typeof body['reason'] === 'string' ? body['reason'] : null;
+
+      const result = await container.useCases.voidPaymentTransaction.execute({
+        merchantId,
+        transactionId,
+        reason,
+      });
+
+      res.json({
+        ok: true,
+        data: {
+          transaction: serializeTransaction(result.transaction),
+          intent: result.intent ? serializeIntent(result.intent) : null,
+          providerCancelled: result.providerCancelled,
         },
       });
     } catch (err) {
@@ -93,9 +195,12 @@ function serializeTransaction(tx: {
   merchantId: string;
   provider: string;
   method: string;
+  transactionType: string;
+  direction: string;
   status: string;
   amount: number;
   currency: string;
+  parentTransactionId?: string | null;
   providerReference: string | null;
   providerPaymentUrl: string | null;
   providerQrString: string | null;
@@ -109,9 +214,12 @@ function serializeTransaction(tx: {
     merchantId: tx.merchantId,
     provider: tx.provider,
     method: tx.method,
+    transactionType: tx.transactionType,
+    direction: tx.direction,
     status: tx.status,
     amount: tx.amount,
     currency: tx.currency,
+    parentTransactionId: tx.parentTransactionId ?? null,
     providerReference: tx.providerReference,
     providerPaymentUrl: tx.providerPaymentUrl,
     providerQrString: tx.providerQrString,

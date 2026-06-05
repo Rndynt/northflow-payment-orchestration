@@ -6,6 +6,8 @@
  *
  * Phase 8K: all public error codes frozen. Add new codes to PAYMENT_ORCHESTRATION_ERROR_CODES
  * and KNOWN_CODES together — never orphan a code in one list only.
+ *
+ * Phase 8F: added refund/void/cancel error codes for parity with legacy AuraPoS.
  */
 
 export const PAYMENT_ORCHESTRATION_ERROR_CODES = [
@@ -40,6 +42,15 @@ export const PAYMENT_ORCHESTRATION_ERROR_CODES = [
   'OPERATIONS_REPOSITORY_UNSUPPORTED',
   // Forbidden (production-only guard)
   'FORBIDDEN_IN_PRODUCTION',
+  // Phase 8F: Refund parity
+  'TRANSACTION_NOT_REFUNDABLE',
+  'REFUND_EXCEEDS_REFUNDABLE',
+  'PROVIDER_REFUND_UNSUPPORTED',
+  'PROVIDER_REFUND_FAILED',
+  // Phase 8F: Void / cancel parity
+  'TRANSACTION_NOT_VOIDABLE',
+  'PROVIDER_CANCEL_UNSUPPORTED',
+  'PROVIDER_CANCEL_FAILED',
 ] as const;
 
 export type PaymentOrchestrationErrorCode =

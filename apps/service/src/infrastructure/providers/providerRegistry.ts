@@ -2,8 +2,10 @@
  * providerRegistry — standalone payment provider registry.
  *
  * Phase 8I: registers FakeGateway for safe non-production use and Xendit sandbox only when its runtime policy is explicit.
+ * Phase 8F: added StandaloneManualProvider (always registered — handles cash/offline payments in all environments).
  *
  * Rules:
+ * - ManualProvider is always registered in all environments.
  * - FakeGateway is always registered in non-production.
  * - Xendit sandbox is disabled unless explicitly enabled by environment.
  * - Standalone extraction first; source applications integrate only after service/package
@@ -13,6 +15,7 @@
 
 import type { StandalonePaymentProvider } from './StandalonePaymentProvider.ts';
 import { StandaloneFakeGatewayProvider } from './StandaloneFakeGatewayProvider.ts';
+import { StandaloneManualProvider } from './StandaloneManualProvider.ts';
 import { XenditSandboxProvider } from './XenditSandboxProvider.ts';
 import {
   createUnconfiguredXenditHttpClient,
@@ -39,6 +42,14 @@ export function createProviderRegistry(
 ): ProviderRegistry {
   const registry = new Map<string, StandalonePaymentProvider>();
 
+  // ── Manual provider: always registered (cash/offline payments in all envs) ──
+  const manual = new StandaloneManualProvider();
+  registry.set(manual.providerCode, manual);
+  console.log(
+    `[payment-orchestration-service/providers] Registered provider: ${manual.providerCode} (all environments)`,
+  );
+
+  // ── FakeGateway: dev/test only ────────────────────────────────────────────
   if (nodeEnv !== 'production') {
     const fakeGateway = new StandaloneFakeGatewayProvider();
     registry.set(fakeGateway.providerCode, fakeGateway);
@@ -47,6 +58,7 @@ export function createProviderRegistry(
     );
   }
 
+  // ── Xendit sandbox: enabled by explicit env config ────────────────────────
   const xenditConfig = loadXenditRuntimeConfig();
   const xenditEnabled = options.xenditSandboxEnabled ?? xenditConfig.enabled;
   const xenditHttpClient = xenditEnabled
@@ -73,6 +85,11 @@ export function getProviderRuntimeReadiness(
   const xenditEnabled = options.xenditSandboxEnabled ?? xenditConfig.enabled;
 
   return {
+    manual: {
+      registered: registry.has('manual'),
+      configured: true,
+      enabled: true,
+    },
     fake_gateway: {
       registered: registry.has('fake_gateway'),
       configured: registry.has('fake_gateway'),

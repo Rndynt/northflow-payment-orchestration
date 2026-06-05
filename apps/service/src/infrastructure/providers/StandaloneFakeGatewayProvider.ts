@@ -21,12 +21,18 @@
  * | immediate_failure  | failed          | Rejected immediately              |
  * | pending_expiry     | requires_action | With expiry set                   |
  * | default / any      | requires_action | QRIS-like default behavior        |
+ *
+ * Phase 8F: added cancelPayment() and refundPayment() for refund/void parity tests.
  */
 
 import { randomBytes } from 'crypto';
 import type {
   StandaloneCreatePaymentInput,
   StandalonePaymentProvider,
+  StandaloneProviderCancelInput,
+  StandaloneProviderCancelResult,
+  StandaloneProviderRefundInput,
+  StandaloneProviderRefundResult,
   StandaloneProviderResult,
   StandaloneProviderStatusResult,
 } from './StandalonePaymentProvider.ts';
@@ -36,8 +42,8 @@ export class StandaloneFakeGatewayProvider implements StandalonePaymentProvider 
 
   public readonly providerCode = 'fake_gateway';
   public readonly capabilities = {
-    supportsRefund: false,
-    supportsCancel: false,
+    supportsRefund: true,
+    supportsCancel: true,
     supportsPolling: true,
     supportsWebhook: true,
     supportedMethods: ['qris', 'card', 'va', 'retail'],
@@ -45,8 +51,8 @@ export class StandaloneFakeGatewayProvider implements StandalonePaymentProvider 
     supportsQr: true,
     supportsVa: true,
     supportsPaymentCode: true,
-    supportsPartialRefund: false,
-    supportsMultiplePartialRefund: false,
+    supportsPartialRefund: true,
+    supportsMultiplePartialRefund: true,
     canReturnImmediateSuccess: true,
     canReturnImmediateFailure: true,
   };
@@ -177,6 +183,48 @@ export class StandaloneFakeGatewayProvider implements StandalonePaymentProvider 
         status_refresh: 'deterministic_fake_gateway_lookup',
       },
       failureReason: status === 'failed' ? 'FAKE_GATEWAY_STATUS_FAILED' : null,
+    };
+  }
+
+  /**
+   * Phase 8F: Cancel (void) a pending/requires_action fake payment.
+   * Always returns 'cancelled' for dev/test purposes.
+   */
+  async cancelPayment(input: StandaloneProviderCancelInput): Promise<StandaloneProviderCancelResult> {
+    const cancelRef = `fake_cancel_${input.transactionId}_${randomBytes(4).toString('hex')}`;
+    return {
+      status: 'cancelled',
+      providerReference: cancelRef,
+      rawProviderResponse: {
+        provider: 'fake_gateway',
+        cancel_reference: cancelRef,
+        original_provider_reference: input.providerReference,
+        reason: input.reason ?? null,
+        cancelled: true,
+      },
+      failureReason: null,
+    };
+  }
+
+  /**
+   * Phase 8F: Refund a succeeded fake payment.
+   * Always returns 'succeeded' for dev/test purposes.
+   */
+  async refundPayment(input: StandaloneProviderRefundInput): Promise<StandaloneProviderRefundResult> {
+    const refundRef = `fake_refund_${input.transactionId}_${randomBytes(4).toString('hex')}`;
+    return {
+      status: 'succeeded',
+      providerReference: refundRef,
+      rawProviderResponse: {
+        provider: 'fake_gateway',
+        refund_reference: refundRef,
+        original_provider_reference: input.providerReference,
+        amount: input.amount,
+        currency: input.currency,
+        reason: input.reason ?? null,
+        refunded: true,
+      },
+      failureReason: null,
     };
   }
 }

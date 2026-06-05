@@ -9,6 +9,9 @@
  *   - ConfirmFakeGatewayPayment uses atomic markSucceededIfConfirmable.
  *   - FakeGatewayWebhookHandler wired with optional webhook secret from env.
  *   - HandleProviderWebhook use case wired and exposed.
+ * Phase 8F:
+ *   - RefundPaymentTransaction and VoidPaymentTransaction wired (legacy parity).
+ *   - StandaloneManualProvider registered in providerRegistry.
  *
  * No AuraPoS session/tenant middleware.
  * No POS order domain deps.
@@ -39,6 +42,8 @@ import { ReconcilePaymentIntentTotals } from './application/use-cases/ReconcileP
 import { RefreshProviderStatus } from './application/use-cases/RefreshProviderStatus.ts';
 import { ExpireStalePaymentTransactions } from './application/use-cases/ExpireStalePaymentTransactions.ts';
 import { ReprocessProviderEvents } from './application/use-cases/ReprocessProviderEvents.ts';
+import { RefundPaymentTransaction } from './application/use-cases/RefundPaymentTransaction.ts';
+import { VoidPaymentTransaction } from './application/use-cases/VoidPaymentTransaction.ts';
 
 import type { PaymentMerchantRepository } from '@northflow/payment-orchestration-core';
 import type { PaymentProviderAccountRepository } from '@northflow/payment-orchestration-core';
@@ -67,6 +72,8 @@ export interface ServiceUseCases {
   handleProviderWebhook: HandleProviderWebhook;
   reconcilePaymentIntentTotals: ReconcilePaymentIntentTotals;
   refreshProviderStatus: RefreshProviderStatus;
+  refundPaymentTransaction: RefundPaymentTransaction;
+  voidPaymentTransaction: VoidPaymentTransaction;
   expireStalePaymentTransactions?: ExpireStalePaymentTransactions;
   reprocessProviderEvents?: ReprocessProviderEvents;
 }
@@ -140,6 +147,19 @@ export function createContainer(config: PaymentOrchestrationServiceConfig): Serv
       transactionRepo,
     ),
     refreshProviderStatus: new RefreshProviderStatus(
+      transactionRepo,
+      intentRepo,
+      providerAccountRepo,
+      providerRegistry,
+    ),
+    // Phase 8F: Refund + Void parity use cases
+    refundPaymentTransaction: new RefundPaymentTransaction(
+      transactionRepo,
+      intentRepo,
+      providerAccountRepo,
+      providerRegistry,
+    ),
+    voidPaymentTransaction: new VoidPaymentTransaction(
       transactionRepo,
       intentRepo,
       providerAccountRepo,
