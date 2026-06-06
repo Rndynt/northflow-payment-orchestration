@@ -182,6 +182,39 @@ export interface ReconcilePaymentIntentTotalsResponse {
   after: ReconcileTotalsSnapshot;
   changed: boolean;
 }
+// ── Refund / Void Payment Transaction ───────────────────────────────────────
+
+export interface RefundPaymentTransactionRequest {
+  /** Optional — falls back to SDK config.merchantId when omitted. */
+  merchantId?: string;
+  amount: number;
+  reason?: string | null;
+  idempotencyKey?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface RefundPaymentTransactionResponse {
+  refundTransaction: PaymentTransactionResponse;
+  intent: PaymentIntentResponse;
+  refundableRemaining?: number;
+  providerRefunded: boolean;
+  idempotentReplay: boolean;
+}
+
+export interface VoidPaymentTransactionRequest {
+  /** Optional — falls back to SDK config.merchantId when omitted. */
+  merchantId?: string;
+  reason?: string | null;
+  idempotencyKey?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface VoidPaymentTransactionResponse {
+  transaction: PaymentTransactionResponse;
+  intent: PaymentIntentResponse | null;
+  providerCancelled: boolean;
+  idempotentReplay: boolean;
+}
 
 // ── Phase 8D: Merchant ────────────────────────────────────────────────────────
 

@@ -38,6 +38,10 @@ import type {
   ConfirmFakeGatewayPaymentResponse,
   ReconcilePaymentIntentTotalsRequest,
   ReconcilePaymentIntentTotalsResponse,
+  RefundPaymentTransactionRequest,
+  RefundPaymentTransactionResponse,
+  VoidPaymentTransactionRequest,
+  VoidPaymentTransactionResponse,
   RefreshProviderStatusRequest,
   RefreshProviderStatusResponse,
   ReadinessResponse,
@@ -231,6 +235,44 @@ export class PaymentOrchestrationClient {
     return this.request<ReconcilePaymentIntentTotalsResponse>(
       'POST',
       `/v1/payment-intents/${intentId}/reconcile`,
+      this.injectMerchantId(input ?? {}),
+    );
+  }
+
+  /**
+   * refundPaymentTransaction — refund a succeeded payment transaction.
+   *
+   * POST /v1/payment-transactions/:transactionId/refund
+   *
+   * merchantId from input or falls back to config.merchantId. idempotencyKey is
+   * passed through in the JSON body when supplied.
+   */
+  async refundPaymentTransaction(
+    transactionId: string,
+    input: RefundPaymentTransactionRequest,
+  ): Promise<RefundPaymentTransactionResponse> {
+    return this.request<RefundPaymentTransactionResponse>(
+      'POST',
+      `/v1/payment-transactions/${transactionId}/refund`,
+      this.injectMerchantId(input),
+    );
+  }
+
+  /**
+   * voidPaymentTransaction — cancel/void a pending or requires_action transaction.
+   *
+   * POST /v1/payment-transactions/:transactionId/void
+   *
+   * merchantId from input or falls back to config.merchantId. idempotencyKey is
+   * passed through in the JSON body when supplied.
+   */
+  async voidPaymentTransaction(
+    transactionId: string,
+    input?: VoidPaymentTransactionRequest,
+  ): Promise<VoidPaymentTransactionResponse> {
+    return this.request<VoidPaymentTransactionResponse>(
+      'POST',
+      `/v1/payment-transactions/${transactionId}/void`,
       this.injectMerchantId(input ?? {}),
     );
   }

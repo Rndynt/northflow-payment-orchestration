@@ -607,14 +607,14 @@
         }
       }
     },
-    "/v1/payment-transactions/{id}/refund": {
+    "/v1/payment-transactions/{transactionId}/refund": {
       "post": {
         "tags": ["Payment Transactions"],
         "summary": "Refund a payment transaction",
-        "description": "Initiate a full or partial refund for a succeeded payment transaction. Creates an outgoing refund transaction and calls the provider's refund API if supported, otherwise records as an offline/manual refund.",
+        "description": "Initiate a full or partial refund for a succeeded payment transaction. Creates an outgoing refund transaction and calls the provider's refund API if supported, manual provider records an offline refund; gateway/sandbox providers without refund support return PROVIDER_REFUND_UNSUPPORTED.",
         "security": [{ "serviceToken": [] }],
         "parameters": [
-          { "name": "id", "in": "path", "required": true, "description": "ID of the original payment transaction to refund", "schema": { "type": "string" } },
+          { "name": "transactionId", "in": "path", "required": true, "description": "ID of the original payment transaction to refund", "schema": { "type": "string" } },
           { "$ref": "#/components/parameters/merchantIdHeader" }
         ],
         "requestBody": {
@@ -628,7 +628,8 @@
                   "merchantId": { "type": "string", "description": "Owner merchant ID (can also be supplied via x-payment-merchant-id header)" },
                   "amount": { "type": "integer", "minimum": 1, "description": "Refund amount in smallest currency unit (e.g. IDR sen). Must be > 0 and ≤ refundable amount." },
                   "reason": { "type": "string", "nullable": true, "description": "Optional human-readable refund reason." },
-                  "idempotencyKey": { "type": "string", "nullable": true, "description": "Optional caller-supplied idempotency key for the refund transaction." }
+                  "idempotencyKey": { "type": "string", "nullable": true, "description": "Optional caller-supplied idempotency key for replay/conflict protection." },
+                  "metadata": { "type": "object", "nullable": true, "additionalProperties": true }
                 }
               }
             }
@@ -648,7 +649,9 @@
                       "properties": {
                         "refundTransaction": { "$ref": "#/components/schemas/PaymentTransaction" },
                         "intent": { "$ref": "#/components/schemas/PaymentIntent" },
-                        "providerRefunded": { "type": "boolean", "description": "true if provider refund API was called; false if recorded as offline/manual refund." }
+                        "providerRefunded": { "type": "boolean", "description": "true if provider refund API was called; false for manual/offline replay/refund." },
+                        "idempotentReplay": { "type": "boolean" },
+                        "refundableRemaining": { "type": "integer" }
                       }
                     }
                   }
@@ -669,14 +672,14 @@
         }
       }
     },
-    "/v1/payment-transactions/{id}/void": {
+    "/v1/payment-transactions/{transactionId}/void": {
       "post": {
         "tags": ["Payment Transactions"],
         "summary": "Void (cancel) a payment transaction",
-        "description": "Cancel a pending or requires_action payment transaction. Calls the provider's cancel API if supported, otherwise voids directly. Intent totals are not changed (the transaction was never succeeded).",
+        "description": "Cancel a pending or requires_action payment transaction. Calls the provider's cancel API if supported, manual provider voids directly; gateway/sandbox providers without cancel support return PROVIDER_CANCEL_UNSUPPORTED. Intent totals are not changed (the transaction was never succeeded).",
         "security": [{ "serviceToken": [] }],
         "parameters": [
-          { "name": "id", "in": "path", "required": true, "description": "ID of the payment transaction to void", "schema": { "type": "string" } },
+          { "name": "transactionId", "in": "path", "required": true, "description": "ID of the payment transaction to void", "schema": { "type": "string" } },
           { "$ref": "#/components/parameters/merchantIdHeader" }
         ],
         "requestBody": {
@@ -688,7 +691,9 @@
                 "required": ["merchantId"],
                 "properties": {
                   "merchantId": { "type": "string", "description": "Owner merchant ID (can also be supplied via x-payment-merchant-id header)" },
-                  "reason": { "type": "string", "nullable": true, "description": "Optional human-readable void reason." }
+                  "reason": { "type": "string", "nullable": true, "description": "Optional human-readable void reason." },
+                  "idempotencyKey": { "type": "string", "nullable": true, "description": "Optional caller-supplied idempotency key for replay/conflict protection." },
+                  "metadata": { "type": "object", "nullable": true, "additionalProperties": true }
                 }
               }
             }
@@ -708,7 +713,8 @@
                       "properties": {
                         "transaction": { "$ref": "#/components/schemas/PaymentTransaction" },
                         "intent": { "oneOf": [{ "$ref": "#/components/schemas/PaymentIntent" }, { "type": "null" }] },
-                        "providerCancelled": { "type": "boolean", "description": "true if provider cancel API was called; false if voided directly." }
+                        "providerCancelled": { "type": "boolean", "description": "true if provider cancel API was called; false for manual/offline replay/cancel." },
+                        "idempotentReplay": { "type": "boolean" }
                       }
                     }
                   }

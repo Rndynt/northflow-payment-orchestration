@@ -241,3 +241,75 @@ Phase 8K freezes this contract. From Phase 8K+:
 - No response fields will be removed.
 - New optional fields may be added to responses (additive changes only).
 - Breaking changes will require a new major version (v1.x → v2.x API prefix).
+
+## Legacy parity hardening: refund/void transaction endpoints
+
+### `POST /v1/payment-transactions/:transactionId/refund`
+
+Request body:
+
+```json
+{
+  "merchantId": "merchant_123",
+  "amount": 5000,
+  "reason": "customer_return",
+  "idempotencyKey": "refund-order-1-line-2",
+  "metadata": { "source": "operator" }
+}
+```
+
+Successful response envelope:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "refundTransaction": { "id": "refund_tx_id" },
+    "intent": { "id": "intent_id" },
+    "providerRefunded": true,
+    "idempotentReplay": false,
+    "refundableRemaining": 0
+  }
+}
+```
+
+Idempotency behavior is merchant-scoped. Same `idempotencyKey` + same parent transaction + same refund amount/currency returns `idempotentReplay: true` and does not create a duplicate refund. Same key for a different transaction/context returns `409 IDEMPOTENCY_CONFLICT`. Race safety relies on the existing unique transaction index on `(merchant_id, idempotency_key)` when no repository-level lock is available.
+
+Provider policy: `manual` may record offline refund success. `fake_gateway` performs deterministic dev/test refunds through its provider method. Gateway/sandbox providers without `refundPayment()` return `PROVIDER_REFUND_UNSUPPORTED`; Xendit sandbox is unsupported unless a real sandbox refund method is implemented.
+
+### `POST /v1/payment-transactions/:transactionId/void`
+
+Request body:
+
+```json
+{
+  "merchantId": "merchant_123",
+  "reason": "customer_cancelled",
+  "idempotencyKey": "void-order-1-attempt-1",
+  "metadata": { "source": "operator" }
+}
+```
+
+Successful response envelope:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "transaction": { "id": "tx_id", "status": "cancelled" },
+    "intent": { "id": "intent_id" },
+    "providerCancelled": true,
+    "idempotentReplay": false
+  }
+}
+```
+
+Void idempotency accepts `idempotencyKey` in the route body. Already-cancelled transactions replay successfully only when the stored transaction idempotency key matches; otherwise they return `TRANSACTION_NOT_VOIDABLE`. Same key used for another transaction/context returns `IDEMPOTENCY_CONFLICT`.
+
+Provider policy: `manual` may record offline cancel success. `fake_gateway` performs deterministic dev/test cancel through its provider method. Gateway/sandbox providers without `cancelPayment()` return `PROVIDER_CANCEL_UNSUPPORTED`; Xendit sandbox is unsupported unless a real sandbox cancel method is implemented.
+
+Errors use the standard envelope:
+
+```json
+{ "ok": false, "error": { "code": "PROVIDER_REFUND_UNSUPPORTED", "message": "Provider x does not support programmatic refunds." } }
+```

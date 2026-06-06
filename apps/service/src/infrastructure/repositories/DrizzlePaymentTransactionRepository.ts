@@ -82,6 +82,20 @@ export class DrizzlePaymentTransactionRepository
     return mapTransactionRow(row as any);
   }
 
+  async findByMerchantIdempotencyKey(
+    merchantId: string,
+    idempotencyKey: string,
+  ): Promise<StandalonePaymentTransactionDTO | null> {
+    const rows = await this.db
+      .select()
+      .from(t)
+      .where(and(eq(t.merchantId, merchantId), eq(t.idempotencyKey, idempotencyKey)))
+      .limit(1);
+    const row = rows[0];
+    if (!row) return null;
+    return mapTransactionRow(row as any);
+  }
+
   async create(
     input: CreatePaymentTransactionInput,
   ): Promise<StandalonePaymentTransactionDTO> {
@@ -129,6 +143,9 @@ export class DrizzlePaymentTransactionRepository
         failureReason: input.failureReason ?? null,
         providerReference: input.providerReference ?? undefined,
         providerEventId: input.providerEventId ?? undefined,
+        idempotencyKey: input.idempotencyKey !== undefined ? input.idempotencyKey : undefined,
+        metadata: input.metadata !== undefined ? (input.metadata ?? {}) as Record<string, unknown> : undefined,
+        rawProviderResponse: input.rawProviderResponse !== undefined ? (input.rawProviderResponse ?? {}) as Record<string, unknown> : undefined,
         updatedAt: new Date(),
       })
       .where(and(eq(t.id, input.id), eq(t.merchantId, input.merchantId)))

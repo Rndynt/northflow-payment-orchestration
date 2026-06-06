@@ -101,3 +101,14 @@ The AuraPoS source areas remain intact as a fallback until the standalone servic
 
 Phase: **8L.1** — Standalone repo cleanup
 Config version: `0.3.0` (8K)
+
+### Refund / void legacy parity status
+
+Northflow exposes transaction refund and void endpoints plus SDK methods:
+
+- `POST /v1/payment-transactions/:transactionId/refund`
+- `POST /v1/payment-transactions/:transactionId/void`
+- `client.refundPaymentTransaction(transactionId, input)`
+- `client.voidPaymentTransaction(transactionId, input?)`
+
+Refund/void operations are merchant-scoped and support caller idempotency keys. Manual provider operations can be recorded offline, FakeGateway supports deterministic dev/test refund/cancel, and gateway/sandbox providers without explicit methods return `PROVIDER_REFUND_UNSUPPORTED` or `PROVIDER_CANCEL_UNSUPPORTED` instead of silently succeeding. Xendit sandbox refund/cancel remains unsupported until a real sandbox adapter method is implemented.

@@ -176,6 +176,9 @@ export interface UpdateTransactionStatusInput {
   failureReason?: string | null;
   providerReference?: string | null;
   providerEventId?: string | null;
+  idempotencyKey?: string | null;
+  metadata?: Record<string, unknown> | null;
+  rawProviderResponse?: Record<string, unknown> | null;
 }
 
 export interface MarkSucceededIfConfirmableInput {
@@ -211,6 +214,10 @@ export interface PaymentTransactionRepository {
   findByProviderReference(
     provider: string,
     providerReference: string,
+  ): Promise<StandalonePaymentTransactionDTO | null>;
+  findByMerchantIdempotencyKey(
+    merchantId: string,
+    idempotencyKey: string,
   ): Promise<StandalonePaymentTransactionDTO | null>;
   create(input: CreatePaymentTransactionInput): Promise<StandalonePaymentTransactionDTO>;
   updateStatus(

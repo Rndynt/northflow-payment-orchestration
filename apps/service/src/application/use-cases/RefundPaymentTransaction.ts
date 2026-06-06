@@ -1,17 +1,12 @@
 /**
  * RefundPaymentTransaction — initiate a full or partial refund for a succeeded payment.
  *
- * Phase 8F: legacy AuraPoS refund parity migration to standalone northflow service.
- *
  * Refund rules:
- * - Source transaction must be direction=incoming, status=succeeded, and a refundable type
- *   (payment | deposit | settlement).
- * - Refund amount must be > 0 and ≤ refundable amount (original amount minus any prior refunds).
- * - A child refund transaction (direction=outgoing, transactionType=refund) is created.
- * - If the provider implements refundPayment(), it is called and the result status is used.
- * - If the provider does NOT implement refundPayment() (e.g. manual/cash), the refund is
- *   recorded as succeeded immediately (offline/cash refund behaviour).
- * - On success, the parent intent's amountRefunded total is updated.
+ * - Source transaction must be direction=incoming, status=succeeded, and refundable type.
+ * - Refund amount must be > 0 and ≤ refundable amount.
+ * - Idempotency key replay is scoped by merchant and must match this source transaction.
+ * - Manual provider may refund offline; gateway providers must implement refundPayment().
+ * - Race safety relies on the existing unique (merchant_id, idempotency_key) transaction index.
  *
  * No AuraPoS tenantId. No embedded payment runtime. Uses merchantId throughout.
  */
@@ -27,6 +22,7 @@ import type {
 import type { ProviderRegistry } from '../../infrastructure/providers/providerRegistry.ts';
 
 const REFUNDABLE_TYPES = new Set(['payment', 'deposit', 'settlement']);
+const OFFLINE_REFUND_PROVIDERS = new Set(['manual']);
 
 export interface RefundPaymentTransactionInput {
   merchantId: string;
@@ -41,12 +37,24 @@ export interface RefundPaymentTransactionInput {
 }
 
 export interface RefundPaymentTransactionOutput {
-  /** The newly created outgoing refund transaction. */
+  /** The outgoing refund transaction, newly created or replayed idempotently. */
   refundTransaction: StandalonePaymentTransactionDTO;
   /** The parent intent with updated amountRefunded. */
   intent: StandalonePaymentIntentDTO;
-  /** true if the provider API was called; false if recorded as manual/offline refund. */
+  /** true if the provider API was called; false for manual/offline replay/refund. */
   providerRefunded: boolean;
+  /** true when idempotencyKey matched a prior refund for the same source transaction. */
+  idempotentReplay: boolean;
+  /** Remaining refundable amount after this operation. */
+  refundableRemaining?: number;
+}
+
+function isOfflineRefundProvider(providerCode: string): boolean {
+  return OFFLINE_REFUND_PROVIDERS.has(providerCode);
+}
+
+function idempotencyConflict(message: string): Error {
+  return Object.assign(new Error(message), { statusCode: 409, code: 'IDEMPOTENCY_CONFLICT' });
 }
 
 export class RefundPaymentTransaction {
@@ -60,7 +68,6 @@ export class RefundPaymentTransaction {
   async execute(input: RefundPaymentTransactionInput): Promise<RefundPaymentTransactionOutput> {
     const { merchantId, transactionId, amount, reason, idempotencyKey } = input;
 
-    // ── 1. Validate amount ────────────────────────────────────────────────────
     if (!Number.isInteger(amount) || amount <= 0) {
       throw Object.assign(
         new Error('Refund amount must be a positive integer.'),
@@ -68,7 +75,6 @@ export class RefundPaymentTransaction {
       );
     }
 
-    // ── 2. Load the source transaction ────────────────────────────────────────
     const sourceTx = await this.transactionRepo.findById(transactionId, merchantId);
     if (!sourceTx) {
       throw Object.assign(
@@ -77,7 +83,40 @@ export class RefundPaymentTransaction {
       );
     }
 
-    // ── 3. Validate refundability ─────────────────────────────────────────────
+    const intent = await this.intentRepo.findById(sourceTx.intentId, merchantId);
+    if (!intent) {
+      throw Object.assign(
+        new Error(`Payment intent not found: ${sourceTx.intentId}`),
+        { statusCode: 404, code: 'INTENT_NOT_FOUND' },
+      );
+    }
+
+    if (idempotencyKey) {
+      const existing = await this.transactionRepo.findByMerchantIdempotencyKey(merchantId, idempotencyKey);
+      if (existing) {
+        const isSameRefund = existing.direction === 'outgoing'
+          && existing.transactionType === 'refund'
+          && existing.parentTransactionId === transactionId
+          && existing.amount === amount
+          && existing.currency === sourceTx.currency;
+
+        if (!isSameRefund) {
+          throw idempotencyConflict(
+            `Idempotency key ${idempotencyKey} is already used for a different payment transaction operation.`,
+          );
+        }
+
+        const alreadyRefunded = await this.transactionRepo.sumSucceededRefundsByParent(transactionId);
+        return {
+          refundTransaction: existing,
+          intent,
+          providerRefunded: false,
+          idempotentReplay: true,
+          refundableRemaining: Math.max(0, sourceTx.amount - alreadyRefunded),
+        };
+      }
+    }
+
     if (
       sourceTx.direction !== 'incoming' ||
       sourceTx.status !== 'succeeded' ||
@@ -93,7 +132,6 @@ export class RefundPaymentTransaction {
       );
     }
 
-    // ── 4. Check refundable amount ────────────────────────────────────────────
     const alreadyRefunded = await this.transactionRepo.sumSucceededRefundsByParent(transactionId);
     const refundableAmount = Math.max(0, sourceTx.amount - alreadyRefunded);
     if (amount > refundableAmount) {
@@ -106,16 +144,16 @@ export class RefundPaymentTransaction {
       );
     }
 
-    // ── 5. Load intent ────────────────────────────────────────────────────────
-    const intent = await this.intentRepo.findById(sourceTx.intentId, merchantId);
-    if (!intent) {
-      throw Object.assign(
-        new Error(`Payment intent not found: ${sourceTx.intentId}`),
-        { statusCode: 404, code: 'INTENT_NOT_FOUND' },
-      );
+    const provider = this.providerRegistry.get(sourceTx.provider);
+    if (!provider || typeof provider.refundPayment !== 'function') {
+      if (!isOfflineRefundProvider(sourceTx.provider)) {
+        throw Object.assign(
+          new Error(`Provider ${sourceTx.provider} does not support programmatic refunds.`),
+          { statusCode: 422, code: 'PROVIDER_REFUND_UNSUPPORTED' },
+        );
+      }
     }
 
-    // ── 6. Create refund transaction as 'pending' ─────────────────────────────
     const refundId = randomUUID();
     let refundTx = await this.transactionRepo.create({
       id: refundId,
@@ -135,8 +173,6 @@ export class RefundPaymentTransaction {
       rawProviderResponse: null,
     });
 
-    // ── 7. Attempt provider refund ────────────────────────────────────────────
-    const provider = this.providerRegistry.get(sourceTx.provider);
     let providerRefunded = false;
     let refundStatus: 'succeeded' | 'failed' | 'pending' = 'succeeded';
     let refundFailureReason: string | null = null;
@@ -144,13 +180,9 @@ export class RefundPaymentTransaction {
     let refundRawResponse: Record<string, unknown> = {};
 
     if (provider && typeof provider.refundPayment === 'function') {
-      // Load provider account for credentials if linked
       let providerAccount = null;
       if (sourceTx.providerAccountId) {
-        providerAccount = await this.providerAccountRepo.findById(
-          sourceTx.providerAccountId,
-          merchantId,
-        );
+        providerAccount = await this.providerAccountRepo.findById(sourceTx.providerAccountId, merchantId);
       }
 
       const providerResult = await provider.refundPayment({
@@ -170,13 +202,13 @@ export class RefundPaymentTransaction {
       refundRawResponse = providerResult.rawProviderResponse;
 
       if (refundStatus === 'failed') {
-        // Update refund transaction to failed
-        refundTx = await this.transactionRepo.updateStatus({
+        await this.transactionRepo.updateStatus({
           id: refundId,
           merchantId,
           status: 'failed',
           failureReason: refundFailureReason ?? 'PROVIDER_REFUND_REJECTED',
           providerReference: refundProviderRef ?? undefined,
+          rawProviderResponse: refundRawResponse,
         });
         throw Object.assign(
           new Error(`Provider rejected refund: ${refundFailureReason ?? 'unknown reason'}`),
@@ -184,7 +216,6 @@ export class RefundPaymentTransaction {
         );
       }
     } else {
-      // No provider refundPayment → manual/offline refund, record as succeeded
       refundStatus = 'succeeded';
       refundRawResponse = {
         provider: sourceTx.provider,
@@ -196,18 +227,15 @@ export class RefundPaymentTransaction {
       };
     }
 
-    // ── 8. Update refund transaction to final status ──────────────────────────
-    if (refundStatus !== 'pending') {
-      refundTx = await this.transactionRepo.updateStatus({
-        id: refundId,
-        merchantId,
-        status: refundStatus,
-        failureReason: refundFailureReason ?? null,
-        providerReference: refundProviderRef ?? undefined,
-      });
-    }
+    refundTx = await this.transactionRepo.updateStatus({
+      id: refundId,
+      merchantId,
+      status: refundStatus,
+      failureReason: refundFailureReason,
+      providerReference: refundProviderRef ?? undefined,
+      rawProviderResponse: refundRawResponse,
+    });
 
-    // ── 9. Update intent amountRefunded (only if succeeded) ──────────────────
     let updatedIntent = intent;
     if (refundStatus === 'succeeded') {
       const newAmountRefunded = intent.amountRefunded + amount;
@@ -224,6 +252,8 @@ export class RefundPaymentTransaction {
       refundTransaction: refundTx,
       intent: updatedIntent,
       providerRefunded,
+      idempotentReplay: false,
+      refundableRemaining: Math.max(0, refundableAmount - (refundStatus === 'succeeded' ? amount : 0)),
     };
   }
 }

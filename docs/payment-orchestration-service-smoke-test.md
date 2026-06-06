@@ -346,3 +346,25 @@ pnpm payment-orchestration:extraction-check
 ```
 
 The check verifies service-local schema ownership, repository schema imports, standalone migrations, worker entry points, the ready endpoint, required package files, forbidden embedded runtime imports, absence of random build/log/asset output in the extraction set, and Phase 8K contract/deployment files.
+
+### 10. Refund / void parity smoke checks
+
+Manual/offline refund example:
+
+```bash
+curl -s -X POST "$BASE/v1/payment-transactions/$SUCCEEDED_TX/refund" \
+  -H "Content-Type: application/json" \
+  -H "x-payment-orchestration-service-token: $TOKEN" \
+  -d '{"merchantId":"'$MERCHANT'","amount":1000,"idempotencyKey":"refund-smoke-1"}'
+```
+
+Void pending/requires-action transaction example:
+
+```bash
+curl -s -X POST "$BASE/v1/payment-transactions/$PENDING_TX/void" \
+  -H "Content-Type: application/json" \
+  -H "x-payment-orchestration-service-token: $TOKEN" \
+  -d '{"merchantId":"'$MERCHANT'","reason":"smoke cancel","idempotencyKey":"void-smoke-1"}'
+```
+
+Expected provider policy: manual provider may complete refund/cancel offline, FakeGateway may refund/cancel deterministically in dev/test, and Xendit sandbox returns `PROVIDER_REFUND_UNSUPPORTED` / `PROVIDER_CANCEL_UNSUPPORTED` until real sandbox adapter methods are implemented.

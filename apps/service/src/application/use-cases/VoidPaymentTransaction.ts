@@ -1,16 +1,11 @@
 /**
  * VoidPaymentTransaction — cancel (void) a pending or requires_action payment transaction.
  *
- * Phase 8F: legacy AuraPoS void parity migration to standalone northflow service.
- *
  * Void rules:
  * - Source transaction must be direction=incoming, status in [pending, requires_action].
- * - If the provider implements cancelPayment(), it is called and the result is used.
- * - If the provider does NOT implement cancelPayment() (e.g. manual/cash), the transaction
- *   is marked 'cancelled' immediately without a provider API call.
- * - On success, the transaction status is set to 'cancelled'.
- * - Intent totals are NOT changed: the transaction was never succeeded, so amountPaid
- *   was never incremented for this transaction.
+ * - Idempotency key replay succeeds only when it matches the stored cancelled transaction.
+ * - Manual provider may cancel offline; gateway providers must implement cancelPayment().
+ * - Intent totals are not changed because voidable transactions have not succeeded.
  *
  * No AuraPoS tenantId. No embedded payment runtime. Uses merchantId throughout.
  */
@@ -25,6 +20,7 @@ import type {
 import type { ProviderRegistry } from '../../infrastructure/providers/providerRegistry.ts';
 
 const VOIDABLE_STATUSES = new Set(['pending', 'requires_action']);
+const OFFLINE_CANCEL_PROVIDERS = new Set(['manual']);
 
 export interface VoidPaymentTransactionInput {
   merchantId: string;
@@ -32,15 +28,34 @@ export interface VoidPaymentTransactionInput {
   transactionId: string;
   /** Optional human-readable reason (stored in metadata). */
   reason?: string | null;
+  /** Caller-supplied idempotency key persisted on the voided transaction. */
+  idempotencyKey?: string | null;
 }
 
 export interface VoidPaymentTransactionOutput {
-  /** The transaction after being cancelled. */
+  /** The transaction after being cancelled, or replayed if already cancelled with the same key. */
   transaction: StandalonePaymentTransactionDTO;
   /** The parent intent (unchanged — totals not affected by void). */
   intent: StandalonePaymentIntentDTO | null;
-  /** true if the provider API was called; false if voided directly (manual/no provider cancel). */
+  /** true if the provider API was called; false for manual/offline replay/cancel. */
   providerCancelled: boolean;
+  /** true when idempotencyKey matched the existing cancelled transaction. */
+  idempotentReplay: boolean;
+}
+
+function isOfflineCancelProvider(providerCode: string): boolean {
+  return OFFLINE_CANCEL_PROVIDERS.has(providerCode);
+}
+
+function transitionError(transactionId: string, tx: StandalonePaymentTransactionDTO): Error {
+  return Object.assign(
+    new Error(
+      `Transaction ${transactionId} cannot be voided. ` +
+      `Required: direction=incoming, status in [${[...VOIDABLE_STATUSES].join(',')}]. ` +
+      `Got: direction=${tx.direction}, status=${tx.status}.`,
+    ),
+    { statusCode: 422, code: 'TRANSACTION_NOT_VOIDABLE' },
+  );
 }
 
 export class VoidPaymentTransaction {
@@ -52,9 +67,8 @@ export class VoidPaymentTransaction {
   ) {}
 
   async execute(input: VoidPaymentTransactionInput): Promise<VoidPaymentTransactionOutput> {
-    const { merchantId, transactionId, reason } = input;
+    const { merchantId, transactionId, reason, idempotencyKey } = input;
 
-    // ── 1. Load the transaction ───────────────────────────────────────────────
     const tx = await this.transactionRepo.findById(transactionId, merchantId);
     if (!tx) {
       throw Object.assign(
@@ -63,30 +77,51 @@ export class VoidPaymentTransaction {
       );
     }
 
-    // ── 2. Validate voidability ───────────────────────────────────────────────
-    if (!VOIDABLE_STATUSES.has(tx.status) || tx.direction !== 'incoming') {
-      throw Object.assign(
-        new Error(
-          `Transaction ${transactionId} cannot be voided. ` +
-          `Required: direction=incoming, status in [${[...VOIDABLE_STATUSES].join(',')}]. ` +
-          `Got: direction=${tx.direction}, status=${tx.status}.`,
-        ),
-        { statusCode: 422, code: 'TRANSACTION_NOT_VOIDABLE' },
-      );
+    if (idempotencyKey) {
+      const existing = await this.transactionRepo.findByMerchantIdempotencyKey(merchantId, idempotencyKey);
+      if (existing && existing.id !== transactionId) {
+        throw Object.assign(
+          new Error(`Idempotency key ${idempotencyKey} is already used for a different payment transaction operation.`),
+          { statusCode: 409, code: 'IDEMPOTENCY_CONFLICT' },
+        );
+      }
     }
 
-    // ── 3. Attempt provider cancel ────────────────────────────────────────────
+    if (tx.status === 'cancelled' || tx.status === 'voided') {
+      if (idempotencyKey && tx.idempotencyKey === idempotencyKey) {
+        return {
+          transaction: tx,
+          intent: await this.loadIntent(tx, merchantId),
+          providerCancelled: false,
+          idempotentReplay: true,
+        };
+      }
+      throw transitionError(transactionId, tx);
+    }
+
+    if (!VOIDABLE_STATUSES.has(tx.status) || tx.direction !== 'incoming') {
+      throw transitionError(transactionId, tx);
+    }
+
     const provider = this.providerRegistry.get(tx.provider);
+    if (!provider || typeof provider.cancelPayment !== 'function') {
+      if (!isOfflineCancelProvider(tx.provider)) {
+        throw Object.assign(
+          new Error(`Provider ${tx.provider} does not support programmatic cancellation.`),
+          { statusCode: 422, code: 'PROVIDER_CANCEL_UNSUPPORTED' },
+        );
+      }
+    }
+
     let providerCancelled = false;
     let cancelFailureReason: string | null = null;
+    let cancelProviderReference: string | null | undefined;
+    let cancelRawResponse: Record<string, unknown> | null = null;
 
     if (provider && typeof provider.cancelPayment === 'function') {
       let providerAccount = null;
       if (tx.providerAccountId) {
-        providerAccount = await this.providerAccountRepo.findById(
-          tx.providerAccountId,
-          merchantId,
-        );
+        providerAccount = await this.providerAccountRepo.findById(tx.providerAccountId, merchantId);
       }
 
       const cancelResult = await provider.cancelPayment({
@@ -94,46 +129,68 @@ export class VoidPaymentTransaction {
         providerReference: tx.providerReference,
         providerAccount,
         reason: reason ?? null,
-        metadata: { void_reason: reason ?? null },
+        metadata: { void_reason: reason ?? null, idempotency_key: idempotencyKey ?? null },
       });
 
       providerCancelled = true;
+      cancelProviderReference = cancelResult.providerReference ?? undefined;
+      cancelRawResponse = cancelResult.rawProviderResponse;
 
       if (cancelResult.status === 'failed') {
         cancelFailureReason = cancelResult.failureReason;
-        const failedTx = await this.transactionRepo.updateStatus({
+        await this.transactionRepo.updateStatus({
           id: transactionId,
           merchantId,
           status: 'failed',
           failureReason: cancelFailureReason ?? 'PROVIDER_CANCEL_REJECTED',
+          providerReference: cancelProviderReference,
+          rawProviderResponse: cancelRawResponse,
         });
         throw Object.assign(
           new Error(`Provider rejected cancellation: ${cancelFailureReason ?? 'unknown reason'}`),
           { statusCode: 502, code: 'PROVIDER_CANCEL_FAILED' },
         );
       }
+    } else {
+      cancelRawResponse = {
+        provider: tx.provider,
+        manual_cancel: true,
+        transaction_id: transactionId,
+        reason: reason ?? null,
+      };
     }
 
-    // ── 4. Mark transaction as cancelled ─────────────────────────────────────
     const cancelledTx = await this.transactionRepo.updateStatus({
       id: transactionId,
       merchantId,
       status: 'cancelled',
       failureReason: null,
+      providerReference: cancelProviderReference,
+      idempotencyKey: idempotencyKey ?? undefined,
+      metadata: {
+        ...(tx.metadata ?? {}),
+        void_reason: reason ?? null,
+        void_idempotency_key: idempotencyKey ?? null,
+      },
+      rawProviderResponse: cancelRawResponse,
     });
-
-    // ── 5. Load intent (for response only — totals not changed) ───────────────
-    let intent: StandalonePaymentIntentDTO | null = null;
-    try {
-      intent = await this.intentRepo.findById(tx.intentId, merchantId);
-    } catch {
-      // Non-fatal: intent metadata is informational in void response
-    }
 
     return {
       transaction: cancelledTx,
-      intent,
+      intent: await this.loadIntent(tx, merchantId),
       providerCancelled,
+      idempotentReplay: false,
     };
+  }
+
+  private async loadIntent(
+    tx: StandalonePaymentTransactionDTO,
+    merchantId: string,
+  ): Promise<StandalonePaymentIntentDTO | null> {
+    try {
+      return await this.intentRepo.findById(tx.intentId, merchantId);
+    } catch {
+      return null;
+    }
   }
 }

@@ -115,14 +115,14 @@ export interface StandalonePaymentProvider {
   getPaymentStatus?(input: StandaloneProviderStatusInput): Promise<StandaloneProviderStatusResult>;
   /**
    * Cancel (void) a payment that is still in a pending/requires_action state.
-   * If not implemented, use cases treat the transaction as directly cancellable
-   * without a provider call (manual/instant cancellation).
+   * If not implemented, only explicit offline providers such as `manual` may
+   * be directly cancelled. Gateway/sandbox providers must return unsupported.
    */
   cancelPayment?(input: StandaloneProviderCancelInput): Promise<StandaloneProviderCancelResult>;
   /**
    * Refund a succeeded payment (fully or partially).
-   * If not implemented, use cases treat the refund as instantly succeeded
-   * without a provider call (manual/offline refund).
+   * If not implemented, only explicit offline providers such as `manual` may
+   * be refunded directly. Gateway/sandbox providers must return unsupported.
    */
   refundPayment?(input: StandaloneProviderRefundInput): Promise<StandaloneProviderRefundResult>;
 }

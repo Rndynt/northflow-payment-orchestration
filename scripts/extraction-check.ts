@@ -161,6 +161,45 @@ check('docs/payment-orchestration-deployment.md', exists('docs/payment-orchestra
 check('docs/payment-orchestration-worker-operations.md', exists('docs/payment-orchestration-worker-operations.md'));
 check('docs/openapi/payment-orchestration.openapi.json', exists('docs/openapi/payment-orchestration.openapi.json'));
 
+
+// ── Section 7B: Legacy payment parity hardening artifacts ───────────────────
+console.log('\nSection 7B: Legacy payment parity hardening');
+const refundUseCase = readText('apps/service/src/application/use-cases/RefundPaymentTransaction.ts');
+const voidUseCase = readText('apps/service/src/application/use-cases/VoidPaymentTransaction.ts');
+const providerContract = readText('apps/service/src/infrastructure/providers/StandalonePaymentProvider.ts');
+const sdkClient = readText('packages/client-sdk/src/client.ts');
+const sdkTypes = readText('packages/client-sdk/src/types.ts');
+const openApi = readText('docs/openapi/payment-orchestration.openapi.json');
+const apiDoc = readText('docs/payment-orchestration-api-contract.md');
+const sdkDoc = readText('docs/payment-orchestration-sdk-contract.md');
+const errorDoc = readText('docs/payment-orchestration-error-codes.md');
+
+check('RefundPaymentTransaction.ts exists', exists('apps/service/src/application/use-cases/RefundPaymentTransaction.ts'));
+check('VoidPaymentTransaction.ts exists', exists('apps/service/src/application/use-cases/VoidPaymentTransaction.ts'));
+check('StandaloneManualProvider.ts exists', exists('apps/service/src/infrastructure/providers/StandaloneManualProvider.ts'));
+check('provider contract exposes cancelPayment', providerContract.includes('cancelPayment?'));
+check('provider contract exposes refundPayment', providerContract.includes('refundPayment?'));
+check('SDK client exposes refundPaymentTransaction', sdkClient.includes('refundPaymentTransaction('));
+check('SDK client exposes voidPaymentTransaction', sdkClient.includes('voidPaymentTransaction('));
+for (const typeName of [
+  'RefundPaymentTransactionRequest',
+  'RefundPaymentTransactionResponse',
+  'VoidPaymentTransactionRequest',
+  'VoidPaymentTransactionResponse',
+]) {
+  check(`SDK types include ${typeName}`, sdkTypes.includes(`interface ${typeName}`));
+}
+check('OpenAPI contains refund endpoint', openApi.includes('/v1/payment-transactions/{transactionId}/refund'));
+check('OpenAPI contains void endpoint', openApi.includes('/v1/payment-transactions/{transactionId}/void'));
+check('parity matrix exists', exists('docs/reports/legacy-payment-to-northflow-parity-matrix.md'));
+check('final parity migration report exists', exists('docs/reports/legacy-payment-parity-migration-report.md'));
+check('docs mention provider refund unsupported behavior',
+  apiDoc.includes('PROVIDER_REFUND_UNSUPPORTED') && sdkDoc.includes('PROVIDER_REFUND_UNSUPPORTED') && errorDoc.includes('PROVIDER_REFUND_UNSUPPORTED'));
+check('docs mention provider cancel unsupported behavior',
+  apiDoc.includes('PROVIDER_CANCEL_UNSUPPORTED') && sdkDoc.includes('PROVIDER_CANCEL_UNSUPPORTED') && errorDoc.includes('PROVIDER_CANCEL_UNSUPPORTED'));
+check('refund use case includes idempotency conflict', refundUseCase.includes('IDEMPOTENCY_CONFLICT'));
+check('void use case accepts idempotencyKey', voidUseCase.includes('idempotencyKey?: string | null'));
+
 // ── Section 8: Phase 8L extraction report ────────────────────────────────────
 console.log('\nSection 8: Extraction report');
 check(

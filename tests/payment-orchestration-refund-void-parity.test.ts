@@ -60,6 +60,12 @@ class InMemoryTransactionRepo implements PaymentTransactionRepository {
     return null;
   }
 
+  async findByMerchantIdempotencyKey(merchantId: string, idempotencyKey: string): Promise<StandalonePaymentTransactionDTO | null> {
+    return [...this.store.values()].find(
+      (tx) => tx.merchantId === merchantId && tx.idempotencyKey === idempotencyKey,
+    ) ?? null;
+  }
+
   async create(input: CreatePaymentTransactionInput): Promise<StandalonePaymentTransactionDTO> {
     const now = new Date();
     const tx: StandalonePaymentTransactionDTO = {
@@ -99,6 +105,9 @@ class InMemoryTransactionRepo implements PaymentTransactionRepository {
       status: input.status,
       failureReason: input.failureReason ?? null,
       providerReference: input.providerReference !== undefined ? input.providerReference : tx.providerReference,
+      idempotencyKey: input.idempotencyKey !== undefined ? input.idempotencyKey : tx.idempotencyKey,
+      metadata: input.metadata !== undefined ? input.metadata : tx.metadata,
+      rawProviderResponse: input.rawProviderResponse !== undefined ? input.rawProviderResponse : tx.rawProviderResponse,
       updatedAt: new Date(),
     };
     this.store.set(input.id, updated);
@@ -314,6 +323,7 @@ describe('StandaloneManualProvider', () => {
     assert.ok(typeof result.providerReference === 'string');
     assert.equal(result.rawProviderResponse['amount'], 30000);
   });
+
 });
 
 // ── Tests: StandaloneFakeGatewayProvider — cancel/refund ─────────────────────
@@ -461,7 +471,7 @@ describe('RefundPaymentTransaction', () => {
     assert.equal(result.intent.amountRefunded, 50000);
   });
 
-  test('refund without any registered provider succeeds (offline fallback)', async () => {
+  test('refund without any registered non-manual provider is unsupported', async () => {
     const { txRepo, intentRepo, useCase } = setup({});  // empty registry
 
     const intentId = randomUUID();
@@ -477,14 +487,13 @@ describe('RefundPaymentTransaction', () => {
     const sourceTx = buildSucceededTransaction(merchantId, intentId, { amount: 80000 });
     txRepo.store.set(sourceTx.id, sourceTx);
 
-    const result = await useCase.execute({
-      merchantId,
-      transactionId: sourceTx.id,
-      amount: 80000,
-    });
-
-    assert.equal(result.refundTransaction.status, 'succeeded');
-    assert.equal(result.providerRefunded, false);
+    await assert.rejects(
+      () => useCase.execute({ merchantId, transactionId: sourceTx.id, amount: 80000 }),
+      (err: any) => {
+        assert.equal(err.code, 'PROVIDER_REFUND_UNSUPPORTED');
+        return true;
+      },
+    );
   });
 
   test('rejects refund exceeding refundable amount', async () => {
@@ -625,6 +634,77 @@ describe('RefundPaymentTransaction', () => {
       },
     );
   });
+
+  test('rejects non-positive refund amount', async () => {
+    const { useCase } = setup();
+    await assert.rejects(
+      () => useCase.execute({ merchantId, transactionId: 'tx-any', amount: 0 }),
+      (err: any) => {
+        assert.equal(err.code, 'VALIDATION_ERROR');
+        return true;
+      },
+    );
+  });
+
+  test('refund idempotent replay returns same refund transaction without duplicate', async () => {
+    const { txRepo, intentRepo, useCase } = setup();
+    const intentId = randomUUID();
+    await intentRepo.create({ id: intentId, merchantId, externalPayableType: 'order', externalPayableId: 'order-idem', amountDue: 100000 });
+    await intentRepo.updateTotals({ id: intentId, merchantId, amountPaid: 100000, amountRefunded: 0, amountRemaining: 0 });
+    const sourceTx = buildSucceededTransaction(merchantId, intentId, { amount: 100000 });
+    txRepo.store.set(sourceTx.id, sourceTx);
+
+    const first = await useCase.execute({ merchantId, transactionId: sourceTx.id, amount: 25000, idempotencyKey: 'refund-key-1' });
+    const second = await useCase.execute({ merchantId, transactionId: sourceTx.id, amount: 25000, idempotencyKey: 'refund-key-1' });
+
+    assert.equal(first.idempotentReplay, false);
+    assert.equal(second.idempotentReplay, true);
+    assert.equal(second.refundTransaction.id, first.refundTransaction.id);
+    assert.equal([...txRepo.store.values()].filter((tx) => tx.transactionType === 'refund').length, 1);
+  });
+
+  test('refund idempotency conflict rejects same key for different source transaction', async () => {
+    const { txRepo, intentRepo, useCase } = setup();
+    const intentId = randomUUID();
+    await intentRepo.create({ id: intentId, merchantId, externalPayableType: 'order', externalPayableId: 'order-conflict', amountDue: 200000 });
+    await intentRepo.updateTotals({ id: intentId, merchantId, amountPaid: 200000, amountRefunded: 0, amountRemaining: 0 });
+    const firstTx = buildSucceededTransaction(merchantId, intentId, { amount: 100000 });
+    const secondTx = buildSucceededTransaction(merchantId, intentId, { amount: 100000 });
+    txRepo.store.set(firstTx.id, firstTx);
+    txRepo.store.set(secondTx.id, secondTx);
+
+    await useCase.execute({ merchantId, transactionId: firstTx.id, amount: 10000, idempotencyKey: 'refund-key-conflict' });
+    await assert.rejects(
+      () => useCase.execute({ merchantId, transactionId: secondTx.id, amount: 10000, idempotencyKey: 'refund-key-conflict' }),
+      (err: any) => {
+        assert.equal(err.code, 'IDEMPOTENCY_CONFLICT');
+        return true;
+      },
+    );
+  });
+
+  test('non-manual provider without refundPayment returns unsupported', async () => {
+    const providerWithoutRefund = {
+      providerCode: 'gateway_without_refund',
+      capabilities: { supportsRefund: false },
+      createPayment: async () => { throw new Error('not used'); },
+    };
+    const { txRepo, intentRepo, useCase } = setup({ gateway_without_refund: providerWithoutRefund });
+    const intentId = randomUUID();
+    await intentRepo.create({ id: intentId, merchantId, externalPayableType: 'order', externalPayableId: 'order-no-refund', amountDue: 100000 });
+    await intentRepo.updateTotals({ id: intentId, merchantId, amountPaid: 100000, amountRefunded: 0, amountRemaining: 0 });
+    const sourceTx = buildSucceededTransaction(merchantId, intentId, { provider: 'gateway_without_refund', amount: 100000 });
+    txRepo.store.set(sourceTx.id, sourceTx);
+
+    await assert.rejects(
+      () => useCase.execute({ merchantId, transactionId: sourceTx.id, amount: 5000 }),
+      (err: any) => {
+        assert.equal(err.code, 'PROVIDER_REFUND_UNSUPPORTED');
+        return true;
+      },
+    );
+  });
+
 });
 
 // ── Tests: VoidPaymentTransaction ─────────────────────────────────────────────
@@ -684,7 +764,7 @@ describe('VoidPaymentTransaction', () => {
     assert.equal(result.providerCancelled, true);
   });
 
-  test('voids without any registered provider (manual cancel)', async () => {
+  test('void without any registered non-manual provider is unsupported', async () => {
     const { txRepo, intentRepo, useCase } = setup({});  // empty registry
 
     const intentId = randomUUID();
@@ -696,9 +776,13 @@ describe('VoidPaymentTransaction', () => {
     const pendingTx = buildPendingTransaction(merchantId, intentId);
     txRepo.store.set(pendingTx.id, pendingTx);
 
-    const result = await useCase.execute({ merchantId, transactionId: pendingTx.id });
-    assert.equal(result.transaction.status, 'cancelled');
-    assert.equal(result.providerCancelled, false);
+    await assert.rejects(
+      () => useCase.execute({ merchantId, transactionId: pendingTx.id }),
+      (err: any) => {
+        assert.equal(err.code, 'PROVIDER_CANCEL_UNSUPPORTED');
+        return true;
+      },
+    );
   });
 
   test('voids with manual provider', async () => {
@@ -796,4 +880,57 @@ describe('VoidPaymentTransaction', () => {
       },
     );
   });
+  test('void idempotent replay returns same cancelled transaction', async () => {
+    const { txRepo, intentRepo, useCase } = setup();
+    const intentId = randomUUID();
+    await intentRepo.create({ id: intentId, merchantId, externalPayableType: 'order', externalPayableId: 'v-order-idem', amountDue: 50000 });
+    const pendingTx = buildPendingTransaction(merchantId, intentId);
+    txRepo.store.set(pendingTx.id, pendingTx);
+
+    const first = await useCase.execute({ merchantId, transactionId: pendingTx.id, idempotencyKey: 'void-key-1' });
+    const second = await useCase.execute({ merchantId, transactionId: pendingTx.id, idempotencyKey: 'void-key-1' });
+
+    assert.equal(first.idempotentReplay, false);
+    assert.equal(second.idempotentReplay, true);
+    assert.equal(second.transaction.id, first.transaction.id);
+    assert.equal(second.transaction.status, 'cancelled');
+  });
+
+  test('already cancelled void without matching key rejects', async () => {
+    const { txRepo, intentRepo, useCase } = setup();
+    const intentId = randomUUID();
+    await intentRepo.create({ id: intentId, merchantId, externalPayableType: 'order', externalPayableId: 'v-order-cancelled', amountDue: 50000 });
+    const cancelledTx = buildPendingTransaction(merchantId, intentId, { status: 'cancelled', idempotencyKey: 'original-key' });
+    txRepo.store.set(cancelledTx.id, cancelledTx);
+
+    await assert.rejects(
+      () => useCase.execute({ merchantId, transactionId: cancelledTx.id, idempotencyKey: 'different-key' }),
+      (err: any) => {
+        assert.equal(err.code, 'TRANSACTION_NOT_VOIDABLE');
+        return true;
+      },
+    );
+  });
+
+  test('non-manual provider without cancelPayment returns unsupported', async () => {
+    const providerWithoutCancel = {
+      providerCode: 'gateway_without_cancel',
+      capabilities: { supportsCancel: false },
+      createPayment: async () => { throw new Error('not used'); },
+    };
+    const { txRepo, intentRepo, useCase } = setup({ gateway_without_cancel: providerWithoutCancel });
+    const intentId = randomUUID();
+    await intentRepo.create({ id: intentId, merchantId, externalPayableType: 'order', externalPayableId: 'v-order-no-cancel', amountDue: 50000 });
+    const pendingTx = buildPendingTransaction(merchantId, intentId, { provider: 'gateway_without_cancel' });
+    txRepo.store.set(pendingTx.id, pendingTx);
+
+    await assert.rejects(
+      () => useCase.execute({ merchantId, transactionId: pendingTx.id }),
+      (err: any) => {
+        assert.equal(err.code, 'PROVIDER_CANCEL_UNSUPPORTED');
+        return true;
+      },
+    );
+  });
+
 });

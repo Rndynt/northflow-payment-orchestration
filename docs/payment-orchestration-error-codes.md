@@ -185,3 +185,9 @@ try {
   }
 }
 ```
+
+## Refund/void provider fallback hardening notes
+
+- `PROVIDER_REFUND_UNSUPPORTED`: returned when a non-manual gateway/sandbox provider does not expose `refundPayment()`. Manual refunds may be recorded offline; FakeGateway supports deterministic dev/test refund; Xendit sandbox currently returns unsupported.
+- `PROVIDER_CANCEL_UNSUPPORTED`: returned when a non-manual gateway/sandbox provider does not expose `cancelPayment()`. Manual void/cancel may be recorded offline; FakeGateway supports deterministic dev/test cancel; Xendit sandbox currently returns unsupported.
+- `IDEMPOTENCY_CONFLICT`: returned when the same merchant-scoped idempotency key is reused for a different refund/void transaction context. Matching refund/void replay returns success with `idempotentReplay: true`.

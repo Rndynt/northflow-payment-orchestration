@@ -100,6 +100,8 @@ export function createTransactionsRouter(container: ServiceContainer): Router {
           refundTransaction: serializeTransaction(result.refundTransaction),
           intent: serializeIntent(result.intent),
           providerRefunded: result.providerRefunded,
+          idempotentReplay: result.idempotentReplay,
+          refundableRemaining: result.refundableRemaining,
         },
       });
     } catch (err) {
@@ -115,6 +117,7 @@ export function createTransactionsRouter(container: ServiceContainer): Router {
    * Body:
    *   merchantId  string  — owner merchant (or x-payment-merchant-id header)
    *   reason      string? — optional human-readable reason
+   *   idempotencyKey string? — optional caller idempotency key
    */
   router.post('/:id/void', async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -132,11 +135,13 @@ export function createTransactionsRouter(container: ServiceContainer): Router {
       }
 
       const reason = typeof body['reason'] === 'string' ? body['reason'] : null;
+      const idempotencyKey = typeof body['idempotencyKey'] === 'string' ? body['idempotencyKey'] : null;
 
       const result = await container.useCases.voidPaymentTransaction.execute({
         merchantId,
         transactionId,
         reason,
+        idempotencyKey,
       });
 
       res.json({
@@ -145,6 +150,7 @@ export function createTransactionsRouter(container: ServiceContainer): Router {
           transaction: serializeTransaction(result.transaction),
           intent: result.intent ? serializeIntent(result.intent) : null,
           providerCancelled: result.providerCancelled,
+          idempotentReplay: result.idempotentReplay,
         },
       });
     } catch (err) {

@@ -231,3 +231,34 @@ try {
 ## SDK Versioning
 
 The SDK follows the same `@northflow/payment-orchestration-*` version line. Phase 8K freezes the public method/type contract; no breaking changes will be made without a major version bump.
+
+## Legacy parity hardening: refund/void SDK methods
+
+### `refundPaymentTransaction(transactionId, input)`
+
+Route: `POST /v1/payment-transactions/:transactionId/refund`
+
+```ts
+await client.refundPaymentTransaction('tx_123', {
+  amount: 5000,
+  reason: 'customer_return',
+  idempotencyKey: 'refund-order-1-line-2',
+});
+```
+
+The SDK injects `merchantId` from `PaymentOrchestrationClientConfig.merchantId` into the request body when omitted. The response includes `refundTransaction`, `intent`, `providerRefunded`, `idempotentReplay`, and optional `refundableRemaining`.
+
+### `voidPaymentTransaction(transactionId, input?)`
+
+Route: `POST /v1/payment-transactions/:transactionId/void`
+
+```ts
+await client.voidPaymentTransaction('tx_123', {
+  reason: 'customer_cancelled',
+  idempotencyKey: 'void-order-1-attempt-1',
+});
+```
+
+The SDK injects `merchantId` into the body when omitted. The response includes `transaction`, nullable `intent`, `providerCancelled`, and `idempotentReplay`.
+
+Refund/void idempotency conflicts are surfaced as `PaymentOrchestrationClientError` with code `IDEMPOTENCY_CONFLICT`. Provider capability failures surface as `PROVIDER_REFUND_UNSUPPORTED` or `PROVIDER_CANCEL_UNSUPPORTED`. Manual provider operations can succeed offline; FakeGateway is deterministic dev/test; Xendit sandbox returns unsupported for refund/cancel until real sandbox adapter methods are added.
