@@ -151,9 +151,7 @@ export class CreateGatewayPayment {
     }
 
     assertIntentPayable(intent);
-    if (!input.idempotencyKey || input.amount > intent.amountRemaining || input.amount === intent.amountRemaining) {
-      assertPaymentAmountAllowed(intent, input.amount);
-    }
+    assertPaymentAmountAllowed(intent, input.amount);
 
     // ── Task 4: Provider account validation ───────────────────────────────────
     let providerAccount: PaymentProviderAccount | null = null;
