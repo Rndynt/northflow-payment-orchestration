@@ -6,4 +6,5 @@ pnpm-lock.yaml
 .turbo/
 
 
-.apps/dashboard/.next
+apps/dashboard/.next
+apps/dashboard/.next/
