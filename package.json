@@ -18,8 +18,9 @@
     "extraction-check": "npx tsx --tsconfig tests/tsconfig.json scripts/extraction-check.ts"
   },
   "devDependencies": {
+    "@types/node": "20.16.11",
     "turbo": "^2.0.0",
     "tsx": "^4.21.0",
-    "@types/node": "20.16.11"
+    "typescript": "^5.9.3"
   }
 }
