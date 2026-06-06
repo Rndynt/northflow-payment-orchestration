@@ -2,7 +2,7 @@
  * DrizzlePaymentProviderAccountRepository — Phase 8D real implementation.
  *
  * Implements PaymentProviderAccountRepository using Drizzle ORM against
- * the payment_orchestration_provider_accounts table.
+ * the po_provider_accounts table.
  */
 
 import { eq, and } from 'drizzle-orm';
@@ -12,7 +12,7 @@ import type {
 } from '@northflow/payment-orchestration-core';
 import type { PaymentProviderAccount } from '@northflow/payment-orchestration-core';
 import type { PoDb } from '../db.ts';
-import { paymentOrchestrationProviderAccounts as t } from '../schema.ts';
+import { poProviderAccounts as t } from '../schema.ts';
 import { mapProviderAccountRow } from './mappers.ts';
 
 export class DrizzlePaymentProviderAccountRepository

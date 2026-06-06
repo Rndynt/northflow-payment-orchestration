@@ -2,7 +2,7 @@
  * DrizzlePaymentIntentRepository — Phase 8D real implementation.
  *
  * Implements PaymentIntentRepository using Drizzle ORM against
- * the payment_orchestration_intents table.
+ * the po_intents table.
  */
 
 import { eq, and, lte, inArray } from 'drizzle-orm';
@@ -15,7 +15,7 @@ import type {
 } from '@northflow/payment-orchestration-core';
 import type { StandalonePaymentIntentDTO } from '@northflow/payment-orchestration-core';
 import type { PoDb } from '../db.ts';
-import { paymentOrchestrationIntents as t } from '../schema.ts';
+import { poIntents as t } from '../schema.ts';
 import { mapIntentRow } from './mappers.ts';
 
 export class DrizzlePaymentIntentRepository implements PaymentIntentRepository {

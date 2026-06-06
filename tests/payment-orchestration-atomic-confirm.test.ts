@@ -223,7 +223,7 @@ function makeRepos() {
   };
 }
 
-async function setupMerchantAndIntent(repos: ReturnType<typeof makeRepos>, amountDue = 50000) {
+async function setupMerchantAndIntent(repos: ReturnType<typeof makeRepos>, amountDue = 50000, allowPartial = false) {
   const merchantId = `m-${randomUUID()}`;
   const intentId = `pi-${randomUUID()}`;
   const fakeGateway = new StandaloneFakeGatewayProvider();
@@ -231,7 +231,7 @@ async function setupMerchantAndIntent(repos: ReturnType<typeof makeRepos>, amoun
 
   await repos.merchantRepo.create({ id: merchantId, name: 'Test Merchant' });
   await repos.providerAccountRepo.create({ id: `pa-${randomUUID()}`, merchantId, provider: 'fake_gateway', environment: 'sandbox' });
-  await repos.intentRepo.create({ id: intentId, merchantId, externalPayableType: 'order', externalPayableId: `ord-${randomUUID()}`, amountDue });
+  await repos.intentRepo.create({ id: intentId, merchantId, externalPayableType: 'order', externalPayableId: `ord-${randomUUID()}`, amountDue, allowPartial });
 
   const createGateway = new CreateGatewayPayment(
     repos.merchantRepo, repos.intentRepo, repos.transactionRepo, providerRegistry,
@@ -469,7 +469,7 @@ describe('AC09 — CreateGatewayPayment: idempotency replay for completed key', 
 describe('AC10 — ConfirmFakeGatewayPayment overpayment guard', () => {
   test('rejects confirm when tx amount exceeds amountRemaining', async () => {
     const repos = makeRepos();
-    const { merchantId, intentId, createGateway, confirm } = await setupMerchantAndIntent(repos, 30000);
+    const { merchantId, intentId, createGateway, confirm } = await setupMerchantAndIntent(repos, 30000, true);
 
     // Create two transactions that together exceed amountDue.
     const { transaction: tx1 } = await createGateway.execute({

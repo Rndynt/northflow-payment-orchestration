@@ -4,7 +4,7 @@
 
 import { eq } from 'drizzle-orm';
 import type { PoDb } from '../db.ts';
-import { paymentOrchestrationApiClients } from '../schema.ts';
+import { poApiClients } from '../schema.ts';
 import type { ApiClientRepository, CreateApiClientInput } from '@northflow/payment-orchestration-core';
 import type { ApiClientDTO, ApiClientStatus } from '@northflow/payment-orchestration-core';
 
@@ -14,15 +14,15 @@ export class DrizzleApiClientRepository implements ApiClientRepository {
   async findById(id: string): Promise<ApiClientDTO | null> {
     const rows = await this.db
       .select()
-      .from(paymentOrchestrationApiClients)
-      .where(eq(paymentOrchestrationApiClients.id, id))
+      .from(poApiClients)
+      .where(eq(poApiClients.id, id))
       .limit(1);
     return rows[0] ? this.#map(rows[0]) : null;
   }
 
   async create(input: CreateApiClientInput): Promise<ApiClientDTO> {
     const rows = await this.db
-      .insert(paymentOrchestrationApiClients)
+      .insert(poApiClients)
       .values({
         id: input.id,
         name: input.name,
@@ -38,15 +38,15 @@ export class DrizzleApiClientRepository implements ApiClientRepository {
 
   async updateStatus(id: string, status: ApiClientStatus): Promise<ApiClientDTO> {
     const rows = await this.db
-      .update(paymentOrchestrationApiClients)
+      .update(poApiClients)
       .set({ status, updatedAt: new Date() })
-      .where(eq(paymentOrchestrationApiClients.id, id))
+      .where(eq(poApiClients.id, id))
       .returning();
     if (!rows[0]) throw new Error(`ApiClient not found: ${id}`);
     return this.#map(rows[0]);
   }
 
-  #map(row: typeof paymentOrchestrationApiClients.$inferSelect): ApiClientDTO {
+  #map(row: typeof poApiClients.$inferSelect): ApiClientDTO {
     return {
       id: row.id,
       name: row.name,

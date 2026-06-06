@@ -1,47 +1,44 @@
 /**
  * db — standalone DB connection for payment-orchestration-service.
  *
- * Phase 8D: wires a dedicated Drizzle/postgres.js connection for the
- * standalone payment_orchestration_* tables.
+ * Tables use the po_* prefix (shortened from payment_orchestration_*).
+ *
+ * Design constraints:
+ * - prepare: false  (NeonDB/PgBouncer-compatible)
+ * - max: 3          (standalone service keeps a small pool)
  *
  * DB URL resolution order:
  *   PAYMENT_ORCHESTRATION_DATABASE_URL → DATABASE_URL
  *
- * Design constraints:
- * - prepare: false  (NeonDB/PgBouncer-compatible — same as apps/api pattern)
- * - max: 3          (standalone service keeps a small pool)
- * - No AuraPoS session/tenant middleware imported here.
- * - Schema imported from service-local schema.ts (standalone payment_orchestration_* ownership).
- *
  * Migrations:
- *   Run manually: psql $DATABASE_URL -f apps/payment-orchestration-service/migrations/0001_payment_orchestration_initial.sql
- *   Do NOT auto-run migrations at startup.
+ *   pnpm db:migrate   (official — Drizzle managed)
+ *   pnpm db:generate  (generate diff after schema changes)
  */
 
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import {
-  paymentOrchestrationMerchants,
-  paymentOrchestrationProviderAccounts,
-  paymentOrchestrationIntents,
-  paymentOrchestrationTransactions,
-  paymentOrchestrationProviderEvents,
-  paymentOrchestrationIdempotencyKeys,
-  paymentOrchestrationApiClients,
-  paymentOrchestrationClientCredentials,
-  paymentOrchestrationClientMerchantAccess,
+  poMerchants,
+  poProviderAccounts,
+  poIntents,
+  poTransactions,
+  poProviderEvents,
+  poIdempotencyKeys,
+  poApiClients,
+  poClientCredentials,
+  poClientMerchantAccess,
 } from './schema.ts';
 
 export const poSchema = {
-  paymentOrchestrationMerchants,
-  paymentOrchestrationProviderAccounts,
-  paymentOrchestrationIntents,
-  paymentOrchestrationTransactions,
-  paymentOrchestrationProviderEvents,
-  paymentOrchestrationIdempotencyKeys,
-  paymentOrchestrationApiClients,
-  paymentOrchestrationClientCredentials,
-  paymentOrchestrationClientMerchantAccess,
+  poMerchants,
+  poProviderAccounts,
+  poIntents,
+  poTransactions,
+  poProviderEvents,
+  poIdempotencyKeys,
+  poApiClients,
+  poClientCredentials,
+  poClientMerchantAccess,
 };
 
 export type PoDb = ReturnType<typeof createPoDb>;

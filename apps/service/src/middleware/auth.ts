@@ -202,10 +202,32 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
  *
  * Never log or persist raw.
  */
+/**
+ * Allowed character patterns for credential components:
+ *   environment  — lowercase letters, digits, hyphen  (e.g. "live", "sandbox", "prod-1")
+ *   credentialId — letters, digits, hyphen             (e.g. "abc123", "cred-A1")
+ *
+ * Rejected: empty, whitespace, dots, slashes, or any other delimiter
+ * that could break the nf.<env>.<id>.<secret> dot-split parsing.
+ * Underscores are allowed since dots are the only delimiter.
+ */
+const ENV_RE = /^[a-z0-9-]+$/;
+const CRED_ID_RE = /^[a-zA-Z0-9_-]+$/;
+
 export function generateCredential(
   environment: string,
   credentialId: string,
 ): { raw: string; prefix: string; hash: string } {
+  if (!environment || !ENV_RE.test(environment)) {
+    throw new Error(
+      `[generateCredential] Invalid environment "${environment}": must be non-empty and match /^[a-z0-9-]+$/`,
+    );
+  }
+  if (!credentialId || !CRED_ID_RE.test(credentialId)) {
+    throw new Error(
+      `[generateCredential] Invalid credentialId "${credentialId}": must be non-empty and match /^[a-zA-Z0-9_-]+$/`,
+    );
+  }
   const secret = randomBytes(32).toString('base64url');
   const prefix = `nf.${environment}.${credentialId}`;
   const raw = `${prefix}.${secret}`;

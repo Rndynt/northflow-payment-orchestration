@@ -2,7 +2,7 @@
  * DrizzlePaymentTransactionRepository — Phase 8D real implementation.
  *
  * Implements PaymentTransactionRepository using Drizzle ORM against
- * the payment_orchestration_transactions table.
+ * the po_transactions table.
  */
 
 import { eq, and, sum, inArray, lte, isNotNull, sql } from 'drizzle-orm';
@@ -20,8 +20,8 @@ import type {
 import type { StandalonePaymentTransactionDTO } from '@northflow/payment-orchestration-core';
 import type { PoDb } from '../db.ts';
 import {
-  paymentOrchestrationTransactions as t,
-  paymentOrchestrationIntents as intents,
+  poTransactions as t,
+  poIntents as intents,
 } from '../schema.ts';
 import { mapIntentRow, mapTransactionRow } from './mappers.ts';
 

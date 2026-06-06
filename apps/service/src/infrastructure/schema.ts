@@ -1,10 +1,8 @@
 /**
  * schema — payment-orchestration-service owned Drizzle schema.
  *
- * This module is the standalone source of truth for `payment_orchestration_*`
- * tables. AuraPoS root/shared schema may keep compatibility definitions for
- * monorepo tests and migrations, but service repositories must import from this
- * service-local module only.
+ * Table prefix: po_* (shortened from payment_orchestration_* for readability).
+ * All indexes keep the existing po_ naming convention.
  */
 
 import { sql } from 'drizzle-orm';
@@ -19,7 +17,7 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
-export const paymentOrchestrationMerchants = pgTable('payment_orchestration_merchants', {
+export const poMerchants = pgTable('po_merchants', {
   id: text('id').primaryKey(),
   externalRef: text('external_ref'),
   sourceApp: text('source_app'),
@@ -36,9 +34,9 @@ export const paymentOrchestrationMerchants = pgTable('payment_orchestration_merc
   statusIdx: index('po_merchants_status_idx').on(table.status),
 }));
 
-export const paymentOrchestrationProviderAccounts = pgTable('payment_orchestration_provider_accounts', {
+export const poProviderAccounts = pgTable('po_provider_accounts', {
   id: text('id').primaryKey(),
-  merchantId: text('merchant_id').notNull().references(() => paymentOrchestrationMerchants.id, { onDelete: 'cascade' }),
+  merchantId: text('merchant_id').notNull().references(() => poMerchants.id, { onDelete: 'cascade' }),
   provider: text('provider').notNull(),
   providerAccountRef: text('provider_account_ref'),
   environment: text('environment').notNull(),
@@ -55,10 +53,10 @@ export const paymentOrchestrationProviderAccounts = pgTable('payment_orchestrati
     .where(sql`${table.providerAccountRef} IS NOT NULL`),
 }));
 
-export const paymentOrchestrationIntents = pgTable('payment_orchestration_intents', {
+export const poIntents = pgTable('po_intents', {
   id: text('id').primaryKey(),
-  merchantId: text('merchant_id').notNull().references(() => paymentOrchestrationMerchants.id, { onDelete: 'cascade' }),
-  providerAccountId: text('provider_account_id').references(() => paymentOrchestrationProviderAccounts.id, { onDelete: 'set null' }),
+  merchantId: text('merchant_id').notNull().references(() => poMerchants.id, { onDelete: 'cascade' }),
+  providerAccountId: text('provider_account_id').references(() => poProviderAccounts.id, { onDelete: 'set null' }),
   sourceApp: text('source_app'),
   externalTenantId: text('external_tenant_id'),
   externalOutletId: text('external_outlet_id'),
@@ -85,11 +83,11 @@ export const paymentOrchestrationIntents = pgTable('payment_orchestration_intent
     .where(sql`${table.sourceApp} IS NOT NULL`),
 }));
 
-export const paymentOrchestrationTransactions = pgTable('payment_orchestration_transactions', {
+export const poTransactions = pgTable('po_transactions', {
   id: text('id').primaryKey(),
-  merchantId: text('merchant_id').notNull().references(() => paymentOrchestrationMerchants.id, { onDelete: 'cascade' }),
-  intentId: text('intent_id').notNull().references(() => paymentOrchestrationIntents.id, { onDelete: 'cascade' }),
-  providerAccountId: text('provider_account_id').references(() => paymentOrchestrationProviderAccounts.id, { onDelete: 'set null' }),
+  merchantId: text('merchant_id').notNull().references(() => poMerchants.id, { onDelete: 'cascade' }),
+  intentId: text('intent_id').notNull().references(() => poIntents.id, { onDelete: 'cascade' }),
+  providerAccountId: text('provider_account_id').references(() => poProviderAccounts.id, { onDelete: 'set null' }),
   provider: text('provider').notNull(),
   method: text('method').notNull(),
   transactionType: text('transaction_type').notNull(),
@@ -97,7 +95,7 @@ export const paymentOrchestrationTransactions = pgTable('payment_orchestration_t
   direction: text('direction').notNull(),
   amount: integer('amount').notNull(),
   currency: text('currency').notNull().default('IDR'),
-  parentTransactionId: text('parent_transaction_id').references((): any => paymentOrchestrationTransactions.id, { onDelete: 'set null' }),
+  parentTransactionId: text('parent_transaction_id').references((): any => poTransactions.id, { onDelete: 'set null' }),
   providerReference: text('provider_reference'),
   providerEventId: text('provider_event_id'),
   providerPaymentUrl: text('provider_payment_url'),
@@ -122,9 +120,9 @@ export const paymentOrchestrationTransactions = pgTable('payment_orchestration_t
     .where(sql`${table.providerReference} IS NOT NULL`),
 }));
 
-export const paymentOrchestrationProviderEvents = pgTable('payment_orchestration_provider_events', {
+export const poProviderEvents = pgTable('po_provider_events', {
   id: text('id').primaryKey(),
-  merchantId: text('merchant_id').references(() => paymentOrchestrationMerchants.id, { onDelete: 'set null' }),
+  merchantId: text('merchant_id').references(() => poMerchants.id, { onDelete: 'set null' }),
   provider: text('provider').notNull(),
   providerEventId: text('provider_event_id').notNull(),
   providerReference: text('provider_reference'),
@@ -147,9 +145,9 @@ export const paymentOrchestrationProviderEvents = pgTable('payment_orchestration
   receivedAtIdx: index('po_provider_events_received_at_idx').on(table.receivedAt),
 }));
 
-export const paymentOrchestrationIdempotencyKeys = pgTable('payment_orchestration_idempotency_keys', {
+export const poIdempotencyKeys = pgTable('po_idempotency_keys', {
   id: text('id').primaryKey(),
-  merchantId: text('merchant_id').notNull().references(() => paymentOrchestrationMerchants.id, { onDelete: 'cascade' }),
+  merchantId: text('merchant_id').notNull().references(() => poMerchants.id, { onDelete: 'cascade' }),
   scope: text('scope').notNull(),
   idempotencyKey: text('idempotency_key').notNull(),
   requestHash: text('request_hash').notNull(),
@@ -167,9 +165,7 @@ export const paymentOrchestrationIdempotencyKeys = pgTable('payment_orchestratio
   statusIdx: index('po_idempotency_status_idx').on(table.status),
 }));
 
-// ── S1: API Client Registry ────────────────────────────────────────────────────
-
-export const paymentOrchestrationApiClients = pgTable('payment_orchestration_api_clients', {
+export const poApiClients = pgTable('po_api_clients', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   sourceApp: text('source_app').notNull(),
@@ -184,9 +180,9 @@ export const paymentOrchestrationApiClients = pgTable('payment_orchestration_api
   statusIdx: index('po_api_clients_status_idx').on(table.status),
 }));
 
-export const paymentOrchestrationClientCredentials = pgTable('payment_orchestration_client_credentials', {
+export const poClientCredentials = pgTable('po_client_credentials', {
   id: text('id').primaryKey(),
-  clientId: text('client_id').notNull().references(() => paymentOrchestrationApiClients.id, { onDelete: 'cascade' }),
+  clientId: text('client_id').notNull().references(() => poApiClients.id, { onDelete: 'cascade' }),
   credentialPrefix: text('credential_prefix').notNull(),
   credentialHash: text('credential_hash').notNull(),
   status: text('status').notNull().default('active'),
@@ -200,10 +196,10 @@ export const paymentOrchestrationClientCredentials = pgTable('payment_orchestrat
   statusIdx: index('po_client_credentials_status_idx').on(table.status),
 }));
 
-export const paymentOrchestrationClientMerchantAccess = pgTable('payment_orchestration_client_merchant_access', {
+export const poClientMerchantAccess = pgTable('po_client_merchant_access', {
   id: text('id').primaryKey(),
-  clientId: text('client_id').notNull().references(() => paymentOrchestrationApiClients.id, { onDelete: 'cascade' }),
-  merchantId: text('merchant_id').notNull().references(() => paymentOrchestrationMerchants.id, { onDelete: 'cascade' }),
+  clientId: text('client_id').notNull().references(() => poApiClients.id, { onDelete: 'cascade' }),
+  merchantId: text('merchant_id').notNull().references(() => poMerchants.id, { onDelete: 'cascade' }),
   scopes: jsonb('scopes').notNull().default([]),
   status: text('status').notNull().default('active'),
   createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),

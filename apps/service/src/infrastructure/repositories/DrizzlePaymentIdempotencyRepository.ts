@@ -2,7 +2,7 @@
  * DrizzlePaymentIdempotencyRepository — Phase 8D real implementation.
  *
  * Implements PaymentIdempotencyRepository using Drizzle ORM against
- * the payment_orchestration_idempotency_keys table.
+ * the po_idempotency_keys table.
  *
  * Uniqueness constraint: (merchantId, scope, idempotencyKey).
  * reserve() inserts with status 'processing'; conflicts bubble up as errors to caller.
@@ -21,7 +21,7 @@ import type {
   ReserveIdempotencyKeyResult,
 } from '@northflow/payment-orchestration-core';
 import type { PoDb } from '../db.ts';
-import { paymentOrchestrationIdempotencyKeys as t } from '../schema.ts';
+import { poIdempotencyKeys as t } from '../schema.ts';
 import { mapIdempotencyKeyRow } from './mappers.ts';
 
 export class DrizzlePaymentIdempotencyRepository

@@ -5,6 +5,10 @@
  * Phase 8K: use frozen error envelope via apiErrorResponse().
  * Phase S3/S4/S5: merchant access guard, sourceApp enforcement, scope checks.
  * Phase S-Hardening P0.3/P0.4: use assertMerchantAccessWithScope (fail-closed + grant scopes).
+ * Phase S1-P1.1: merchant creation is atomic — grant is always created or request fails.
+ *   Normal clients cannot create an orphan merchant:
+ *     - 503 SERVICE_MISCONFIGURED if accessRepo is missing before merchant creation.
+ *     - Grant creation errors propagate as 500 (not swallowed).
  */
 
 import { randomUUID } from 'crypto';
@@ -36,6 +40,17 @@ export function createMerchantsRouter(container: ServiceContainer): Router {
         return;
       }
 
+      // P1.1: fail-closed — normal (non-legacy, non-internal) clients require the access repo
+      // to be present before we create the merchant. This prevents orphan merchants.
+      const isNormalClient = req.auth!.clientId !== 'legacy' && req.auth!.sourceApp !== 'internal';
+      if (isNormalClient && !accessRepo) {
+        res.status(503).json(apiErrorResponse(
+          'SERVICE_MISCONFIGURED',
+          'Merchant access authorization service is unavailable.',
+        ));
+        return;
+      }
+
       // S4: enforce sourceApp matches authenticated client
       const sourceAppErr = assertSourceApp(req.auth!, body);
       if (sourceAppErr) { res.status(403).json(sourceAppErr); return; }
@@ -49,14 +64,16 @@ export function createMerchantsRouter(container: ServiceContainer): Router {
         metadata: metadata != null && typeof metadata === 'object' ? (metadata as Record<string, unknown>) : {},
       });
 
-      // S3: link newly-created merchant to the creating API client (non-legacy, non-system)
-      if (result.created && accessRepo && req.auth && req.auth.clientId !== 'legacy' && req.auth.sourceApp !== 'internal') {
+      // P1.1: S3 — link newly-created merchant to the creating API client (non-legacy, non-system).
+      // Grant creation is awaited and errors are NOT swallowed — a grant failure causes
+      // the entire request to fail (500) so the caller knows no orphan merchant was created.
+      if (result.created && isNormalClient && accessRepo) {
         await accessRepo.create({
           id: randomUUID(),
-          clientId: req.auth.clientId,
+          clientId: req.auth!.clientId,
           merchantId: result.merchant.id,
-          scopes: req.auth.scopes,
-        }).catch(() => {});
+          scopes: req.auth!.scopes,
+        });
       }
 
       res.status(result.created ? 201 : 200).json({

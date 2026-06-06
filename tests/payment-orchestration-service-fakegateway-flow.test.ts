@@ -981,6 +981,7 @@ describe('Phase 8D FakeGateway Flow', () => {
       externalPayableId: 'order-cfl-001',
       currency: 'IDR',
       amountDue: 200000,
+      allowPartial: true,
     });
 
     const idemKey = 'idem-key-s16-001';

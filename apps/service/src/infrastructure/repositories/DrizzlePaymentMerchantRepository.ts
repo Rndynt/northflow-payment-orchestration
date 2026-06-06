@@ -12,7 +12,7 @@ import type {
 } from '@northflow/payment-orchestration-core';
 import type { PaymentMerchant } from '@northflow/payment-orchestration-core';
 import type { PoDb } from '../db.ts';
-import { paymentOrchestrationMerchants as t } from '../schema.ts';
+import { poMerchants as t } from '../schema.ts';
 import { mapMerchantRow } from './mappers.ts';
 
 export class DrizzlePaymentMerchantRepository implements PaymentMerchantRepository {

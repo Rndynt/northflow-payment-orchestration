@@ -142,7 +142,7 @@ export interface IdempotencyKeyRow {
 // ── Mappers ────────────────────────────────────────────────────────────────────
 
 /**
- * mapMerchantRow — maps a payment_orchestration_merchants DB row to PaymentMerchant.
+ * mapMerchantRow — maps a po_merchants DB row to PaymentMerchant.
  *
  * Uses `id` as the merchantId-equivalent field (standalone merchants use slug/text IDs).
  * No `tenantId` exposed.
@@ -158,7 +158,7 @@ export function mapMerchantRow(row: MerchantRow): PaymentMerchant {
 }
 
 /**
- * mapProviderAccountRow — maps a payment_orchestration_provider_accounts row to PaymentProviderAccount.
+ * mapProviderAccountRow — maps a po_provider_accounts row to PaymentProviderAccount.
  *
  * `providerAccountRef` is the provider's own account identifier — safe to expose in API responses.
  * `credentialsRef` is an opaque secret-store reference — callers MUST NOT expose it in public responses.
@@ -178,7 +178,7 @@ export function mapProviderAccountRow(row: ProviderAccountRow): PaymentProviderA
 }
 
 /**
- * mapIntentRow — maps a payment_orchestration_intents row to StandalonePaymentIntentDTO.
+ * mapIntentRow — maps a po_intents row to StandalonePaymentIntentDTO.
  *
  * External references (sourceApp, externalTenantId, etc.) are preserved for callback correlation.
  * No AuraPoS tenantId in the output.
@@ -210,7 +210,7 @@ export function mapIntentRow(row: IntentRow): StandalonePaymentIntentDTO {
 }
 
 /**
- * mapTransactionRow — maps a payment_orchestration_transactions row to StandalonePaymentTransactionDTO.
+ * mapTransactionRow — maps a po_transactions row to StandalonePaymentTransactionDTO.
  *
  * Provider reference and action fields (url, qr) are mapped safely.
  * rawProviderResponse is passed through but callers must not leak it externally.
@@ -245,7 +245,7 @@ export function mapTransactionRow(row: TransactionRow): StandalonePaymentTransac
 }
 
 /**
- * mapProviderEventRow — maps a payment_orchestration_provider_events row to PaymentProviderEventDTO.
+ * mapProviderEventRow — maps a po_provider_events row to PaymentProviderEventDTO.
  *
  * merchantId may be null at initial receipt; it is backfilled after providerReference resolution.
  */
@@ -271,7 +271,7 @@ export function mapProviderEventRow(row: ProviderEventRow): PaymentProviderEvent
 }
 
 /**
- * mapIdempotencyKeyRow — maps a payment_orchestration_idempotency_keys row to PaymentIdempotencyKeyDTO.
+ * mapIdempotencyKeyRow — maps a po_idempotency_keys row to PaymentIdempotencyKeyDTO.
  *
  * responseSnapshot is preserved for idempotent replay.
  */

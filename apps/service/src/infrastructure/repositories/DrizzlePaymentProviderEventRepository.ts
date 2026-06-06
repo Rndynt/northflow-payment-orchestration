@@ -2,7 +2,7 @@
  * DrizzlePaymentProviderEventRepository — Phase 8D real implementation.
  *
  * Implements PaymentProviderEventRepository using Drizzle ORM against
- * the payment_orchestration_provider_events table.
+ * the po_provider_events table.
  *
  * Phase 8D: full implementation for Phase 8E/9 compatibility.
  * Webhook processing use case NOT yet wired in Phase 8D.
@@ -19,7 +19,7 @@ import type {
   ReserveProviderEventInput,
 } from '@northflow/payment-orchestration-core';
 import type { PoDb } from '../db.ts';
-import { paymentOrchestrationProviderEvents as t } from '../schema.ts';
+import { poProviderEvents as t } from '../schema.ts';
 import { mapProviderEventRow } from './mappers.ts';
 import { redactSensitiveRecord } from '../../application/payment-state/redaction.ts';
 
