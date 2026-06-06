@@ -4,3 +4,6 @@ dist/
 *.local
 pnpm-lock.yaml
 .turbo/
+
+
+.apps/dashboard/.next
