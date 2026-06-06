@@ -312,6 +312,61 @@ export interface PaymentProviderEventRepository {
   findStalePending(input: FindStalePendingInput): Promise<PaymentProviderEventDTO[]>;
 }
 
+// ── S1: API Client Registry ───────────────────────────────────────────────────
+
+import type {
+  ApiClientDTO,
+  ClientCredentialDTO,
+  ClientMerchantAccessDTO,
+  ApiClientStatus,
+} from '../domain/ApiClient';
+
+export interface CreateApiClientInput {
+  id: string;
+  name: string;
+  sourceApp: string;
+  environment: string;
+  scopes?: string[];
+  status?: ApiClientStatus;
+  metadata?: Record<string, unknown>;
+}
+
+export interface CreateClientCredentialInput {
+  id: string;
+  clientId: string;
+  credentialPrefix: string;
+  credentialHash: string;
+  expiresAt?: Date | null;
+}
+
+export interface CreateClientMerchantAccessInput {
+  id: string;
+  clientId: string;
+  merchantId: string;
+  scopes: string[];
+}
+
+export interface ApiClientRepository {
+  findById(id: string): Promise<ApiClientDTO | null>;
+  create(input: CreateApiClientInput): Promise<ApiClientDTO>;
+  updateStatus(id: string, status: ApiClientStatus): Promise<ApiClientDTO>;
+}
+
+export interface ClientCredentialRepository {
+  findByPrefix(prefix: string): Promise<ClientCredentialDTO[]>;
+  findById(id: string): Promise<ClientCredentialDTO | null>;
+  create(input: CreateClientCredentialInput): Promise<ClientCredentialDTO>;
+  revoke(id: string): Promise<void>;
+  touchLastUsed(id: string, at: Date): Promise<void>;
+}
+
+export interface ClientMerchantAccessRepository {
+  findByClientAndMerchant(clientId: string, merchantId: string): Promise<ClientMerchantAccessDTO | null>;
+  findByClient(clientId: string): Promise<ClientMerchantAccessDTO[]>;
+  create(input: CreateClientMerchantAccessInput): Promise<ClientMerchantAccessDTO>;
+  revoke(id: string): Promise<void>;
+}
+
 // ── Idempotency ───────────────────────────────────────────────────────────────
 
 export interface ReserveIdempotencyKeyResult {

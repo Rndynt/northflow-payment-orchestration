@@ -166,3 +166,51 @@ export const paymentOrchestrationIdempotencyKeys = pgTable('payment_orchestratio
   expiresAtIdx: index('po_idempotency_expires_at_idx').on(table.expiresAt),
   statusIdx: index('po_idempotency_status_idx').on(table.status),
 }));
+
+// ── S1: API Client Registry ────────────────────────────────────────────────────
+
+export const paymentOrchestrationApiClients = pgTable('payment_orchestration_api_clients', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  sourceApp: text('source_app').notNull(),
+  environment: text('environment').notNull().default('production'),
+  status: text('status').notNull().default('active'),
+  scopes: jsonb('scopes').notNull().default([]),
+  metadata: jsonb('metadata').notNull().default({}),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+  sourceAppEnvIdx: index('po_api_clients_source_app_env_idx').on(table.sourceApp, table.environment),
+  statusIdx: index('po_api_clients_status_idx').on(table.status),
+}));
+
+export const paymentOrchestrationClientCredentials = pgTable('payment_orchestration_client_credentials', {
+  id: text('id').primaryKey(),
+  clientId: text('client_id').notNull().references(() => paymentOrchestrationApiClients.id, { onDelete: 'cascade' }),
+  credentialPrefix: text('credential_prefix').notNull(),
+  credentialHash: text('credential_hash').notNull(),
+  status: text('status').notNull().default('active'),
+  expiresAt: timestamp('expires_at'),
+  lastUsedAt: timestamp('last_used_at'),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  revokedAt: timestamp('revoked_at'),
+}, (table) => ({
+  clientIdx: index('po_client_credentials_client_idx').on(table.clientId),
+  prefixIdx: index('po_client_credentials_prefix_idx').on(table.credentialPrefix),
+  statusIdx: index('po_client_credentials_status_idx').on(table.status),
+}));
+
+export const paymentOrchestrationClientMerchantAccess = pgTable('payment_orchestration_client_merchant_access', {
+  id: text('id').primaryKey(),
+  clientId: text('client_id').notNull().references(() => paymentOrchestrationApiClients.id, { onDelete: 'cascade' }),
+  merchantId: text('merchant_id').notNull().references(() => paymentOrchestrationMerchants.id, { onDelete: 'cascade' }),
+  scopes: jsonb('scopes').notNull().default([]),
+  status: text('status').notNull().default('active'),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  revokedAt: timestamp('revoked_at'),
+}, (table) => ({
+  clientMerchantUnique: uniqueIndex('po_client_merchant_access_unique').on(table.clientId, table.merchantId),
+  clientIdx: index('po_client_merchant_access_client_idx').on(table.clientId),
+  merchantIdx: index('po_client_merchant_access_merchant_idx').on(table.merchantId),
+  statusIdx: index('po_client_merchant_access_status_idx').on(table.status),
+}));

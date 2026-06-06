@@ -32,6 +32,7 @@ export interface PaymentOrchestrationServiceConfig {
   xenditSandboxEnabled?: boolean;
   xenditBaseUrl?: string;
   xenditCallbackTokenConfigured?: boolean;
+  legacyServiceTokenEnabled: boolean;
 }
 
 export function loadEnv(): PaymentOrchestrationServiceConfig {
@@ -58,6 +59,12 @@ export function loadEnv(): PaymentOrchestrationServiceConfig {
   const xenditBaseUrl = (process.env['PAYMENT_ORCHESTRATION_XENDIT_BASE_URL'] ?? 'https://api.xendit.co').trim();
   const xenditCallbackTokenConfigured = Boolean(process.env['PAYMENT_ORCHESTRATION_XENDIT_CALLBACK_TOKEN']?.trim());
 
+  // S2: Legacy shared service token compatibility.
+  // Production default: disabled. Development default: enabled (backward-compat with dashboard).
+  const legacyServiceTokenEnabled = nodeEnv === 'production'
+    ? process.env['PAYMENT_ORCHESTRATION_LEGACY_SERVICE_TOKEN_ENABLED'] === 'true'
+    : (process.env['PAYMENT_ORCHESTRATION_LEGACY_SERVICE_TOKEN_ENABLED'] ?? 'true') !== 'false';
+
   return {
     port,
     nodeEnv,
@@ -68,5 +75,6 @@ export function loadEnv(): PaymentOrchestrationServiceConfig {
     xenditSandboxEnabled,
     xenditBaseUrl,
     xenditCallbackTokenConfigured,
+    legacyServiceTokenEnabled,
   };
 }

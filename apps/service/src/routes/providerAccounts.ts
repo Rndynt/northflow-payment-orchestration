@@ -2,30 +2,37 @@
  * providerAccounts — routes under /v1/merchants/:merchantId/provider-accounts
  *
  * Phase 8D: real implementation.
- * Phase 8D Hardening (Task 3):
- *   - Return providerAccountRef directly from DTO field.
- *   - Never expose credentialsRef in any response.
  * Phase 8K: use frozen error envelope via apiErrorResponse().
+ * Phase S3/S5: merchant access guard and scope checks.
  */
 
 import { Router } from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import type { ServiceContainer } from '../container.ts';
 import { apiErrorResponse } from './utils.ts';
+import { requireScope } from '../middleware/requireScope.ts';
+import { assertMerchantAccess } from '../middleware/merchantAccess.ts';
 
 export function createProviderAccountsRouter(container: ServiceContainer): Router {
   const router = Router({ mergeParams: true });
+  const accessRepo = container.authRepos?.clientMerchantAccessRepo;
 
   /**
    * POST /v1/merchants/:merchantId/provider-accounts
+   * S5: provider_account:create
+   * S3: merchant access check
    */
-  router.post('/', async (req: Request, res: Response, next: NextFunction) => {
+  router.post('/', requireScope('provider_account:create'), async (req: Request, res: Response, next: NextFunction) => {
     try {
       const merchantId = req.params['merchantId'];
       if (!merchantId) {
         res.status(400).json(apiErrorResponse('VALIDATION_ERROR', 'merchantId is required'));
         return;
       }
+
+      // S3: merchant ownership guard
+      const denied = await assertMerchantAccess(req.auth!, merchantId, accessRepo);
+      if (denied) { res.status(403).json(denied); return; }
 
       const { id, provider, environment, providerAccountRef, credentialsRef, publicConfig, metadata } =
         req.body as Record<string, unknown>;
@@ -72,8 +79,10 @@ export function createProviderAccountsRouter(container: ServiceContainer): Route
 
   /**
    * GET /v1/merchants/:merchantId/provider-accounts/:id
+   * S5: provider_account:read
+   * S3: merchant access check
    */
-  router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
+  router.get('/:id', requireScope('provider_account:read'), async (req: Request, res: Response, next: NextFunction) => {
     try {
       const merchantId = req.params['merchantId'];
       const id = req.params['id'];
@@ -81,6 +90,10 @@ export function createProviderAccountsRouter(container: ServiceContainer): Route
         res.status(400).json(apiErrorResponse('VALIDATION_ERROR', 'merchantId and id are required'));
         return;
       }
+
+      // S3: merchant ownership guard
+      const denied = await assertMerchantAccess(req.auth!, merchantId, accessRepo);
+      if (denied) { res.status(403).json(denied); return; }
 
       const pa = await container.repos.providerAccountRepo.findById(id, merchantId);
       if (!pa) {

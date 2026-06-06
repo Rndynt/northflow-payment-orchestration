@@ -2,20 +2,11 @@
  * container — dependency injection container for payment-orchestration-service.
  *
  * Phase 8D: DB connection, repositories, provider registry, and use cases wired.
- * Phase 8D Hardening:
- *   - CreateGatewayPayment now receives providerAccountRepo, idempotencyRepo, nodeEnv
- *     for provider account validation (Task 4) and idempotency guard (Task 5).
- * Phase 8D.1 + 8E:
- *   - ConfirmFakeGatewayPayment uses atomic markSucceededIfConfirmable.
- *   - FakeGatewayWebhookHandler wired with optional webhook secret from env.
- *   - HandleProviderWebhook use case wired and exposed.
- * Phase 8F:
- *   - RefundPaymentTransaction and VoidPaymentTransaction wired (legacy parity).
- *   - StandaloneManualProvider registered in providerRegistry.
+ * Phase 8F: RefundPaymentTransaction and VoidPaymentTransaction wired.
+ * Phase S1: ApiClient, ClientCredential, ClientMerchantAccess repos added (optional authRepos).
  *
  * No AuraPoS session/tenant middleware.
  * No POS order domain deps.
- * No import from apps/api/src/container.ts.
  */
 
 import type { PaymentOrchestrationServiceConfig } from './config/env.ts';
@@ -29,6 +20,9 @@ import { DrizzlePaymentIntentRepository } from './infrastructure/repositories/Dr
 import { DrizzlePaymentTransactionRepository } from './infrastructure/repositories/DrizzlePaymentTransactionRepository.ts';
 import { DrizzlePaymentProviderEventRepository } from './infrastructure/repositories/DrizzlePaymentProviderEventRepository.ts';
 import { DrizzlePaymentIdempotencyRepository } from './infrastructure/repositories/DrizzlePaymentIdempotencyRepository.ts';
+import { DrizzleApiClientRepository } from './infrastructure/repositories/DrizzleApiClientRepository.ts';
+import { DrizzleClientCredentialRepository } from './infrastructure/repositories/DrizzleClientCredentialRepository.ts';
+import { DrizzleClientMerchantAccessRepository } from './infrastructure/repositories/DrizzleClientMerchantAccessRepository.ts';
 import { FakeGatewayWebhookHandler } from './infrastructure/providers/FakeGatewayWebhookHandler.ts';
 import { CreateMerchant } from './application/use-cases/CreateMerchant.ts';
 import { CreateProviderAccount } from './application/use-cases/CreateProviderAccount.ts';
@@ -51,6 +45,9 @@ import type { PaymentIntentRepository } from '@northflow/payment-orchestration-c
 import type { PaymentTransactionRepository } from '@northflow/payment-orchestration-core';
 import type { PaymentProviderEventRepository } from '@northflow/payment-orchestration-core';
 import type { PaymentIdempotencyRepository } from '@northflow/payment-orchestration-core';
+import type { ApiClientRepository } from '@northflow/payment-orchestration-core';
+import type { ClientCredentialRepository } from '@northflow/payment-orchestration-core';
+import type { ClientMerchantAccessRepository } from '@northflow/payment-orchestration-core';
 
 export interface ServiceRepos {
   merchantRepo: PaymentMerchantRepository;
@@ -59,6 +56,13 @@ export interface ServiceRepos {
   transactionRepo: PaymentTransactionRepository;
   providerEventRepo: PaymentProviderEventRepository;
   idempotencyRepo: PaymentIdempotencyRepository;
+}
+
+/** S1: Auth repos — optional so in-memory test containers remain backward-compatible. */
+export interface AuthRepos {
+  apiClientRepo: ApiClientRepository;
+  clientCredentialRepo: ClientCredentialRepository;
+  clientMerchantAccessRepo: ClientMerchantAccessRepository;
 }
 
 export interface ServiceUseCases {
@@ -82,6 +86,8 @@ export interface ServiceContainer {
   config: PaymentOrchestrationServiceConfig;
   db: PoDb;
   repos: ServiceRepos;
+  /** S1: Per-client auth repos. Optional to preserve backward compat with in-memory test containers. */
+  authRepos?: AuthRepos;
   providerRegistry: ProviderRegistry;
   useCases: ServiceUseCases;
 }
@@ -109,6 +115,13 @@ export function createContainer(config: PaymentOrchestrationServiceConfig): Serv
     idempotencyRepo,
   };
 
+  // ── S1: API Client auth repos ──────────────────────────────────────────────
+  const apiClientRepo = new DrizzleApiClientRepository(db);
+  const clientCredentialRepo = new DrizzleClientCredentialRepository(db);
+  const clientMerchantAccessRepo = new DrizzleClientMerchantAccessRepository(db);
+
+  const authRepos: AuthRepos = { apiClientRepo, clientCredentialRepo, clientMerchantAccessRepo };
+
   // ── Phase 8E: FakeGateway webhook handler ────────────────────────────────
   const fakeGatewayWebhookHandler = new FakeGatewayWebhookHandler({
     webhookSecret: process.env['PAYMENT_ORCHESTRATION_FAKEGATEWAY_WEBHOOK_SECRET'] ?? null,
@@ -124,9 +137,9 @@ export function createContainer(config: PaymentOrchestrationServiceConfig): Serv
       intentRepo,
       transactionRepo,
       providerRegistry,
-      providerAccountRepo,   // Task 4: provider account validation
-      idempotencyRepo,       // Task 5: gateway payment idempotency
-      config.nodeEnv,        // Task 4: fake_gateway dev convenience in non-production
+      providerAccountRepo,
+      idempotencyRepo,
+      config.nodeEnv,
     ),
     confirmFakeGatewayPayment: new ConfirmFakeGatewayPayment(
       transactionRepo,
@@ -152,7 +165,6 @@ export function createContainer(config: PaymentOrchestrationServiceConfig): Serv
       providerAccountRepo,
       providerRegistry,
     ),
-    // Phase 8F: Refund + Void parity use cases
     refundPaymentTransaction: new RefundPaymentTransaction(
       transactionRepo,
       intentRepo,
@@ -172,5 +184,5 @@ export function createContainer(config: PaymentOrchestrationServiceConfig): Serv
     reprocessProviderEvents: new ReprocessProviderEvents(providerEventRepo, transactionRepo, intentRepo),
   };
 
-  return { config, db, repos, providerRegistry, useCases };
+  return { config, db, repos, authRepos, providerRegistry, useCases };
 }

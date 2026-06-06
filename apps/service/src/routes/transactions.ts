@@ -4,20 +4,26 @@
  * Phase 8H: service-token protected provider status refresh endpoint.
  * Phase 8K: use frozen error envelope via apiErrorResponse().
  * Phase 8F: added POST /:id/refund and POST /:id/void for legacy parity.
+ * Phase S3/S5: merchant access guard and scope checks.
  */
 
 import { Router } from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import type { ServiceContainer } from '../container.ts';
 import { resolveMerchantId, apiErrorResponse } from './utils.ts';
+import { requireScope } from '../middleware/requireScope.ts';
+import { assertMerchantAccess } from '../middleware/merchantAccess.ts';
 
 export function createTransactionsRouter(container: ServiceContainer): Router {
   const router = Router();
+  const accessRepo = container.authRepos?.clientMerchantAccessRepo;
 
   /**
    * POST /v1/payment-transactions/:id/refresh-provider-status
+   * S5: intent:read (status refresh is a read-class operation)
+   * S3: merchant access check
    */
-  router.post('/:id/refresh-provider-status', async (req: Request, res: Response, next: NextFunction) => {
+  router.post('/:id/refresh-provider-status', requireScope('intent:read'), async (req: Request, res: Response, next: NextFunction) => {
     try {
       const transactionId = req.params['id'];
       if (!transactionId) {
@@ -31,6 +37,10 @@ export function createTransactionsRouter(container: ServiceContainer): Router {
         res.status(400).json(apiErrorResponse('VALIDATION_ERROR', 'merchantId is required (body or x-payment-merchant-id header)'));
         return;
       }
+
+      // S3: merchant ownership guard
+      const denied = await assertMerchantAccess(req.auth!, merchantId, accessRepo);
+      if (denied) { res.status(403).json(denied); return; }
 
       const result = await container.useCases.refreshProviderStatus.execute({
         merchantId,
@@ -53,16 +63,10 @@ export function createTransactionsRouter(container: ServiceContainer): Router {
 
   /**
    * POST /v1/payment-transactions/:id/refund
-   *
-   * Refund a succeeded payment transaction (full or partial).
-   *
-   * Body:
-   *   merchantId    string  — owner merchant (or x-payment-merchant-id header)
-   *   amount        number  — refund amount in smallest currency unit (must be > 0)
-   *   reason        string? — optional human-readable reason
-   *   idempotencyKey string? — optional caller-supplied idempotency key
+   * S5: payment:refund
+   * S3: merchant access check
    */
-  router.post('/:id/refund', async (req: Request, res: Response, next: NextFunction) => {
+  router.post('/:id/refund', requireScope('payment:refund'), async (req: Request, res: Response, next: NextFunction) => {
     try {
       const transactionId = req.params['id'];
       if (!transactionId) {
@@ -76,6 +80,10 @@ export function createTransactionsRouter(container: ServiceContainer): Router {
         res.status(400).json(apiErrorResponse('VALIDATION_ERROR', 'merchantId is required (body or x-payment-merchant-id header)'));
         return;
       }
+
+      // S3: merchant ownership guard
+      const denied = await assertMerchantAccess(req.auth!, merchantId, accessRepo);
+      if (denied) { res.status(403).json(denied); return; }
 
       const amount = body['amount'];
       if (typeof amount !== 'number' || !Number.isInteger(amount) || amount <= 0) {
@@ -111,15 +119,10 @@ export function createTransactionsRouter(container: ServiceContainer): Router {
 
   /**
    * POST /v1/payment-transactions/:id/void
-   *
-   * Void (cancel) a pending or requires_action payment transaction.
-   *
-   * Body:
-   *   merchantId  string  — owner merchant (or x-payment-merchant-id header)
-   *   reason      string? — optional human-readable reason
-   *   idempotencyKey string? — optional caller idempotency key
+   * S5: payment:void
+   * S3: merchant access check
    */
-  router.post('/:id/void', async (req: Request, res: Response, next: NextFunction) => {
+  router.post('/:id/void', requireScope('payment:void'), async (req: Request, res: Response, next: NextFunction) => {
     try {
       const transactionId = req.params['id'];
       if (!transactionId) {
@@ -133,6 +136,10 @@ export function createTransactionsRouter(container: ServiceContainer): Router {
         res.status(400).json(apiErrorResponse('VALIDATION_ERROR', 'merchantId is required (body or x-payment-merchant-id header)'));
         return;
       }
+
+      // S3: merchant ownership guard
+      const denied = await assertMerchantAccess(req.auth!, merchantId, accessRepo);
+      if (denied) { res.status(403).json(denied); return; }
 
       const reason = typeof body['reason'] === 'string' ? body['reason'] : null;
       const idempotencyKey = typeof body['idempotencyKey'] === 'string' ? body['idempotencyKey'] : null;

@@ -27,6 +27,9 @@ import {
   paymentOrchestrationTransactions,
   paymentOrchestrationProviderEvents,
   paymentOrchestrationIdempotencyKeys,
+  paymentOrchestrationApiClients,
+  paymentOrchestrationClientCredentials,
+  paymentOrchestrationClientMerchantAccess,
 } from './schema.ts';
 
 export const poSchema = {
@@ -36,6 +39,9 @@ export const poSchema = {
   paymentOrchestrationTransactions,
   paymentOrchestrationProviderEvents,
   paymentOrchestrationIdempotencyKeys,
+  paymentOrchestrationApiClients,
+  paymentOrchestrationClientCredentials,
+  paymentOrchestrationClientMerchantAccess,
 };
 
 export type PoDb = ReturnType<typeof createPoDb>;

@@ -118,3 +118,23 @@ export type {
 } from './providers/providerActions';
 
 export type { PaymentProviderCapabilities } from './providers/providerCapabilities';
+
+// ── S1: API Client Registry ───────────────────────────────────────────────────
+
+export type {
+  ApiClientDTO,
+  ClientCredentialDTO,
+  ClientMerchantAccessDTO,
+  ApiClientStatus,
+  ClientCredentialStatus,
+  ClientMerchantAccessStatus,
+} from './domain/ApiClient';
+
+export type {
+  ApiClientRepository,
+  CreateApiClientInput,
+  ClientCredentialRepository,
+  CreateClientCredentialInput,
+  ClientMerchantAccessRepository,
+  CreateClientMerchantAccessInput,
+} from './application/repositories';

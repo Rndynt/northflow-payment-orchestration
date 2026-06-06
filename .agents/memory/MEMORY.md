@@ -1,0 +1,2 @@
+- [S1-S5 per-client auth](s1-s5-auth.md) — per-client credential model implemented; legacy token stays enabled in dev by default; authRepos optional in ServiceContainer for backward-compat.
+- [DB migration approach](db-migration-approach.md) — base migrations (0001, 0002) applied via psql directly; drizzle-kit journal tracks only 0000 (all-tables); use psql + IF NOT EXISTS for additive schema changes.

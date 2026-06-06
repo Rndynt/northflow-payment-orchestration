@@ -4,36 +4,38 @@
  * Phase 8D: real implementation wired to use cases.
  * Phase 8D Hardening (Task 2): merchantId resolution with x-payment-merchant-id header fallback.
  * Phase 8K: use frozen error envelope via apiErrorResponse().
+ * Phase S3/S4/S5: merchant access guard, sourceApp enforcement, scope checks.
  *
  * Routes:
- *   POST /v1/payment-intents
- *   GET  /v1/payment-intents/:id/status
- *   GET  /v1/payment-intents/:id/refundability
- *   POST /v1/payment-intents/:id/gateway-payments
- *   POST /v1/payment-intents/:id/reconcile
- *
- * merchantId resolution:
- *   POST bodies: body.merchantId → x-payment-merchant-id header
- *   GET params:  ?merchantId= query → x-payment-merchant-id header
+ *   POST /v1/payment-intents            [intent:create]
+ *   GET  /v1/payment-intents/:id/status [intent:read]
+ *   GET  /v1/payment-intents/:id/refundability [intent:read]
+ *   POST /v1/payment-intents/:id/gateway-payments [payment:create]
+ *   POST /v1/payment-intents/:id/reconcile [payment:reconcile]
  */
 
 import { Router } from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import type { ServiceContainer } from '../container.ts';
 import { resolveMerchantId, resolveMerchantIdQuery, apiErrorResponse } from './utils.ts';
+import { requireScope } from '../middleware/requireScope.ts';
+import { assertMerchantAccess, assertSourceApp } from '../middleware/merchantAccess.ts';
 
 export function createIntentsRouter(container: ServiceContainer): Router {
   const router = Router();
+  const accessRepo = container.authRepos?.clientMerchantAccessRepo;
 
   /**
    * POST /v1/payment-intents
+   * S5: intent:create
+   * S4: sourceApp enforced
+   * S3: merchantId access check
    */
-  router.post('/', async (req: Request, res: Response, next: NextFunction) => {
+  router.post('/', requireScope('intent:create'), async (req: Request, res: Response, next: NextFunction) => {
     try {
       const body = req.body as Record<string, unknown>;
       const {
         providerAccountId,
-        sourceApp,
         externalTenantId,
         externalOutletId,
         externalLocationId,
@@ -52,6 +54,15 @@ export function createIntentsRouter(container: ServiceContainer): Router {
         res.status(400).json(apiErrorResponse('VALIDATION_ERROR', 'merchantId is required (body or x-payment-merchant-id header)'));
         return;
       }
+
+      // S3: merchant ownership guard
+      const denied = await assertMerchantAccess(req.auth!, merchantId, accessRepo);
+      if (denied) { res.status(403).json(denied); return; }
+
+      // S4: sourceApp enforcement
+      const sourceAppErr = assertSourceApp(req.auth!, body);
+      if (sourceAppErr) { res.status(403).json(sourceAppErr); return; }
+
       if (!externalPayableType || typeof externalPayableType !== 'string') {
         res.status(400).json(apiErrorResponse('VALIDATION_ERROR', 'externalPayableType is required'));
         return;
@@ -68,7 +79,7 @@ export function createIntentsRouter(container: ServiceContainer): Router {
       const result = await container.useCases.createPaymentIntent.execute({
         merchantId,
         providerAccountId: typeof providerAccountId === 'string' ? providerAccountId : null,
-        sourceApp: typeof sourceApp === 'string' ? sourceApp : null,
+        sourceApp: typeof body['sourceApp'] === 'string' ? body['sourceApp'] : null,
         externalTenantId: typeof externalTenantId === 'string' ? externalTenantId : null,
         externalOutletId: typeof externalOutletId === 'string' ? externalOutletId : null,
         externalLocationId: typeof externalLocationId === 'string' ? externalLocationId : null,
@@ -93,11 +104,12 @@ export function createIntentsRouter(container: ServiceContainer): Router {
 
   /**
    * GET /v1/payment-intents/:id/status
+   * S5: intent:read
+   * S3: merchant access check
    */
-  router.get('/:id/status', async (req: Request, res: Response, next: NextFunction) => {
+  router.get('/:id/status', requireScope('intent:read'), async (req: Request, res: Response, next: NextFunction) => {
     try {
       const intentId = req.params['id'];
-
       if (!intentId) {
         res.status(400).json(apiErrorResponse('VALIDATION_ERROR', 'id is required'));
         return;
@@ -108,6 +120,10 @@ export function createIntentsRouter(container: ServiceContainer): Router {
         res.status(400).json(apiErrorResponse('VALIDATION_ERROR', 'merchantId is required (query param or x-payment-merchant-id header)'));
         return;
       }
+
+      // S3: merchant ownership guard
+      const denied = await assertMerchantAccess(req.auth!, merchantId, accessRepo);
+      if (denied) { res.status(403).json(denied); return; }
 
       const result = await container.useCases.getPaymentIntentStatus.execute({
         intentId,
@@ -133,11 +149,12 @@ export function createIntentsRouter(container: ServiceContainer): Router {
 
   /**
    * GET /v1/payment-intents/:id/refundability
+   * S5: intent:read
+   * S3: merchant access check
    */
-  router.get('/:id/refundability', async (req: Request, res: Response, next: NextFunction) => {
+  router.get('/:id/refundability', requireScope('intent:read'), async (req: Request, res: Response, next: NextFunction) => {
     try {
       const intentId = req.params['id'];
-
       if (!intentId) {
         res.status(400).json(apiErrorResponse('VALIDATION_ERROR', 'id is required'));
         return;
@@ -148,6 +165,10 @@ export function createIntentsRouter(container: ServiceContainer): Router {
         res.status(400).json(apiErrorResponse('VALIDATION_ERROR', 'merchantId is required (query param or x-payment-merchant-id header)'));
         return;
       }
+
+      // S3: merchant ownership guard
+      const denied = await assertMerchantAccess(req.auth!, merchantId, accessRepo);
+      if (denied) { res.status(403).json(denied); return; }
 
       const result = await container.useCases.getRefundability.execute({
         intentId,
@@ -165,8 +186,10 @@ export function createIntentsRouter(container: ServiceContainer): Router {
 
   /**
    * POST /v1/payment-intents/:id/gateway-payments
+   * S5: payment:create
+   * S3: merchant access check
    */
-  router.post('/:id/gateway-payments', async (req: Request, res: Response, next: NextFunction) => {
+  router.post('/:id/gateway-payments', requireScope('payment:create'), async (req: Request, res: Response, next: NextFunction) => {
     try {
       const intentId = req.params['id'];
       if (!intentId) {
@@ -182,6 +205,11 @@ export function createIntentsRouter(container: ServiceContainer): Router {
         res.status(400).json(apiErrorResponse('VALIDATION_ERROR', 'merchantId is required (body or x-payment-merchant-id header)'));
         return;
       }
+
+      // S3: merchant ownership guard
+      const denied = await assertMerchantAccess(req.auth!, merchantId, accessRepo);
+      if (denied) { res.status(403).json(denied); return; }
+
       if (!provider || typeof provider !== 'string') {
         res.status(400).json(apiErrorResponse('VALIDATION_ERROR', 'provider is required'));
         return;
@@ -221,10 +249,10 @@ export function createIntentsRouter(container: ServiceContainer): Router {
 
   /**
    * POST /v1/payment-intents/:id/reconcile
-   * Recompute intent totals from actual transaction state (crash-recovery safety).
-   * Protected by service token (via app.ts global auth middleware).
+   * S5: payment:reconcile
+   * S3: merchant access check
    */
-  router.post('/:id/reconcile', async (req: Request, res: Response, next: NextFunction) => {
+  router.post('/:id/reconcile', requireScope('payment:reconcile'), async (req: Request, res: Response, next: NextFunction) => {
     try {
       const intentId = req.params['id'];
       if (!intentId) {
@@ -238,6 +266,10 @@ export function createIntentsRouter(container: ServiceContainer): Router {
         res.status(400).json(apiErrorResponse('VALIDATION_ERROR', 'merchantId is required (body or x-payment-merchant-id header)'));
         return;
       }
+
+      // S3: merchant ownership guard
+      const denied = await assertMerchantAccess(req.auth!, merchantId, accessRepo);
+      if (denied) { res.status(403).json(denied); return; }
 
       const result = await container.useCases.reconcilePaymentIntentTotals.execute({
         merchantId,

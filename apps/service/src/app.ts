@@ -4,19 +4,10 @@
  * Returns a configured Express app instance.
  * Does NOT call app.listen() — that is the responsibility of src/index.ts.
  *
- * Design principles:
- * - No AuraPoS session/tenant middleware
- * - No POS order domain deps
- * - No static file serving
- * - JSON API only
- *
- * Phase 8E changes:
- *   1. Raw body capture: express.json({ verify }) saves Buffer to req.rawBody for HMAC.
- *   2. Webhook route registered BEFORE service-token auth middleware so that
- *      POST /v1/webhooks/:provider does NOT require a service token.
- *      Provider-level signature verification is done inside FakeGatewayWebhookHandler.
- *
- * Phase 8K: 404 handler uses frozen error envelope.
+ * Phase 8E: Raw body capture for HMAC webhook verification.
+ *           Webhook routes bypass service-token auth.
+ * Phase S2: Auth middleware updated to per-client credential model.
+ *           Legacy shared service token controlled by legacyServiceTokenEnabled config.
  */
 
 import express from 'express';
@@ -52,13 +43,16 @@ export function createApp(container: ServiceContainer): express.Application {
   app.use(createHealthRouter(container.config, container.providerRegistry));
 
   // ── Webhooks bypass service-token auth ────────────────────────────────────
-  // IMPORTANT: must be registered BEFORE app.use('/v1', auth) so that
-  // POST /v1/webhooks/:provider does not require a service token.
-  // Provider identity is verified via payload signature inside each handler.
   app.use('/v1/webhooks', createWebhooksRouter(container));
 
-  // ── Service-token auth for all remaining /v1/... routes ───────────────────
-  const auth = createAuthMiddleware(container.config.serviceToken, container.config.nodeEnv);
+  // ── S2: Per-client auth for all remaining /v1/... routes ──────────────────
+  const auth = createAuthMiddleware({
+    serviceToken: container.config.serviceToken,
+    nodeEnv: container.config.nodeEnv,
+    legacyEnabled: container.config.legacyServiceTokenEnabled,
+    credentialRepo: container.authRepos?.clientCredentialRepo,
+    clientRepo: container.authRepos?.apiClientRepo,
+  });
   app.use('/v1', auth);
 
   // ── API v1 — Merchants ────────────────────────────────────────────────────
