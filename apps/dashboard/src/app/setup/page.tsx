@@ -8,9 +8,17 @@ import { Card } from "@/components/ui/card";
 import { saveConfig } from "@/lib/config";
 import { PaymentOrchestrationClient } from "@northflow/payment-orchestration-client-sdk";
 
+function getDefaultServiceUrl(): string {
+  const replitDomain = process.env.NEXT_PUBLIC_REPLIT_DEV_DOMAIN;
+  if (replitDomain) {
+    return `https://3001-${replitDomain}`;
+  }
+  return "http://localhost:3001";
+}
+
 export default function SetupPage() {
   const router = useRouter();
-  const [serviceUrl, setServiceUrl] = useState("http://localhost:5000");
+  const [serviceUrl, setServiceUrl] = useState(getDefaultServiceUrl());
   const [serviceToken, setServiceToken] = useState("");
   const [testing, setTesting] = useState(false);
   const [error, setError] = useState("");
@@ -58,7 +66,7 @@ export default function SetupPage() {
             type="url"
             value={serviceUrl}
             onChange={(e) => setServiceUrl(e.target.value)}
-            placeholder="http://localhost:5000"
+            placeholder="https://3001-your-replit-domain"
             hint="The base URL of your payment orchestration service"
           />
           <Input

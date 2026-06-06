@@ -1,21 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { MobileNav } from "@/components/layout/mobile-nav";
-import { isConfigured } from "@/lib/config";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && !isConfigured()) {
-      router.replace("/setup");
-    }
-  }, [router]);
-
   return (
     <div className="flex h-screen bg-zinc-950 overflow-hidden">
       <Sidebar />

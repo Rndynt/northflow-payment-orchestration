@@ -1,26 +1,16 @@
 "use client";
 
 import { PaymentOrchestrationClient } from "@northflow/payment-orchestration-client-sdk";
-import { getConfig } from "./config";
 
 let _client: PaymentOrchestrationClient | null = null;
 
 export function getClient(): PaymentOrchestrationClient {
-  const config = getConfig();
-  if (!config?.serviceUrl || !config?.serviceToken) {
-    throw new Error("Dashboard not configured. Please set service URL and token.");
-  }
-
-  if (
-    !_client ||
-    (_client as any)["baseUrl"] !== config.serviceUrl.replace(/\/$/, "")
-  ) {
+  if (!_client) {
     _client = new PaymentOrchestrationClient({
-      baseUrl: config.serviceUrl,
-      serviceToken: config.serviceToken,
+      baseUrl: "/api/proxy",
+      serviceToken: "proxy-internal",
     });
   }
-
   return _client;
 }
 
