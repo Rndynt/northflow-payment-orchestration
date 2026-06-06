@@ -24,8 +24,6 @@ RUN pnpm install --no-frozen-lockfile
 FROM base AS build
 
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/packages/core/node_modules packages/core/node_modules
-COPY --from=deps /app/packages/client-sdk/node_modules packages/client-sdk/node_modules
 COPY --from=deps /app/apps/service/node_modules apps/service/node_modules
 COPY package.json pnpm-workspace.yaml tsconfig.base.json ./
 COPY packages/core/ packages/core/
@@ -42,8 +40,6 @@ FROM base AS production
 ENV NODE_ENV=production
 
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/packages/core/node_modules packages/core/node_modules
-COPY --from=deps /app/packages/client-sdk/node_modules packages/client-sdk/node_modules
 COPY --from=deps /app/apps/service/node_modules apps/service/node_modules
 COPY package.json pnpm-workspace.yaml tsconfig.base.json ./
 COPY --from=build /app/packages/core/ packages/core/
