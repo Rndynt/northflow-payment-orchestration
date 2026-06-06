@@ -30,14 +30,18 @@ import { createWebhooksRouter } from './routes/webhooks.ts';
 import { createTransactionsRouter } from './routes/transactions.ts';
 import { createAuthMiddleware } from './middleware/auth.ts';
 import { errorHandler } from './middleware/errors.ts';
+import { requestContextMiddleware } from './middleware/requestContext.ts';
 import type { ServiceContainer } from './container.ts';
 
 export function createApp(container: ServiceContainer): express.Application {
   const app = express();
 
+  app.use(requestContextMiddleware);
+
   // ── Body parsing: capture raw bytes for HMAC webhook verification ──────────
   app.use(
     express.json({
+      limit: '256kb',
       verify: (req: Request, _res: Response, buf: Buffer) => {
         (req as any).rawBody = buf;
       },

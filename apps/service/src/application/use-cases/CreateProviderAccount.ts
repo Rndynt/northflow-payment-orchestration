@@ -13,6 +13,17 @@ import type {
 } from '@northflow/payment-orchestration-core';
 import type { PaymentProviderAccount } from '@northflow/payment-orchestration-core';
 
+
+function assertSafeCredentialsRef(credentialsRef: string | null | undefined): void {
+  if (!credentialsRef) return;
+  if (credentialsRef.length > 128 || credentialsRef.includes('sk_') || credentialsRef.includes('xnd_')) {
+    throw Object.assign(new Error('credentialsRef must be a safe environment variable name, not a raw secret.'), {
+      statusCode: 400,
+      code: 'VALIDATION_ERROR',
+    });
+  }
+}
+
 export interface CreateProviderAccountInput {
   merchantId: string;
   id?: string;
@@ -51,6 +62,8 @@ export class CreateProviderAccount {
         { statusCode: 404, code: 'MERCHANT_NOT_FOUND' },
       );
     }
+
+    assertSafeCredentialsRef(input.credentialsRef);
 
     const id = input.id ?? `pa_${randomUUID()}`;
     const providerAccount = await this.providerAccountRepo.create({

@@ -21,15 +21,17 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import type { ServiceContainer } from '../container.ts';
+import { createWebhookRateLimitMiddleware } from '../middleware/webhookRateLimit.ts';
 
 export function createWebhooksRouter(container: ServiceContainer): Router {
   const router = Router();
+  const rateLimit = createWebhookRateLimitMiddleware();
 
   /**
    * POST /v1/webhooks/:provider
    * Ingest a provider webhook event into the standalone payment orchestration tables.
    */
-  router.post('/:provider', async (req: Request, res: Response) => {
+  router.post('/:provider', rateLimit, async (req: Request, res: Response) => {
     const provider = req.params['provider'];
     try {
       // Prefer raw bytes for HMAC; fall back to parsed body if rawBody not captured.

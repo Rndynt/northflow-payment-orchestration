@@ -89,6 +89,10 @@ export type {
   PaymentProviderAccountRepository,
   CreatePaymentProviderAccountInput,
   PaymentIntentRepository,
+  ApplySucceededPaymentInput,
+  ApplySucceededPaymentResult,
+  ApplySucceededRefundInput,
+  ApplySucceededRefundResult,
   CreatePaymentIntentDbInput,
   UpdateIntentTotalsInput,
   UpdateIntentStatusInput,
@@ -99,8 +103,10 @@ export type {
   MarkSucceededIfConfirmableInput,
   MarkSucceededIfConfirmableResult,
   PaymentProviderEventRepository,
+  ReserveProviderEventResult,
   FindStalePendingInput,
   PaymentIdempotencyRepository,
+  ReserveIdempotencyKeyResult,
 } from './application/repositories';
 
 // ── Provider Action Types ─────────────────────────────────────────────────────

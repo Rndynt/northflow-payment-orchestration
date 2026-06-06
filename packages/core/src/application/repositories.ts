@@ -132,6 +132,34 @@ export interface FindExpiredActiveIntentsInput {
   limit: number;
 }
 
+export interface ApplySucceededPaymentInput {
+  transactionId: string;
+  merchantId: string;
+  intentId: string;
+  amount: number;
+}
+
+export interface ApplySucceededPaymentResult {
+  transaction: StandalonePaymentTransactionDTO;
+  intent: StandalonePaymentIntentDTO;
+  changed: boolean;
+  alreadySucceeded: boolean;
+}
+
+export interface ApplySucceededRefundInput {
+  refundTransactionId: string;
+  merchantId: string;
+  intentId: string;
+  amount: number;
+  providerReference?: string | null;
+  rawProviderResponse?: Record<string, unknown> | null;
+}
+
+export interface ApplySucceededRefundResult {
+  refundTransaction: StandalonePaymentTransactionDTO;
+  intent: StandalonePaymentIntentDTO;
+}
+
 export interface PaymentIntentRepository {
   findById(id: string, merchantId: string): Promise<StandalonePaymentIntentDTO | null>;
   findByExternalPayable(
@@ -206,6 +234,20 @@ export interface FindStalePendingTransactionsInput {
 }
 
 export interface PaymentTransactionRepository {
+  /**
+   * Atomically transition a confirmable incoming transaction to succeeded and
+   * increment the parent intent totals/status in one DB transaction.
+   */
+  applySucceededPayment?(
+    input: ApplySucceededPaymentInput,
+  ): Promise<ApplySucceededPaymentResult>;
+  /**
+   * Atomically mark a refund transaction succeeded and increment parent intent
+   * amountRefunded/status in one DB transaction.
+   */
+  applySucceededRefund?(
+    input: ApplySucceededRefundInput,
+  ): Promise<ApplySucceededRefundResult>;
   findById(id: string, merchantId: string): Promise<StandalonePaymentTransactionDTO | null>;
   findByIntentId(
     intentId: string,
@@ -251,8 +293,15 @@ export interface FindStalePendingInput {
   limit?: number;
 }
 
+export interface ReserveProviderEventResult {
+  event: PaymentProviderEventDTO;
+  reserved: boolean;
+}
+
 export interface PaymentProviderEventRepository {
   reserveEvent(input: ReserveProviderEventInput): Promise<PaymentProviderEventDTO>;
+  reserveEventOrGet?(input: ReserveProviderEventInput): Promise<ReserveProviderEventResult>;
+  claimForProcessing?(eventId: string): Promise<PaymentProviderEventDTO | null>;
   findByProviderEventId(
     provider: string,
     providerEventId: string,
@@ -265,8 +314,14 @@ export interface PaymentProviderEventRepository {
 
 // ── Idempotency ───────────────────────────────────────────────────────────────
 
+export interface ReserveIdempotencyKeyResult {
+  key: PaymentIdempotencyKeyDTO;
+  reserved: boolean;
+}
+
 export interface PaymentIdempotencyRepository {
   reserve(input: ReserveIdempotencyKeyInput): Promise<PaymentIdempotencyKeyDTO>;
+  reserveOrGet?(input: ReserveIdempotencyKeyInput): Promise<ReserveIdempotencyKeyResult>;
   find(input: FindIdempotencyKeyInput): Promise<PaymentIdempotencyKeyDTO | null>;
   markCompleted(input: MarkIdempotencyCompletedInput): Promise<void>;
   markFailed(input: MarkIdempotencyFailedInput): Promise<void>;

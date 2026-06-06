@@ -18,6 +18,7 @@ import type {
   FindIdempotencyKeyInput,
   MarkIdempotencyCompletedInput,
   MarkIdempotencyFailedInput,
+  ReserveIdempotencyKeyResult,
 } from '@northflow/payment-orchestration-core';
 import type { PoDb } from '../db.ts';
 import { paymentOrchestrationIdempotencyKeys as t } from '../schema.ts';
@@ -52,6 +53,41 @@ export class DrizzlePaymentIdempotencyRepository
     const row = rows[0];
     if (!row) throw new Error('Failed to reserve idempotency key — no row returned');
     return mapIdempotencyKeyRow(row as any);
+  }
+
+
+
+  async reserveOrGet(
+    input: ReserveIdempotencyKeyInput,
+  ): Promise<ReserveIdempotencyKeyResult> {
+    const now = new Date();
+    const rows = await this.db
+      .insert(t)
+      .values({
+        id: input.id,
+        merchantId: input.merchantId,
+        scope: input.scope,
+        idempotencyKey: input.idempotencyKey,
+        requestHash: input.requestHash,
+        responseSnapshot: null,
+        resourceType: null,
+        resourceId: null,
+        status: 'processing',
+        createdAt: now,
+        updatedAt: now,
+        expiresAt: input.expiresAt ?? null,
+      })
+      .onConflictDoNothing()
+      .returning();
+    const row = rows[0];
+    if (row) return { key: mapIdempotencyKeyRow(row as any), reserved: true };
+    const existing = await this.find({
+      merchantId: input.merchantId,
+      scope: input.scope,
+      idempotencyKey: input.idempotencyKey,
+    });
+    if (!existing) throw new Error('Failed to reserve or reload idempotency key');
+    return { key: existing, reserved: false };
   }
 
   async find(

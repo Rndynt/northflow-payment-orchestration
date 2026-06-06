@@ -30,7 +30,7 @@ import type {
   StandaloneTransactionStatus,
 } from '@northflow/payment-orchestration-core';
 import type { ProviderRegistry } from '../../infrastructure/providers/providerRegistry.ts';
-import { computeIntentStatus } from './intentStatusHelper.ts';
+import { assertIntentPayable, assertPaymentAmountAllowed, computeIntentStatus } from './intentStatusHelper.ts';
 
 const IDEMPOTENCY_SCOPE = 'create_gateway_payment';
 
@@ -41,8 +41,16 @@ function parseProviderExpiresAt(rawProviderResponse: Record<string, unknown> | n
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map((v) => stableJson(v)).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value as Record<string, unknown>).sort().map((k) => `${JSON.stringify(k)}:${stableJson((value as Record<string, unknown>)[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
 function computeRequestHash(input: CreateGatewayPaymentInput): string {
-  const canonical = JSON.stringify({
+  const canonical = stableJson({
     merchantId: input.merchantId,
     intentId: input.intentId,
     provider: input.provider,
@@ -99,7 +107,33 @@ export class CreateGatewayPayment {
       );
     }
 
-    // ── Merchant + intent lookups ─────────────────────────────────────────────
+    // ── Merchant + idempotency hash ─────────────────────────────────────────
+    const requestHash = computeRequestHash(input);
+
+    if (input.idempotencyKey) {
+      const existingPrecheck = await this.idempotencyRepo.find({
+        merchantId: input.merchantId,
+        scope: IDEMPOTENCY_SCOPE,
+        idempotencyKey: input.idempotencyKey,
+      });
+      if (existingPrecheck && existingPrecheck.status !== 'processing') {
+        if (existingPrecheck.status === 'failed') {
+          throw Object.assign(new Error('Idempotency key previously failed. A new idempotency key is required for a retry.'), { statusCode: 409, code: 'IDEMPOTENCY_PREVIOUSLY_FAILED' });
+        }
+        if (existingPrecheck.requestHash !== requestHash) {
+          throw Object.assign(new Error('Idempotency key has already been used with different request parameters.'), { statusCode: 409, code: 'IDEMPOTENCY_CONFLICT' });
+        }
+        if (existingPrecheck.status === 'completed') {
+          const snapshot = existingPrecheck.responseSnapshot as Record<string, unknown>;
+          return {
+            transaction: snapshot['transaction'] as StandalonePaymentTransactionDTO,
+            intent: snapshot['intent'] as StandalonePaymentIntentDTO,
+            idempotentReplay: true,
+          };
+        }
+      }
+    }
+
     const merchant = await this.merchantRepo.findById(input.merchantId);
     if (!merchant) {
       throw Object.assign(
@@ -116,14 +150,9 @@ export class CreateGatewayPayment {
       );
     }
 
-    if (input.amount > intent.amountRemaining) {
-      throw Object.assign(
-        new Error(
-          `Payment amount (${input.amount}) exceeds remaining amount (${intent.amountRemaining}). ` +
-            'Overpayment is not allowed.',
-        ),
-        { statusCode: 422, code: 'OVERPAYMENT_REJECTED' },
-      );
+    assertIntentPayable(intent);
+    if (!input.idempotencyKey || input.amount > intent.amountRemaining || input.amount === intent.amountRemaining) {
+      assertPaymentAmountAllowed(intent, input.amount);
     }
 
     // ── Task 4: Provider account validation ───────────────────────────────────
@@ -181,36 +210,35 @@ export class CreateGatewayPayment {
     }
 
     // ── Task 5: Idempotency guard ─────────────────────────────────────────────
-    const requestHash = computeRequestHash(input);
-
     if (input.idempotencyKey) {
-      const existingKey = await this.idempotencyRepo.find({
-        merchantId: input.merchantId,
-        scope: IDEMPOTENCY_SCOPE,
-        idempotencyKey: input.idempotencyKey,
-      });
+      const { key: existingKey, reserved } = this.idempotencyRepo.reserveOrGet
+        ? await this.idempotencyRepo.reserveOrGet({
+            id: `idem_${randomUUID()}`,
+            merchantId: input.merchantId,
+            scope: IDEMPOTENCY_SCOPE,
+            idempotencyKey: input.idempotencyKey,
+            requestHash,
+          })
+        : { key: await this.idempotencyRepo.find({
+            merchantId: input.merchantId,
+            scope: IDEMPOTENCY_SCOPE,
+            idempotencyKey: input.idempotencyKey,
+          }), reserved: false } as any;
 
-      if (existingKey) {
-        if (existingKey.status === 'processing') {
+      if (!reserved && existingKey) {
+        if (existingKey.requestHash !== requestHash) {
           throw Object.assign(
-            new Error(
-              'A payment with this idempotency key is already being processed. ' +
-                'Retry after a short delay.',
-            ),
-            { statusCode: 409, code: 'IDEMPOTENCY_IN_PROGRESS' },
+            new Error('Idempotency key has already been used with different request parameters.'),
+            { statusCode: 409, code: 'IDEMPOTENCY_CONFLICT' },
           );
         }
+        if (existingKey.status === 'processing') {
+          throw Object.assign(new Error('A payment with this idempotency key is already being processed.'), {
+            statusCode: 409,
+            code: 'IDEMPOTENCY_IN_PROGRESS',
+          });
+        }
         if (existingKey.status === 'completed') {
-          if (existingKey.requestHash !== requestHash) {
-            throw Object.assign(
-              new Error(
-                'Idempotency key has already been used with different request parameters. ' +
-                  'Use a new idempotency key for a different request.',
-              ),
-              { statusCode: 409, code: 'IDEMPOTENCY_CONFLICT' },
-            );
-          }
-          // Same hash → idempotent replay: return cached response.
           const snapshot = existingKey.responseSnapshot as Record<string, unknown>;
           return {
             transaction: snapshot['transaction'] as StandalonePaymentTransactionDTO,
@@ -219,26 +247,20 @@ export class CreateGatewayPayment {
           };
         }
         if (existingKey.status === 'failed') {
-          // Phase 8D.1 policy: failed idempotency key is NOT reusable.
-          // The client must supply a new idempotency key for a retry.
-          throw Object.assign(
-            new Error(
-              'Idempotency key previously failed. A new idempotency key is required for a retry.',
-            ),
-            { statusCode: 409, code: 'IDEMPOTENCY_PREVIOUSLY_FAILED' },
-          );
+          throw Object.assign(new Error('Idempotency key previously failed. A new idempotency key is required for a retry.'), {
+            statusCode: 409,
+            code: 'IDEMPOTENCY_PREVIOUSLY_FAILED',
+          });
         }
-        // unknown status: fall through to normal execution.
+      } else if (!reserved) {
+        await this.idempotencyRepo.reserve({
+          id: `idem_${randomUUID()}`,
+          merchantId: input.merchantId,
+          scope: IDEMPOTENCY_SCOPE,
+          idempotencyKey: input.idempotencyKey,
+          requestHash,
+        });
       }
-
-      // Reserve the idempotency key before calling the provider.
-      await this.idempotencyRepo.reserve({
-        id: `idem_${randomUUID()}`,
-        merchantId: input.merchantId,
-        scope: IDEMPOTENCY_SCOPE,
-        idempotencyKey: input.idempotencyKey,
-        requestHash,
-      });
     }
 
     // ── Provider call ─────────────────────────────────────────────────────────
@@ -278,7 +300,7 @@ export class CreateGatewayPayment {
       method: input.method,
       transactionType: 'payment',
       direction: 'incoming',
-      status: txStatus,
+      status: txStatus === 'succeeded' && this.transactionRepo.applySucceededPayment ? 'pending' : txStatus,
       amount: input.amount,
       currency: intent.currency,
       providerReference: providerResult.providerReference,
@@ -295,23 +317,32 @@ export class CreateGatewayPayment {
     let updatedIntent = intent;
 
     if (txStatus === 'succeeded') {
-      const newAmountPaid = intent.amountPaid + input.amount;
-      const newAmountRemaining = Math.max(0, intent.amountDue - newAmountPaid);
-      const newStatus = computeIntentStatus(intent.amountDue, newAmountPaid);
-
-      updatedIntent = await this.intentRepo.updateTotals({
-        id: intent.id,
-        merchantId: input.merchantId,
-        amountPaid: newAmountPaid,
-        amountRefunded: intent.amountRefunded,
-        amountRemaining: newAmountRemaining,
-      });
-
-      updatedIntent = await this.intentRepo.updateStatus({
-        id: intent.id,
-        merchantId: input.merchantId,
-        status: newStatus,
-      });
+      if (this.transactionRepo.applySucceededPayment) {
+        const applied = await this.transactionRepo.applySucceededPayment({
+          transactionId: transaction.id,
+          merchantId: input.merchantId,
+          intentId: intent.id,
+          amount: input.amount,
+        });
+        updatedIntent = applied.intent;
+        (transaction as any).status = applied.transaction.status;
+      } else {
+        const newAmountPaid = intent.amountPaid + input.amount;
+        const newAmountRemaining = Math.max(0, intent.amountDue - newAmountPaid);
+        const newStatus = computeIntentStatus(intent.amountDue, newAmountPaid);
+        updatedIntent = await this.intentRepo.updateTotals({
+          id: intent.id,
+          merchantId: input.merchantId,
+          amountPaid: newAmountPaid,
+          amountRefunded: intent.amountRefunded,
+          amountRemaining: newAmountRemaining,
+        });
+        updatedIntent = await this.intentRepo.updateStatus({
+          id: intent.id,
+          merchantId: input.merchantId,
+          status: newStatus,
+        });
+      }
     }
 
     // ── Mark idempotency key completed ────────────────────────────────────────

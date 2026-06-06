@@ -191,3 +191,17 @@ try {
 - `PROVIDER_REFUND_UNSUPPORTED`: returned when a non-manual gateway/sandbox provider does not expose `refundPayment()`. Manual refunds may be recorded offline; FakeGateway supports deterministic dev/test refund; Xendit sandbox currently returns unsupported.
 - `PROVIDER_CANCEL_UNSUPPORTED`: returned when a non-manual gateway/sandbox provider does not expose `cancelPayment()`. Manual void/cancel may be recorded offline; FakeGateway supports deterministic dev/test cancel; Xendit sandbox currently returns unsupported.
 - `IDEMPOTENCY_CONFLICT`: returned when the same merchant-scoped idempotency key is reused for a different refund/void transaction context. Matching refund/void replay returns success with `idempotentReplay: true`.
+
+## P0/P1 Additional Codes
+
+| Code | HTTP | Meaning |
+| --- | ---: | --- |
+| `PARTIAL_PAYMENT_NOT_ALLOWED` | 422 | Intent disallows partial payment and the requested amount is not the full remaining amount. |
+| `INTENT_NOT_PAYABLE` | 422 | Intent status is terminal or otherwise not payable. |
+| `INTENT_EXPIRED` | 422 | Intent expiration time has passed. |
+| `OVERPAYMENT_REJECTED` | 422 | Payment or confirmation would exceed remaining/refundable amount. |
+| `IDEMPOTENCY_CONFLICT` | 409 | Same idempotency key was used with a different canonical request hash. |
+| `IDEMPOTENCY_IN_PROGRESS` | 409 | Same idempotency key is currently processing. |
+| `IDEMPOTENCY_PREVIOUSLY_FAILED` | 409 | Same idempotency key was marked failed and must not be retried. |
+| `RATE_LIMITED` | 429 | Webhook rate limit exceeded. |
+| `WEBHOOK_SECRET_REQUIRED` | 503 | Xendit callback token is not configured and unsigned-dev override is not enabled. |

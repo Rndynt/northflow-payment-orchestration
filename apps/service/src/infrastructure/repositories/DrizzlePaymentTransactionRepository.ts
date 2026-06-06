@@ -5,23 +5,167 @@
  * the payment_orchestration_transactions table.
  */
 
-import { eq, and, sum, inArray, lte, isNotNull } from 'drizzle-orm';
+import { eq, and, sum, inArray, lte, isNotNull, sql } from 'drizzle-orm';
 import type {
   PaymentTransactionRepository,
   CreatePaymentTransactionInput,
   UpdateTransactionStatusInput,
   MarkSucceededIfConfirmableInput,
   MarkSucceededIfConfirmableResult,
+  ApplySucceededPaymentInput,
+  ApplySucceededPaymentResult,
+  ApplySucceededRefundInput,
+  ApplySucceededRefundResult,
 } from '@northflow/payment-orchestration-core';
 import type { StandalonePaymentTransactionDTO } from '@northflow/payment-orchestration-core';
 import type { PoDb } from '../db.ts';
-import { paymentOrchestrationTransactions as t } from '../schema.ts';
-import { mapTransactionRow } from './mappers.ts';
+import {
+  paymentOrchestrationTransactions as t,
+  paymentOrchestrationIntents as intents,
+} from '../schema.ts';
+import { mapIntentRow, mapTransactionRow } from './mappers.ts';
 
 export class DrizzlePaymentTransactionRepository
   implements PaymentTransactionRepository
 {
   constructor(private readonly db: PoDb) {}
+
+
+
+  async applySucceededPayment(
+    input: ApplySucceededPaymentInput,
+  ): Promise<ApplySucceededPaymentResult> {
+    return await this.db.transaction(async (txDb) => {
+      const now = new Date();
+      const txRows = await txDb
+        .update(t)
+        .set({ status: 'succeeded', updatedAt: now })
+        .where(
+          and(
+            eq(t.id, input.transactionId),
+            eq(t.merchantId, input.merchantId),
+            inArray(t.status, ['requires_action', 'pending']),
+          ),
+        )
+        .returning();
+      const changedTx = txRows[0];
+      if (!changedTx) {
+        const existingRows = await txDb
+          .select()
+          .from(t)
+          .where(and(eq(t.id, input.transactionId), eq(t.merchantId, input.merchantId)))
+          .limit(1);
+        const existing = existingRows[0];
+        if (existing?.status === 'succeeded') {
+          const intentRows = await txDb
+            .select()
+            .from(intents)
+            .where(and(eq(intents.id, input.intentId), eq(intents.merchantId, input.merchantId)))
+            .limit(1);
+          const intent = intentRows[0];
+          if (!intent) throw new Error(`Payment intent not found: ${input.intentId}`);
+          return {
+            transaction: mapTransactionRow(existing as any),
+            intent: mapIntentRow(intent as any),
+            changed: false,
+            alreadySucceeded: true,
+          };
+        }
+        throw Object.assign(new Error('Transaction is not confirmable.'), {
+          statusCode: 422,
+          code: 'INVALID_TRANSACTION_STATUS',
+        });
+      }
+
+      const intentRows = await txDb
+        .update(intents)
+        .set({
+          amountPaid: sql`${intents.amountPaid} + ${input.amount}`,
+          amountRemaining: sql`${intents.amountRemaining} - ${input.amount}`,
+          status: sql`CASE
+            WHEN ${intents.amountPaid} + ${input.amount} > ${intents.amountDue} THEN 'overpaid'
+            WHEN ${intents.amountPaid} + ${input.amount} >= ${intents.amountDue} THEN 'paid'
+            WHEN ${intents.amountPaid} + ${input.amount} > 0 THEN 'partially_paid'
+            ELSE 'requires_payment'
+          END`,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(intents.id, input.intentId),
+            eq(intents.merchantId, input.merchantId),
+            sql`${intents.amountRemaining} >= ${input.amount}`,
+          ),
+        )
+        .returning();
+      const intent = intentRows[0];
+      if (!intent) {
+        throw Object.assign(new Error('Confirming this transaction would cause overpayment.'), {
+          statusCode: 422,
+          code: 'OVERPAYMENT_REJECTED',
+        });
+      }
+      return {
+        transaction: mapTransactionRow(changedTx as any),
+        intent: mapIntentRow(intent as any),
+        changed: true,
+        alreadySucceeded: false,
+      };
+    });
+  }
+
+  async applySucceededRefund(
+    input: ApplySucceededRefundInput,
+  ): Promise<ApplySucceededRefundResult> {
+    return await this.db.transaction(async (txDb) => {
+      const now = new Date();
+      const refundRows = await txDb
+        .update(t)
+        .set({
+          status: 'succeeded',
+          failureReason: null,
+          providerReference: input.providerReference ?? undefined,
+          rawProviderResponse: input.rawProviderResponse !== undefined
+            ? (input.rawProviderResponse ?? {}) as Record<string, unknown>
+            : undefined,
+          updatedAt: now,
+        })
+        .where(and(eq(t.id, input.refundTransactionId), eq(t.merchantId, input.merchantId)))
+        .returning();
+      const refund = refundRows[0];
+      if (!refund) throw new Error(`Refund transaction not found: ${input.refundTransactionId}`);
+
+      const intentRows = await txDb
+        .update(intents)
+        .set({
+          amountRefunded: sql`${intents.amountRefunded} + ${input.amount}`,
+          status: sql`CASE
+            WHEN ${intents.amountPaid} > 0 AND ${intents.amountRefunded} + ${input.amount} >= ${intents.amountPaid} THEN 'refunded'
+            ELSE ${intents.status}
+          END`,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(intents.id, input.intentId),
+            eq(intents.merchantId, input.merchantId),
+            sql`${intents.amountRefunded} + ${input.amount} <= ${intents.amountPaid}`,
+          ),
+        )
+        .returning();
+      const intent = intentRows[0];
+      if (!intent) {
+        throw Object.assign(new Error('Refund exceeds refundable amount.'), {
+          statusCode: 422,
+          code: 'REFUND_EXCEEDS_REFUNDABLE',
+        });
+      }
+      return {
+        refundTransaction: mapTransactionRow(refund as any),
+        intent: mapIntentRow(intent as any),
+      };
+    });
+  }
 
   async findById(
     id: string,

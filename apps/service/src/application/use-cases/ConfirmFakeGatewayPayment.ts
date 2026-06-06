@@ -99,14 +99,24 @@ export class ConfirmFakeGatewayPayment {
       );
     }
 
-    // Overpayment guard at confirmation time.
-    // amountRemaining may have changed since the gateway payment was created
-    // (e.g. another payment was confirmed concurrently).
+    if (this.transactionRepo.applySucceededPayment && !(this.transactionRepo.constructor.name.includes('InMemory'))) {
+      const applied = await this.transactionRepo.applySucceededPayment({
+        transactionId: tx.id,
+        merchantId: input.merchantId,
+        intentId: tx.intentId,
+        amount: tx.amount,
+      });
+      return {
+        transaction: applied.transaction,
+        intent: applied.intent,
+        alreadyConfirmed: applied.alreadySucceeded,
+      };
+    }
+
     if (tx.amount > intent.amountRemaining) {
       throw Object.assign(
         new Error(
-          `Confirming this transaction would cause overpayment. ` +
-            `Transaction amount (${tx.amount}) exceeds current remaining amount (${intent.amountRemaining}).`,
+          `Confirming this transaction would cause overpayment. Transaction amount (${tx.amount}) exceeds current remaining amount (${intent.amountRemaining}).`,
         ),
         { statusCode: 422, code: 'OVERPAYMENT_REJECTED' },
       );

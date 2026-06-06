@@ -18,7 +18,7 @@ export interface ApiError extends Error {
 
 export function errorHandler(
   err: ApiError,
-  _req: Request,
+  req: Request,
   res: Response,
   _next: NextFunction,
 ): void {
@@ -31,7 +31,7 @@ export function errorHandler(
       : 'An internal error occurred. Please try again later.';
 
   if (statusCode >= 500) {
-    console.error('[payment-orchestration-service/error]', err.message, err.stack);
+    console.error(JSON.stringify({ level: 'error', event: 'request_error', requestId: (req as any).requestId ?? null, code, message: err.message }));
   }
 
   res.status(statusCode).json({
