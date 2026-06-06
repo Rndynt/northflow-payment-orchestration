@@ -5,49 +5,45 @@
 
 FROM node:20-alpine AS base
 RUN corepack enable pnpm
-
-# ── Stage 1: Install dependencies ─────────────────────────────────────────────
-FROM base AS deps
 WORKDIR /app
+
+# ── Stage 1: Install workspace dependencies ───────────────────────────────────
+FROM base AS deps
 
 COPY package.json pnpm-workspace.yaml ./
-COPY packages/core/package.json packages/core/
-COPY packages/client-sdk/package.json packages/client-sdk/
-COPY apps/service/package.json apps/service/
+COPY packages/core/package.json packages/core/package.json
+COPY packages/client-sdk/package.json packages/client-sdk/package.json
+COPY apps/service/package.json apps/service/package.json
 
-RUN pnpm install --frozen-lockfile
+# This repository currently does not commit pnpm-lock.yaml, so frozen-lockfile
+# cannot be used in Docker/Coolify builds. Switch to --no-frozen-lockfile until
+# a lockfile is generated and committed.
+RUN pnpm install --no-frozen-lockfile
 
-# ── Stage 2: Build (type-check only — no transpile step, tsx runs TS directly) ─
+# ── Stage 2: Build / type-check ───────────────────────────────────────────────
 FROM base AS build
-WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/packages/core/node_modules packages/core/node_modules 2>/dev/null || true
-COPY --from=deps /app/packages/client-sdk/node_modules packages/client-sdk/node_modules 2>/dev/null || true
-COPY --from=deps /app/apps/service/node_modules apps/service/node_modules 2>/dev/null || true
-
-COPY tsconfig.base.json ./
+COPY package.json pnpm-workspace.yaml tsconfig.base.json ./
 COPY packages/core/ packages/core/
 COPY packages/client-sdk/ packages/client-sdk/
 COPY apps/service/ apps/service/
 COPY migrations/ migrations/
 
-# Type-check only (tsx runs source directly; no transpile needed)
+# Type-check only (tsx runs source directly; no transpile artifact is required)
 RUN pnpm --filter @northflow/payment-orchestration-service type-check
 
 # ── Stage 3: Production runtime ────────────────────────────────────────────────
 FROM base AS production
-WORKDIR /app
 
 ENV NODE_ENV=production
 
 COPY --from=deps /app/node_modules ./node_modules
+COPY package.json pnpm-workspace.yaml tsconfig.base.json ./
 COPY --from=build /app/packages/core/ packages/core/
 COPY --from=build /app/packages/client-sdk/ packages/client-sdk/
 COPY --from=build /app/apps/service/ apps/service/
 COPY --from=build /app/migrations/ migrations/
-COPY tsconfig.base.json ./
-COPY package.json pnpm-workspace.yaml ./
 
 EXPOSE 5100
 
