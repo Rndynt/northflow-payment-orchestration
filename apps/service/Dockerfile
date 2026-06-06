@@ -49,4 +49,4 @@ COPY --from=build /app/migrations/ migrations/
 
 EXPOSE 5100
 
-CMD ["node", "--loader", "tsx/esm", "apps/service/src/index.ts"]
+CMD ["pnpm", "--filter", "@northflow/payment-orchestration-service", "start"]
