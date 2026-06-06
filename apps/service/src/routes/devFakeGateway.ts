@@ -11,7 +11,7 @@
 import { Router } from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import type { ServiceContainer } from '../container.ts';
-import { resolveMerchantId } from './utils.ts';
+import { apiErrorResponse, resolveMerchantId } from './utils.ts';
 
 export function createDevFakeGatewayRouter(container: ServiceContainer): Router {
   const router = Router();
@@ -30,13 +30,13 @@ export function createDevFakeGatewayRouter(container: ServiceContainer): Router 
         const body = req.body as Record<string, unknown>;
 
         if (!transactionId) {
-          res.status(400).json({ ok: false, error: 'VALIDATION_ERROR', message: 'transactionId is required' });
+          res.status(400).json(apiErrorResponse('VALIDATION_ERROR', 'transactionId is required'));
           return;
         }
 
         const merchantId = resolveMerchantId(req, body['merchantId']);
         if (!merchantId) {
-          res.status(400).json({ ok: false, error: 'VALIDATION_ERROR', message: 'merchantId is required (body or x-payment-merchant-id header)' });
+          res.status(400).json(apiErrorResponse('VALIDATION_ERROR', 'merchantId is required (body or x-payment-merchant-id header)'));
           return;
         }
 

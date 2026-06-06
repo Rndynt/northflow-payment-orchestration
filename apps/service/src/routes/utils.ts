@@ -61,13 +61,14 @@ export function apiErrorResponse(
   code: string,
   message: string,
   details?: unknown,
-): { ok: false; error: { code: string; message: string; details: unknown } } {
+): { ok: false; error: { code: string; message: string; details: unknown; toJSON?: () => string } } {
   return {
     ok: false,
     error: {
       code,
       message,
       details: details ?? null,
+      toJSON() { return this.code; },
     },
   };
 }

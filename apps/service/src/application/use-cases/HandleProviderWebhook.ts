@@ -42,6 +42,7 @@ import type {
 import type { FakeGatewayWebhookHandler } from '../../infrastructure/providers/FakeGatewayWebhookHandler.ts';
 import type { ProviderRegistry } from '../../infrastructure/providers/providerRegistry.ts';
 import { computeIntentStatus } from './intentStatusHelper.ts';
+import { redactSensitiveRecord } from '../payment-state/redaction.ts';
 
 const TERMINAL_STATUSES = new Set(['succeeded', 'failed', 'cancelled', 'expired', 'reversed']);
 
@@ -93,51 +94,71 @@ export class HandleProviderWebhook {
 
     const rawPayload = parsed.rawPayload;
 
-    // ── Duplicate check by (provider, providerEventId) ────────────────────────
-    const existing = await this.providerEventRepo.findByProviderEventId(
-      provider,
-      parsed.providerEventId,
-    );
-
-    if (existing) {
-      if (existing.processingStatus === 'processed') {
-        // Already processed — idempotent success without re-mutating transaction.
-        const tx = parsed.providerReference
-          ? await this.transactionRepo.findByProviderReference(provider, parsed.providerReference)
-          : null;
-        const intent = tx
-          ? await this.intentRepo.findById(tx.intentId, tx.merchantId)
-          : null;
-        return {
-          eventId: existing.id,
-          provider,
-          providerReference: parsed.providerReference,
-          processingStatus: 'processed',
-          transaction: tx,
-          intent,
-          idempotentReplay: true,
-        };
-      }
-      // Pending or failed — fall through to re-process using the existing event row.
-    }
-
-    // ── Reserve provider event (or reuse existing) ────────────────────────────
+    // ── Reserve provider event (race-safe where repository supports it) ─────
     let eventRow: PaymentProviderEventDTO;
-    if (existing) {
-      eventRow = existing;
-    } else {
-      eventRow = await this.providerEventRepo.reserveEvent({
+    let idempotentReplay = false;
+    if (this.providerEventRepo.reserveEventOrGet) {
+      const reserved = await this.providerEventRepo.reserveEventOrGet({
         id: `pev_${randomUUID()}`,
         provider,
         providerEventId: parsed.providerEventId,
         providerReference: parsed.providerReference,
         eventType: parsed.eventType,
-        rawHeaders: input.headers as Record<string, unknown>,
-        rawBody: Buffer.isBuffer(input.rawBody)
-          ? ({ _raw: true } as Record<string, unknown>)
-          : rawPayload,
-        parsedPayload: rawPayload,
+        rawHeaders: redactSensitiveRecord(input.headers) as Record<string, unknown>,
+        rawBody: Buffer.isBuffer(input.rawBody) ? ({ _raw: true } as Record<string, unknown>) : (redactSensitiveRecord(rawPayload) as Record<string, unknown>),
+        parsedPayload: redactSensitiveRecord(rawPayload) as Record<string, unknown>,
       });
+      eventRow = reserved.event;
+      if (!reserved.reserved && eventRow.processingStatus === 'processed') idempotentReplay = true;
+    } else {
+      const existing = await this.providerEventRepo.findByProviderEventId(provider, parsed.providerEventId);
+      if (existing) {
+        eventRow = existing;
+        if (existing.processingStatus === 'processed') idempotentReplay = true;
+      } else {
+        eventRow = await this.providerEventRepo.reserveEvent({
+          id: `pev_${randomUUID()}`,
+          provider,
+          providerEventId: parsed.providerEventId,
+          providerReference: parsed.providerReference,
+          eventType: parsed.eventType,
+          rawHeaders: redactSensitiveRecord(input.headers) as Record<string, unknown>,
+          rawBody: Buffer.isBuffer(input.rawBody) ? ({ _raw: true } as Record<string, unknown>) : (redactSensitiveRecord(rawPayload) as Record<string, unknown>),
+          parsedPayload: redactSensitiveRecord(rawPayload) as Record<string, unknown>,
+        });
+      }
+    }
+
+    if (idempotentReplay) {
+      const replayTx = parsed.providerReference
+        ? await this.transactionRepo.findByProviderReference(provider, parsed.providerReference)
+        : null;
+      const replayIntent = replayTx ? await this.intentRepo.findById(replayTx.intentId, replayTx.merchantId) : null;
+      return {
+        eventId: eventRow.id,
+        provider,
+        providerReference: parsed.providerReference,
+        processingStatus: 'processed',
+        transaction: replayTx,
+        intent: replayIntent,
+        idempotentReplay: true,
+      };
+    }
+
+    if (this.providerEventRepo.claimForProcessing) {
+      const claimed = await this.providerEventRepo.claimForProcessing(eventRow.id);
+      if (!claimed) {
+        return {
+          eventId: eventRow.id,
+          provider,
+          providerReference: parsed.providerReference,
+          processingStatus: 'ignored',
+          transaction: null,
+          intent: null,
+          idempotentReplay: true,
+        };
+      }
+      eventRow = claimed;
     }
 
     // ── Resolve transaction by provider reference ────────────────────────────
@@ -206,57 +227,30 @@ export class HandleProviderWebhook {
             };
           }
 
-          // Overpayment guard.
-          if (intent && tx.amount > intent.amountRemaining) {
-            await this.providerEventRepo.markFailed(
-              eventRow.id,
-              `Overpayment rejected: tx.amount=${tx.amount} > intent.amountRemaining=${intent.amountRemaining}`,
-            );
-            return {
-              eventId: eventRow.id,
-              provider,
-              providerReference: parsed.providerReference,
-              processingStatus: 'failed',
-              transaction: tx,
-              intent,
-              idempotentReplay: false,
-            };
-          }
-
-          const { changed, transaction: confirmedTx } =
-            await this.transactionRepo.markSucceededIfConfirmable({
-              id: tx.id,
+          if (this.transactionRepo.applySucceededPayment) {
+            const applied = await this.transactionRepo.applySucceededPayment({
+              transactionId: tx.id,
               merchantId: tx.merchantId,
+              intentId: tx.intentId,
+              amount: tx.amount,
             });
-
-          if (changed && confirmedTx && intent) {
-            // Update intent totals — only when WE transitioned the status.
-            const newAmountPaid = intent.amountPaid + tx.amount;
-            const newAmountRemaining = Math.max(0, intent.amountDue - newAmountPaid);
-            const newStatus = computeIntentStatus(intent.amountDue, newAmountPaid);
-
-            await this.intentRepo.updateTotals({
-              id: intent.id,
-              merchantId: tx.merchantId,
-              amountPaid: newAmountPaid,
-              amountRefunded: intent.amountRefunded,
-              amountRemaining: newAmountRemaining,
-            });
-
-            const updatedIntent = await this.intentRepo.updateStatus({
-              id: intent.id,
-              merchantId: tx.merchantId,
-              status: newStatus,
-            });
-
-            intent = updatedIntent;
-            tx = confirmedTx;
-          } else if (confirmedTx === null && !changed) {
-            // Concurrent call won — reload for fresh state.
-            const reloaded = await this.transactionRepo.findById(tx.id, tx.merchantId);
-            if (reloaded) tx = reloaded;
-            const freshIntent = await this.intentRepo.findById(tx.intentId, tx.merchantId);
-            if (freshIntent) intent = freshIntent;
+            tx = applied.transaction;
+            intent = applied.intent;
+          } else {
+            // Overpayment guard.
+            if (intent && tx.amount > intent.amountRemaining) {
+              await this.providerEventRepo.markFailed(eventRow.id, `Overpayment rejected: tx.amount=${tx.amount} > intent.amountRemaining=${intent.amountRemaining}`);
+              return { eventId: eventRow.id, provider, providerReference: parsed.providerReference, processingStatus: 'failed', transaction: tx, intent, idempotentReplay: false };
+            }
+            const { changed, transaction: confirmedTx } = await this.transactionRepo.markSucceededIfConfirmable({ id: tx.id, merchantId: tx.merchantId });
+            if (changed && confirmedTx && intent) {
+              const newAmountPaid = intent.amountPaid + tx.amount;
+              const newAmountRemaining = Math.max(0, intent.amountDue - newAmountPaid);
+              const newStatus = computeIntentStatus(intent.amountDue, newAmountPaid);
+              await this.intentRepo.updateTotals({ id: intent.id, merchantId: tx.merchantId, amountPaid: newAmountPaid, amountRefunded: intent.amountRefunded, amountRemaining: newAmountRemaining });
+              intent = await this.intentRepo.updateStatus({ id: intent.id, merchantId: tx.merchantId, status: newStatus });
+              tx = confirmedTx;
+            }
           }
         }
         // If transaction was already in terminal status (and not succeeded), skip.

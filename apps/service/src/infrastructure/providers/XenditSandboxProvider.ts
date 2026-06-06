@@ -6,6 +6,7 @@
  * never call the network and raw provider secrets are never read from DB rows.
  */
 
+import { createHash, timingSafeEqual } from 'crypto';
 import type {
   PaymentProviderAccount,
 } from '@northflow/payment-orchestration-core';
@@ -159,7 +160,8 @@ export class XenditSandboxProvider implements StandalonePaymentProvider {
     }
 
     const publicConfig = account.publicConfig ?? {};
-    const externalId = `po_${input.intentId}_${Date.now()}`;
+    const externalSeed = `${input.intentId}:${input.amount}:${input.currency}:${input.method}`;
+    const externalId = `po_${input.intentId}_${createHash('sha256').update(externalSeed).digest('hex').slice(0, 16)}`;
     const requestBody = {
       external_id: externalId,
       amount: input.amount,
@@ -213,17 +215,25 @@ export class XenditSandboxProvider implements StandalonePaymentProvider {
 
   parseWebhook(input: StandaloneProviderWebhookInput): StandaloneParsedProviderWebhook {
     const callbackToken = getHeader(input.headers, CALLBACK_TOKEN_HEADER);
-    const expectedToken = process.env['PAYMENT_ORCHESTRATION_XENDIT_CALLBACK_TOKEN'] ?? null;
-    if (expectedToken && callbackToken !== expectedToken) {
-      throw Object.assign(new Error('Xendit webhook callback token verification failed.'), {
-        statusCode: 401,
-        code: 'WEBHOOK_SIGNATURE_INVALID',
-      });
-    }
-    if (!expectedToken && !callbackToken) {
+    const expectedToken = process.env['PAYMENT_ORCHESTRATION_XENDIT_CALLBACK_TOKEN']?.trim() ?? '';
+    const allowUnsignedDev = this.nodeEnv !== 'production' && process.env['PAYMENT_ORCHESTRATION_XENDIT_ALLOW_UNSIGNED_DEV_WEBHOOKS'] === 'true';
+    if (!callbackToken) {
       throw Object.assign(new Error('Xendit webhook callback token missing.'), {
         statusCode: 401,
         code: 'WEBHOOK_SIGNATURE_MISSING',
+      });
+    }
+    if (!expectedToken) {
+      if (!allowUnsignedDev) {
+        throw Object.assign(new Error('Xendit webhook callback token secret is required.'), {
+          statusCode: 503,
+          code: 'WEBHOOK_SECRET_REQUIRED',
+        });
+      }
+    } else if (!safeEqual(callbackToken, expectedToken)) {
+      throw Object.assign(new Error('Xendit webhook callback token verification failed.'), {
+        statusCode: 401,
+        code: 'WEBHOOK_SIGNATURE_INVALID',
       });
     }
 
@@ -298,4 +308,10 @@ function sanitizeXenditResponse(input: Record<string, unknown>): Record<string, 
     }
   }
   return clone;
+}
+
+function safeEqual(left: string, right: string): boolean {
+  const a = Buffer.from(left);
+  const b = Buffer.from(right);
+  return a.length === b.length && timingSafeEqual(a, b);
 }

@@ -313,3 +313,12 @@ Errors use the standard envelope:
 ```json
 { "ok": false, "error": { "code": "PROVIDER_REFUND_UNSUPPORTED", "message": "Provider x does not support programmatic refunds." } }
 ```
+
+## P0/P1 Production Readiness Notes
+
+- Payment success/refund mutations are applied through transaction-aware repository helpers so transaction status, intent totals/status, and idempotency completion are persisted atomically on the normal path.
+- New gateway payments are accepted only for `requires_payment` and `partially_paid` intents; terminal or expired intents return `INTENT_NOT_PAYABLE` or `INTENT_EXPIRED`.
+- `allowPartial=false` requires full remaining amount unless replaying an already-reserved idempotent request; new partial attempts return `PARTIAL_PAYMENT_NOT_ALLOWED`.
+- Idempotency request hashes are canonical SHA-256 hashes of request identity parameters; same key/different body returns `IDEMPOTENCY_CONFLICT`, processing keys return `IDEMPOTENCY_IN_PROGRESS`, and failed keys return `IDEMPOTENCY_PREVIOUSLY_FAILED`.
+- All service-token errors use the nested frozen error envelope and include an `x-request-id` response header for correlation.
+- Webhook ingestion stores redacted headers/payloads, applies per-IP/provider in-memory rate limiting, and enforces strict Xendit callback token policy unless the explicit unsigned-dev override is enabled.

@@ -12,6 +12,7 @@ import { eq, and, lt, sql, inArray } from 'drizzle-orm';
 import type {
   PaymentProviderEventRepository,
   FindStalePendingInput,
+  ReserveProviderEventResult,
 } from '@northflow/payment-orchestration-core';
 import type {
   PaymentProviderEventDTO,
@@ -20,6 +21,7 @@ import type {
 import type { PoDb } from '../db.ts';
 import { paymentOrchestrationProviderEvents as t } from '../schema.ts';
 import { mapProviderEventRow } from './mappers.ts';
+import { redactSensitiveRecord } from '../../application/payment-state/redaction.ts';
 
 export class DrizzlePaymentProviderEventRepository
   implements PaymentProviderEventRepository
@@ -42,9 +44,9 @@ export class DrizzlePaymentProviderEventRepository
         processingStatus: 'pending',
         processingAttempts: 0,
         lastError: null,
-        rawHeaders: (input.rawHeaders ?? {}) as Record<string, unknown>,
-        rawBody: (input.rawBody ?? null) as Record<string, unknown> | null,
-        parsedPayload: (input.parsedPayload ?? null) as Record<string, unknown> | null,
+        rawHeaders: redactSensitiveRecord(input.rawHeaders ?? {}) as Record<string, unknown>,
+        rawBody: redactSensitiveRecord(input.rawBody ?? null) as Record<string, unknown> | null,
+        parsedPayload: redactSensitiveRecord(input.parsedPayload ?? null) as Record<string, unknown> | null,
         receivedAt: now,
         processedAt: null,
         createdAt: now,
@@ -54,6 +56,51 @@ export class DrizzlePaymentProviderEventRepository
     const row = rows[0];
     if (!row) throw new Error('Failed to reserve provider event — no row returned');
     return mapProviderEventRow(row as any);
+  }
+
+
+
+  async reserveEventOrGet(
+    input: ReserveProviderEventInput,
+  ): Promise<ReserveProviderEventResult> {
+    const now = new Date();
+    const rows = await this.db
+      .insert(t)
+      .values({
+        id: input.id,
+        merchantId: null,
+        provider: input.provider,
+        providerEventId: input.providerEventId,
+        providerReference: input.providerReference ?? null,
+        eventType: input.eventType,
+        processingStatus: 'pending',
+        processingAttempts: 0,
+        lastError: null,
+        rawHeaders: redactSensitiveRecord(input.rawHeaders ?? {}) as Record<string, unknown>,
+        rawBody: redactSensitiveRecord(input.rawBody ?? null) as Record<string, unknown> | null,
+        parsedPayload: redactSensitiveRecord(input.parsedPayload ?? null) as Record<string, unknown> | null,
+        receivedAt: now,
+        processedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing()
+      .returning();
+    const row = rows[0];
+    if (row) return { event: mapProviderEventRow(row as any), reserved: true };
+    const existing = await this.findByProviderEventId(input.provider, input.providerEventId);
+    if (!existing) throw new Error('Failed to reserve or reload provider event');
+    return { event: existing, reserved: false };
+  }
+
+  async claimForProcessing(eventId: string): Promise<PaymentProviderEventDTO | null> {
+    const rows = await this.db
+      .update(t)
+      .set({ processingStatus: 'processing', updatedAt: new Date() })
+      .where(and(eq(t.id, eventId), inArray(t.processingStatus, ['pending', 'failed'])))
+      .returning();
+    const row = rows[0];
+    return row ? mapProviderEventRow(row as any) : null;
   }
 
   async findByProviderEventId(

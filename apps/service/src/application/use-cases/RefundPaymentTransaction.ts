@@ -20,6 +20,7 @@ import type {
   StandalonePaymentIntentDTO,
 } from '@northflow/payment-orchestration-core';
 import type { ProviderRegistry } from '../../infrastructure/providers/providerRegistry.ts';
+import { computeIntentStatusAfterRefund } from './intentStatusHelper.ts';
 
 const REFUNDABLE_TYPES = new Set(['payment', 'deposit', 'settlement']);
 const OFFLINE_REFUND_PROVIDERS = new Set(['manual']);
@@ -227,25 +228,42 @@ export class RefundPaymentTransaction {
       };
     }
 
-    refundTx = await this.transactionRepo.updateStatus({
-      id: refundId,
-      merchantId,
-      status: refundStatus,
-      failureReason: refundFailureReason,
-      providerReference: refundProviderRef ?? undefined,
-      rawProviderResponse: refundRawResponse,
-    });
-
     let updatedIntent = intent;
-    if (refundStatus === 'succeeded') {
-      const newAmountRefunded = intent.amountRefunded + amount;
-      updatedIntent = await this.intentRepo.updateTotals({
-        id: intent.id,
+    if (refundStatus === 'succeeded' && this.transactionRepo.applySucceededRefund) {
+      const applied = await this.transactionRepo.applySucceededRefund({
+        refundTransactionId: refundId,
         merchantId,
-        amountPaid: intent.amountPaid,
-        amountRefunded: newAmountRefunded,
-        amountRemaining: intent.amountRemaining,
+        intentId: intent.id,
+        amount,
+        providerReference: refundProviderRef ?? undefined,
+        rawProviderResponse: refundRawResponse,
       });
+      refundTx = applied.refundTransaction;
+      updatedIntent = applied.intent;
+    } else {
+      refundTx = await this.transactionRepo.updateStatus({
+        id: refundId,
+        merchantId,
+        status: refundStatus,
+        failureReason: refundFailureReason,
+        providerReference: refundProviderRef ?? undefined,
+        rawProviderResponse: refundRawResponse,
+      });
+
+      if (refundStatus === 'succeeded') {
+        const newAmountRefunded = intent.amountRefunded + amount;
+        updatedIntent = await this.intentRepo.updateTotals({
+          id: intent.id,
+          merchantId,
+          amountPaid: intent.amountPaid,
+          amountRefunded: newAmountRefunded,
+          amountRemaining: intent.amountRemaining,
+        });
+        const newStatus = computeIntentStatusAfterRefund(updatedIntent, newAmountRefunded);
+        if (newStatus !== updatedIntent.status) {
+          updatedIntent = await this.intentRepo.updateStatus({ id: intent.id, merchantId, status: newStatus });
+        }
+      }
     }
 
     return {
