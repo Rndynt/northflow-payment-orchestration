@@ -10,7 +10,7 @@ channel = "stable-25_05"
 
 [userenv.shared]
 NODE_ENV = "development"
-PAYMENT_ORCHESTRATION_SERVICE_PORT = "5000"
+PAYMENT_ORCHESTRATION_SERVICE_PORT = "3001"
 PAYMENT_ORCHESTRATION_XENDIT_SANDBOX_ENABLED = "false"
 PAYMENT_ORCHESTRATION_XENDIT_BASE_URL = "https://api.xendit.co"
 
@@ -24,19 +24,43 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Start application"
+args = "Start service"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start dashboard"
 
 [[workflows.workflow]]
-name = "Start application"
+name = "Start service"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "pnpm dev:service"
+waitForPort = 3001
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "Start dashboard"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @northflow/payment-orchestration-dashboard dev"
 waitForPort = 5000
 
 [workflows.workflow.metadata]
 outputType = "webview"
+
+[[ports]]
+localPort = 3000
+externalPort = 3000
+
+[[ports]]
+localPort = 3001
+externalPort = 3001
 
 [[ports]]
 localPort = 5000
