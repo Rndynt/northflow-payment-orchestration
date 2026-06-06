@@ -1,6 +1,0 @@
-{
-  "/api/auto-config/route": "app/api/auto-config/route.js",
-  "/api/proxy/[...path]/route": "app/api/proxy/[...path]/route.js",
-  "/page": "app/page.js",
-  "/(dashboard)/overview/page": "app/(dashboard)/overview/page.js"
-}

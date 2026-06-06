@@ -1,13 +1,17 @@
 /**
  * auth — S2: per-client credential authentication middleware.
  *
- * Token format: nf_{8-char-prefix}_{random-hex}
- * Lookup: find credentials by prefix, hash presented token, compare with timingSafeEqual.
+ * Credential format (P0.1): nf.<environment>.<credentialId>.<secret>
+ *   - Dot-separated — safe even when credentialId contains no dots or underscores.
+ *   - Stored prefix: nf.<environment>.<credentialId>  (deterministic, URL-safe)
+ *   - Only prefix + SHA-256 hash are stored; raw secret is shown once at generation.
  *
- * Resolution order:
- *   1. Authorization: Bearer <token>  (primary)
- *   2. x-payment-orchestration-service-token  (legacy header alias)
- *   3. x-payment-engine-service-token  (legacy header alias)
+ * Token extraction order (P0.2):
+ *   1. Authorization: Bearer <token>   (primary standard header)
+ *   2. x-nf-api-key: <token>           (Northflow dedicated header)
+ *   3. Legacy compatibility headers     (only when legacyEnabled)
+ *      x-payment-orchestration-service-token
+ *      x-payment-engine-service-token
  *
  * Legacy mode: PAYMENT_ORCHESTRATION_LEGACY_SERVICE_TOKEN_ENABLED=true
  *   - Allows the old shared service token to authorize protected routes.
@@ -17,7 +21,7 @@
  * S2: req.auth attached on success with clientId, sourceApp, environment, credentialId, scopes.
  */
 
-import { createHash, timingSafeEqual } from 'crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'crypto';
 import type { Request, Response, NextFunction } from 'express';
 import { apiErrorResponse } from '../routes/utils.ts';
 import type { ClientCredentialRepository, ApiClientRepository } from '@northflow/payment-orchestration-core';
@@ -27,11 +31,25 @@ export function hashCredential(raw: string): string {
   return createHash('sha256').update(raw).digest('hex');
 }
 
+/**
+ * extractCredentialPrefix — P0.1 stable parser.
+ *
+ * Format: nf.<environment>.<credentialId>.<secret>
+ * Prefix:  nf.<environment>.<credentialId>   (first 3 dot-segments)
+ *
+ * Returns null for any token that is not a valid nf. credential.
+ */
 export function extractCredentialPrefix(token: string): string | null {
-  // Format: nf_{prefix}_{random} — prefix is always "nf_" + next segment
-  const parts = token.split('_');
-  if (parts.length < 3 || parts[0] !== 'nf') return null;
-  return `nf_${parts[1]}`;
+  if (!token.startsWith('nf.')) return null;
+  const segments = token.split('.');
+  // Must have at least 4 segments: nf, environment, credentialId, secret
+  if (segments.length < 4) return null;
+  const env = segments[1];
+  const credId = segments[2];
+  if (!env || !credId) return null;
+  // credentialId must not be empty and must be URL-safe (no spaces)
+  if (/\s/.test(credId)) return null;
+  return `nf.${env}.${credId}`;
 }
 
 function safeEqual(a: string, b: string): boolean {
@@ -45,16 +63,30 @@ function safeEqual(a: string, b: string): boolean {
   }
 }
 
-function extractToken(req: Request): string | null {
+/**
+ * extractPrimaryToken — reads Authorization: Bearer or x-nf-api-key.
+ * These are always tried regardless of legacy mode.
+ */
+function extractPrimaryToken(req: Request): string | null {
   const auth = req.headers['authorization'];
   if (typeof auth === 'string') {
     const match = auth.match(/^Bearer\s+(.+)$/i);
     if (match) return match[1].trim();
   }
-  const legacy1 = req.headers['x-payment-orchestration-service-token'];
-  if (typeof legacy1 === 'string' && legacy1) return legacy1;
-  const legacy2 = req.headers['x-payment-engine-service-token'];
-  if (typeof legacy2 === 'string' && legacy2) return legacy2;
+  const nfKey = req.headers['x-nf-api-key'];
+  if (typeof nfKey === 'string' && nfKey.trim()) return nfKey.trim();
+  return null;
+}
+
+/**
+ * extractLegacyToken — reads legacy compatibility headers.
+ * Only used when legacyEnabled is true.
+ */
+function extractLegacyToken(req: Request): string | null {
+  const h1 = req.headers['x-payment-orchestration-service-token'];
+  if (typeof h1 === 'string' && h1.trim()) return h1.trim();
+  const h2 = req.headers['x-payment-engine-service-token'];
+  if (typeof h2 === 'string' && h2.trim()) return h2.trim();
   return null;
 }
 
@@ -62,9 +94,9 @@ export interface AuthMiddlewareOptions {
   serviceToken: string;
   nodeEnv: string;
   legacyEnabled: boolean;
-  /** Optional — when absent the per-client path is skipped and only legacy token auth is attempted. */
+  /** Optional — when absent only legacy token auth is attempted. */
   credentialRepo?: ClientCredentialRepository;
-  /** Optional — when absent the per-client path is skipped and only legacy token auth is attempted. */
+  /** Optional — when absent only legacy token auth is attempted. */
   clientRepo?: ApiClientRepository;
 }
 
@@ -76,14 +108,15 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
   }
 
   return async function authMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
-    const token = extractToken(req);
+    // P0.2: primary headers always; legacy headers only if legacyEnabled
+    const token = extractPrimaryToken(req) ?? (legacyEnabled ? extractLegacyToken(req) : null);
 
     if (!token) {
       res.status(401).json(apiErrorResponse('UNAUTHORIZED', 'Missing authentication credential.'));
       return;
     }
 
-    // ── Per-client credential path ─────────────────────────────────────────────
+    // ── Per-client credential path (nf. format) ───────────────────────────────
     const prefix = extractCredentialPrefix(token);
     if (prefix && credentialRepo && clientRepo) {
       try {
@@ -128,7 +161,7 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
       }
     }
 
-    // ── Legacy shared service token (optional backward-compat fallback) ─────────
+    // ── Legacy shared service token (backward-compat fallback) ────────────────
     if (legacyEnabled && serviceToken) {
       try {
         const tokenBuf = Buffer.from(token);
@@ -158,19 +191,24 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
 }
 
 /**
- * generateCredential — create a new nf_ prefixed token.
- * Returns raw (shown once), prefix (stored), and hash (stored).
+ * generateCredential — P0.1: create a new nf.<env>.<credentialId>.<secret> token.
+ *
+ * Returns raw (shown once at generation, never stored), prefix (stored for DB lookup),
+ * and hash (stored for constant-time verification).
+ *
+ * The credentialId is passed in (e.g. a UUIDv4 stripped of hyphens) — it must be
+ * URL-safe and must not contain dots. The caller is responsible for storing credentialId
+ * and using it as the DB record ID.
+ *
  * Never log or persist raw.
  */
-export function generateCredential(clientIdShort: string): {
-  raw: string;
-  prefix: string;
-  hash: string;
-} {
-  const { randomBytes } = require('crypto') as typeof import('crypto');
-  const rand = randomBytes(24).toString('hex');
-  const prefix = `nf_${clientIdShort.slice(0, 8)}`;
-  const raw = `${prefix}_${rand}`;
+export function generateCredential(
+  environment: string,
+  credentialId: string,
+): { raw: string; prefix: string; hash: string } {
+  const secret = randomBytes(32).toString('base64url');
+  const prefix = `nf.${environment}.${credentialId}`;
+  const raw = `${prefix}.${secret}`;
   const hash = hashCredential(raw);
   return { raw, prefix, hash };
 }

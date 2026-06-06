@@ -5,6 +5,7 @@
  * Phase 8D Hardening (Task 2): merchantId resolution with x-payment-merchant-id header fallback.
  * Phase 8K: use frozen error envelope via apiErrorResponse().
  * Phase S3/S4/S5: merchant access guard, sourceApp enforcement, scope checks.
+ * Phase S-Hardening P0.3/P0.4: use assertMerchantAccessWithScope (fail-closed + grant scopes).
  *
  * Routes:
  *   POST /v1/payment-intents            [intent:create]
@@ -19,7 +20,7 @@ import type { Request, Response, NextFunction } from 'express';
 import type { ServiceContainer } from '../container.ts';
 import { resolveMerchantId, resolveMerchantIdQuery, apiErrorResponse } from './utils.ts';
 import { requireScope } from '../middleware/requireScope.ts';
-import { assertMerchantAccess, assertSourceApp } from '../middleware/merchantAccess.ts';
+import { assertMerchantAccessWithScope, assertSourceApp } from '../middleware/merchantAccess.ts';
 
 export function createIntentsRouter(container: ServiceContainer): Router {
   const router = Router();
@@ -27,9 +28,8 @@ export function createIntentsRouter(container: ServiceContainer): Router {
 
   /**
    * POST /v1/payment-intents
-   * S5: intent:create
-   * S4: sourceApp enforced
-   * S3: merchantId access check
+   * requireScope: intent:create (global)
+   * assertMerchantAccessWithScope: grant must include intent:create
    */
   router.post('/', requireScope('intent:create'), async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -55,9 +55,9 @@ export function createIntentsRouter(container: ServiceContainer): Router {
         return;
       }
 
-      // S3: merchant ownership guard
-      const denied = await assertMerchantAccess(req.auth!, merchantId, accessRepo);
-      if (denied) { res.status(403).json(denied); return; }
+      // P0.3/P0.4: merchant access + grant scope check
+      const denied = await assertMerchantAccessWithScope(req.auth!, merchantId, 'intent:create', accessRepo);
+      if (denied) { res.status(denied.status).json(denied.body); return; }
 
       // S4: sourceApp enforcement
       const sourceAppErr = assertSourceApp(req.auth!, body);
@@ -104,8 +104,8 @@ export function createIntentsRouter(container: ServiceContainer): Router {
 
   /**
    * GET /v1/payment-intents/:id/status
-   * S5: intent:read
-   * S3: merchant access check
+   * requireScope: intent:read (global)
+   * assertMerchantAccessWithScope: grant must include intent:read
    */
   router.get('/:id/status', requireScope('intent:read'), async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -121,9 +121,9 @@ export function createIntentsRouter(container: ServiceContainer): Router {
         return;
       }
 
-      // S3: merchant ownership guard
-      const denied = await assertMerchantAccess(req.auth!, merchantId, accessRepo);
-      if (denied) { res.status(403).json(denied); return; }
+      // P0.3/P0.4: merchant access + grant scope check
+      const denied = await assertMerchantAccessWithScope(req.auth!, merchantId, 'intent:read', accessRepo);
+      if (denied) { res.status(denied.status).json(denied.body); return; }
 
       const result = await container.useCases.getPaymentIntentStatus.execute({
         intentId,
@@ -149,8 +149,8 @@ export function createIntentsRouter(container: ServiceContainer): Router {
 
   /**
    * GET /v1/payment-intents/:id/refundability
-   * S5: intent:read
-   * S3: merchant access check
+   * requireScope: intent:read (global)
+   * assertMerchantAccessWithScope: grant must include intent:read
    */
   router.get('/:id/refundability', requireScope('intent:read'), async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -166,9 +166,9 @@ export function createIntentsRouter(container: ServiceContainer): Router {
         return;
       }
 
-      // S3: merchant ownership guard
-      const denied = await assertMerchantAccess(req.auth!, merchantId, accessRepo);
-      if (denied) { res.status(403).json(denied); return; }
+      // P0.3/P0.4: merchant access + grant scope check
+      const denied = await assertMerchantAccessWithScope(req.auth!, merchantId, 'intent:read', accessRepo);
+      if (denied) { res.status(denied.status).json(denied.body); return; }
 
       const result = await container.useCases.getRefundability.execute({
         intentId,
@@ -186,8 +186,8 @@ export function createIntentsRouter(container: ServiceContainer): Router {
 
   /**
    * POST /v1/payment-intents/:id/gateway-payments
-   * S5: payment:create
-   * S3: merchant access check
+   * requireScope: payment:create (global)
+   * assertMerchantAccessWithScope: grant must include payment:create
    */
   router.post('/:id/gateway-payments', requireScope('payment:create'), async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -206,9 +206,9 @@ export function createIntentsRouter(container: ServiceContainer): Router {
         return;
       }
 
-      // S3: merchant ownership guard
-      const denied = await assertMerchantAccess(req.auth!, merchantId, accessRepo);
-      if (denied) { res.status(403).json(denied); return; }
+      // P0.3/P0.4: merchant access + grant scope check
+      const denied = await assertMerchantAccessWithScope(req.auth!, merchantId, 'payment:create', accessRepo);
+      if (denied) { res.status(denied.status).json(denied.body); return; }
 
       if (!provider || typeof provider !== 'string') {
         res.status(400).json(apiErrorResponse('VALIDATION_ERROR', 'provider is required'));
@@ -249,8 +249,8 @@ export function createIntentsRouter(container: ServiceContainer): Router {
 
   /**
    * POST /v1/payment-intents/:id/reconcile
-   * S5: payment:reconcile
-   * S3: merchant access check
+   * requireScope: payment:reconcile (global)
+   * assertMerchantAccessWithScope: grant must include payment:reconcile
    */
   router.post('/:id/reconcile', requireScope('payment:reconcile'), async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -267,9 +267,9 @@ export function createIntentsRouter(container: ServiceContainer): Router {
         return;
       }
 
-      // S3: merchant ownership guard
-      const denied = await assertMerchantAccess(req.auth!, merchantId, accessRepo);
-      if (denied) { res.status(403).json(denied); return; }
+      // P0.3/P0.4: merchant access + grant scope check
+      const denied = await assertMerchantAccessWithScope(req.auth!, merchantId, 'payment:reconcile', accessRepo);
+      if (denied) { res.status(denied.status).json(denied.body); return; }
 
       const result = await container.useCases.reconcilePaymentIntentTotals.execute({
         merchantId,

@@ -5,6 +5,7 @@
  * Phase 8K: use frozen error envelope via apiErrorResponse().
  * Phase 8F: added POST /:id/refund and POST /:id/void for legacy parity.
  * Phase S3/S5: merchant access guard and scope checks.
+ * Phase S-Hardening P0.3/P0.4: use assertMerchantAccessWithScope (fail-closed + grant scopes).
  */
 
 import { Router } from 'express';
@@ -12,7 +13,7 @@ import type { Request, Response, NextFunction } from 'express';
 import type { ServiceContainer } from '../container.ts';
 import { resolveMerchantId, apiErrorResponse } from './utils.ts';
 import { requireScope } from '../middleware/requireScope.ts';
-import { assertMerchantAccess } from '../middleware/merchantAccess.ts';
+import { assertMerchantAccessWithScope } from '../middleware/merchantAccess.ts';
 
 export function createTransactionsRouter(container: ServiceContainer): Router {
   const router = Router();
@@ -20,8 +21,8 @@ export function createTransactionsRouter(container: ServiceContainer): Router {
 
   /**
    * POST /v1/payment-transactions/:id/refresh-provider-status
-   * S5: intent:read (status refresh is a read-class operation)
-   * S3: merchant access check
+   * requireScope: intent:read (global)
+   * assertMerchantAccessWithScope: grant must include intent:read
    */
   router.post('/:id/refresh-provider-status', requireScope('intent:read'), async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -38,9 +39,9 @@ export function createTransactionsRouter(container: ServiceContainer): Router {
         return;
       }
 
-      // S3: merchant ownership guard
-      const denied = await assertMerchantAccess(req.auth!, merchantId, accessRepo);
-      if (denied) { res.status(403).json(denied); return; }
+      // P0.3/P0.4: merchant access + grant scope check
+      const denied = await assertMerchantAccessWithScope(req.auth!, merchantId, 'intent:read', accessRepo);
+      if (denied) { res.status(denied.status).json(denied.body); return; }
 
       const result = await container.useCases.refreshProviderStatus.execute({
         merchantId,
@@ -63,8 +64,8 @@ export function createTransactionsRouter(container: ServiceContainer): Router {
 
   /**
    * POST /v1/payment-transactions/:id/refund
-   * S5: payment:refund
-   * S3: merchant access check
+   * requireScope: payment:refund (global)
+   * assertMerchantAccessWithScope: grant must include payment:refund
    */
   router.post('/:id/refund', requireScope('payment:refund'), async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -81,9 +82,9 @@ export function createTransactionsRouter(container: ServiceContainer): Router {
         return;
       }
 
-      // S3: merchant ownership guard
-      const denied = await assertMerchantAccess(req.auth!, merchantId, accessRepo);
-      if (denied) { res.status(403).json(denied); return; }
+      // P0.3/P0.4: merchant access + grant scope check
+      const denied = await assertMerchantAccessWithScope(req.auth!, merchantId, 'payment:refund', accessRepo);
+      if (denied) { res.status(denied.status).json(denied.body); return; }
 
       const amount = body['amount'];
       if (typeof amount !== 'number' || !Number.isInteger(amount) || amount <= 0) {
@@ -119,8 +120,8 @@ export function createTransactionsRouter(container: ServiceContainer): Router {
 
   /**
    * POST /v1/payment-transactions/:id/void
-   * S5: payment:void
-   * S3: merchant access check
+   * requireScope: payment:void (global)
+   * assertMerchantAccessWithScope: grant must include payment:void
    */
   router.post('/:id/void', requireScope('payment:void'), async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -137,9 +138,9 @@ export function createTransactionsRouter(container: ServiceContainer): Router {
         return;
       }
 
-      // S3: merchant ownership guard
-      const denied = await assertMerchantAccess(req.auth!, merchantId, accessRepo);
-      if (denied) { res.status(403).json(denied); return; }
+      // P0.3/P0.4: merchant access + grant scope check
+      const denied = await assertMerchantAccessWithScope(req.auth!, merchantId, 'payment:void', accessRepo);
+      if (denied) { res.status(denied.status).json(denied.body); return; }
 
       const reason = typeof body['reason'] === 'string' ? body['reason'] : null;
       const idempotencyKey = typeof body['idempotencyKey'] === 'string' ? body['idempotencyKey'] : null;

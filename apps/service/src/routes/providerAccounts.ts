@@ -4,6 +4,7 @@
  * Phase 8D: real implementation.
  * Phase 8K: use frozen error envelope via apiErrorResponse().
  * Phase S3/S5: merchant access guard and scope checks.
+ * Phase S-Hardening P0.3/P0.4: use assertMerchantAccessWithScope (fail-closed + grant scopes).
  */
 
 import { Router } from 'express';
@@ -11,7 +12,7 @@ import type { Request, Response, NextFunction } from 'express';
 import type { ServiceContainer } from '../container.ts';
 import { apiErrorResponse } from './utils.ts';
 import { requireScope } from '../middleware/requireScope.ts';
-import { assertMerchantAccess } from '../middleware/merchantAccess.ts';
+import { assertMerchantAccessWithScope } from '../middleware/merchantAccess.ts';
 
 export function createProviderAccountsRouter(container: ServiceContainer): Router {
   const router = Router({ mergeParams: true });
@@ -19,8 +20,8 @@ export function createProviderAccountsRouter(container: ServiceContainer): Route
 
   /**
    * POST /v1/merchants/:merchantId/provider-accounts
-   * S5: provider_account:create
-   * S3: merchant access check
+   * requireScope: provider_account:create (global)
+   * assertMerchantAccessWithScope: grant must include provider_account:create
    */
   router.post('/', requireScope('provider_account:create'), async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -30,9 +31,9 @@ export function createProviderAccountsRouter(container: ServiceContainer): Route
         return;
       }
 
-      // S3: merchant ownership guard
-      const denied = await assertMerchantAccess(req.auth!, merchantId, accessRepo);
-      if (denied) { res.status(403).json(denied); return; }
+      // P0.3/P0.4: merchant access + grant scope check
+      const denied = await assertMerchantAccessWithScope(req.auth!, merchantId, 'provider_account:create', accessRepo);
+      if (denied) { res.status(denied.status).json(denied.body); return; }
 
       const { id, provider, environment, providerAccountRef, credentialsRef, publicConfig, metadata } =
         req.body as Record<string, unknown>;
@@ -58,7 +59,6 @@ export function createProviderAccountsRouter(container: ServiceContainer): Route
       });
 
       const pa = result.providerAccount;
-      // ⚠ credentialsRef intentionally excluded from response.
       res.status(201).json({
         ok: true,
         data: {
@@ -79,8 +79,8 @@ export function createProviderAccountsRouter(container: ServiceContainer): Route
 
   /**
    * GET /v1/merchants/:merchantId/provider-accounts/:id
-   * S5: provider_account:read
-   * S3: merchant access check
+   * requireScope: provider_account:read (global)
+   * assertMerchantAccessWithScope: grant must include provider_account:read
    */
   router.get('/:id', requireScope('provider_account:read'), async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -91,9 +91,9 @@ export function createProviderAccountsRouter(container: ServiceContainer): Route
         return;
       }
 
-      // S3: merchant ownership guard
-      const denied = await assertMerchantAccess(req.auth!, merchantId, accessRepo);
-      if (denied) { res.status(403).json(denied); return; }
+      // P0.3/P0.4: merchant access + grant scope check
+      const denied = await assertMerchantAccessWithScope(req.auth!, merchantId, 'provider_account:read', accessRepo);
+      if (denied) { res.status(denied.status).json(denied.body); return; }
 
       const pa = await container.repos.providerAccountRepo.findById(id, merchantId);
       if (!pa) {
@@ -101,7 +101,6 @@ export function createProviderAccountsRouter(container: ServiceContainer): Route
         return;
       }
 
-      // ⚠ credentialsRef intentionally excluded from response.
       res.json({
         ok: true,
         data: {

@@ -327,6 +327,7 @@ function buildTestContainer(opts: { serviceToken?: string; nodeEnv?: string } = 
     dbUrl: '',
     version: '0.2.0',
     phase: '8D',
+    legacyServiceTokenEnabled: true,
   };
 
   const fakeGatewayWebhookHandler = new FakeGatewayWebhookHandler({ nodeEnv });

@@ -4,6 +4,7 @@
  * Phase 8D: real implementation wired to CreateMerchant and merchant repo.
  * Phase 8K: use frozen error envelope via apiErrorResponse().
  * Phase S3/S4/S5: merchant access guard, sourceApp enforcement, scope checks.
+ * Phase S-Hardening P0.3/P0.4: use assertMerchantAccessWithScope (fail-closed + grant scopes).
  */
 
 import { randomUUID } from 'crypto';
@@ -12,7 +13,7 @@ import type { Request, Response, NextFunction } from 'express';
 import type { ServiceContainer } from '../container.ts';
 import { apiErrorResponse } from './utils.ts';
 import { requireScope } from '../middleware/requireScope.ts';
-import { assertMerchantAccess, assertSourceApp } from '../middleware/merchantAccess.ts';
+import { assertMerchantAccessWithScope, assertSourceApp } from '../middleware/merchantAccess.ts';
 
 export function createMerchantsRouter(container: ServiceContainer): Router {
   const router = Router();
@@ -20,10 +21,10 @@ export function createMerchantsRouter(container: ServiceContainer): Router {
 
   /**
    * POST /v1/merchants
-   * Create or return existing merchant.
-   * S5: requires merchant:create scope.
+   * S5: requires merchant:create scope (global).
    * S4: sourceApp must match authenticated client's sourceApp.
    * S3: newly-created merchant is linked to the creating client.
+   * Note: no merchantId yet at creation time — no grant check needed here.
    */
   router.post('/', requireScope('merchant:create'), async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -75,8 +76,8 @@ export function createMerchantsRouter(container: ServiceContainer): Router {
 
   /**
    * GET /v1/merchants/:id
-   * S5: requires merchant:read scope.
-   * S3: client must have access to this merchant.
+   * requireScope: global client must have merchant:read.
+   * assertMerchantAccessWithScope: grant must exist + grant must include merchant:read.
    */
   router.get('/:id', requireScope('merchant:read'), async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -86,9 +87,9 @@ export function createMerchantsRouter(container: ServiceContainer): Router {
         return;
       }
 
-      // S3: merchant ownership guard
-      const denied = await assertMerchantAccess(req.auth!, id, accessRepo);
-      if (denied) { res.status(403).json(denied); return; }
+      // P0.3/P0.4: merchant access + grant scope check
+      const denied = await assertMerchantAccessWithScope(req.auth!, id, 'merchant:read', accessRepo);
+      if (denied) { res.status(denied.status).json(denied.body); return; }
 
       const merchant = await container.repos.merchantRepo.findById(id);
       if (!merchant) {
