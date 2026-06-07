@@ -21,7 +21,7 @@
 // ── Domain ────────────────────────────────────────────────────────────────────
 
 export type { PaymentScope } from './domain/PaymentScope';
-export { createConsumerPaymentScope } from './domain/PaymentScope';
+export { createPaymentScope } from './domain/PaymentScope';
 
 export type { PaymentMerchant, ExternalPayableRef } from './domain/PaymentMerchant';
 

@@ -54,7 +54,7 @@ All named external consumer project references replaced with generic consumer te
 - `docs/integration/kioskoin-rest-integration.md` → `docs/integration/consumer-c-rest-integration.md`
 
 **PaymentScope.ts helper renamed:**
-- `createAuraPosPaymentScope` → `createConsumerPaymentScope` (no old alias left)
+- `createAuraPosPaymentScope` → `createPaymentScope` (no old alias left)
 - `packages/core/src/index.ts` export updated accordingly
 - `sourceApp` default changed from `'aurapos'` to `'consumer-a'`; new generic `sourceApp` parameter added
 
