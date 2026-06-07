@@ -104,8 +104,7 @@ async function buildSigningHeaders(
 ): Promise<SigningHeaders> {
   const timestampMs = Date.now();
   const nonce = generateNonce();
-  const bodyHashResult = hashBody(bodyBytes);
-  const bodyHash = bodyHashResult instanceof Promise ? await bodyHashResult : bodyHashResult;
+  const bodyHash = hashBody(bodyBytes);
   const canonicalStr = buildCanonicalString({
     timestampMs,
     nonce,
@@ -114,7 +113,7 @@ async function buildSigningHeaders(
     query: queryStr,
     bodyHash,
   });
-  const signature = await computeSignature(signing.secret, canonicalStr);
+  const signature = computeSignature(signing.secret, canonicalStr);
 
   return {
     'x-nf-client-id': signing.clientId,
@@ -218,448 +217,136 @@ export class PaymentOrchestrationClient {
       let details: unknown = null;
 
       if (errorObj != null && typeof errorObj === 'object') {
-        // Nested envelope (Phase 8K)
-        const e = errorObj as Record<string, unknown>;
-        code = typeof e['code'] === 'string' ? e['code'] : undefined;
-        message = typeof e['message'] === 'string'
-          ? e['message']
-          : `HTTP ${response.status} from payment-orchestration-service`;
-        details = e['details'] ?? null;
-      } else if (typeof errorObj === 'string') {
-        // Legacy flat format (backward compat)
-        code = errorObj;
-        message = data != null && typeof data === 'object' && 'message' in data
-          ? String((data as Record<string, unknown>)['message'])
-          : `HTTP ${response.status} from payment-orchestration-service`;
+        const eo = errorObj as Record<string, unknown>;
+        code = typeof eo['code'] === 'string' ? eo['code'] : undefined;
+        message = typeof eo['message'] === 'string'
+          ? eo['message'] as string
+          : `HTTP ${response.status}`;
+        details = eo['details'] ?? null;
       } else {
-        code = undefined;
-        message = `HTTP ${response.status} from payment-orchestration-service`;
+        code = typeof errorObj === 'string' ? errorObj : undefined;
+        message = data != null && typeof data === 'object' && 'message' in data
+          ? String((data as any).message)
+          : `HTTP ${response.status}`;
       }
 
-      throw new PaymentOrchestrationClientError(message, response.status, code, details, data);
+      throw new PaymentOrchestrationClientError(message, {
+        status: response.status,
+        code,
+        details,
+        responseBody: data,
+      });
     }
 
-    // Unwrap { ok, data } envelope if present; otherwise return data as-is.
-    if (data != null && typeof data === 'object' && 'data' in data) {
-      return (data as Record<string, unknown>)['data'] as T;
-    }
     return data as T;
   }
 
-  /**
-   * Merge the SDK config's merchantId into a POST body when not explicitly provided.
-   * Returns the enriched body object.
-   */
-  private injectMerchantId<T extends { merchantId?: string }>(input: T): T & { merchantId?: string } {
-    if (input.merchantId || !this.configMerchantId) return input;
-    return { ...input, merchantId: this.configMerchantId };
+  // ── Payment Intent ──────────────────────────────────────────────────────────
+
+  async createPaymentIntent(input: CreatePaymentIntentRequest): Promise<PaymentIntentResponse> {
+    return this.request<PaymentIntentResponse>('POST', '/v1/payment-intents', this.withMerchantId(input));
   }
 
-  // ── Public methods ──────────────────────────────────────────────────────────
-
-  /**
-   * createPaymentIntent — create a new payment intent.
-   *
-   * POST /v1/payment-intents
-   *
-   * merchantId from input or falls back to config.merchantId.
-   */
-  async createPaymentIntent(
-    input: CreatePaymentIntentRequest,
-  ): Promise<PaymentIntentResponse> {
-    return this.request<PaymentIntentResponse>(
-      'POST',
-      '/v1/payment-intents',
-      this.injectMerchantId(input),
-    );
+  async getPaymentIntentStatus(intentId: string, merchantId?: string): Promise<PaymentIntentStatusResponse> {
+    return this.request<PaymentIntentStatusResponse>('GET', `/v1/payment-intents/${encodeURIComponent(intentId)}/status`, undefined, this.merchantHeader(merchantId));
   }
 
-  /**
-   * createGatewayPayment — create a gateway payment for an existing intent.
-   *
-   * POST /v1/payment-intents/:intentId/gateway-payments
-   *
-   * merchantId from input or falls back to config.merchantId.
-   */
-  async createGatewayPayment(
-    intentId: string,
-    input: CreateGatewayPaymentRequest,
-  ): Promise<GatewayPaymentResponse> {
-    return this.request<GatewayPaymentResponse>(
-      'POST',
-      `/v1/payment-intents/${intentId}/gateway-payments`,
-      this.injectMerchantId(input),
-    );
+  async getRefundability(intentId: string, merchantId?: string): Promise<RefundabilityResponse> {
+    return this.request<RefundabilityResponse>('GET', `/v1/payment-intents/${encodeURIComponent(intentId)}/refundability`, undefined, this.merchantHeader(merchantId));
   }
 
-  /**
-   * getPaymentIntentStatus — poll the status of a payment intent.
-   *
-   * GET /v1/payment-intents/:intentId/status
-   *
-   * merchantId resolved from: options.merchantId → config.merchantId header (x-payment-merchant-id).
-   */
-  async getPaymentIntentStatus(
-    intentId: string,
-    options?: { merchantId?: string },
-  ): Promise<PaymentIntentStatusResponse> {
-    const merchantId = options?.merchantId ?? this.configMerchantId;
-    const qs = merchantId ? `?merchantId=${encodeURIComponent(merchantId)}` : '';
-    return this.request<PaymentIntentStatusResponse>(
-      'GET',
-      `/v1/payment-intents/${intentId}/status${qs}`,
-    );
+  async createGatewayPayment(intentId: string, input: CreateGatewayPaymentRequest): Promise<GatewayPaymentResponse> {
+    return this.request<GatewayPaymentResponse>('POST', `/v1/payment-intents/${encodeURIComponent(intentId)}/gateway-payments`, this.withMerchantId(input));
   }
 
-  /**
-   * getRefundability — check the refundable amount for a payment intent.
-   *
-   * GET /v1/payment-intents/:intentId/refundability
-   *
-   * merchantId resolved from: options.merchantId → config.merchantId header.
-   */
-  async getRefundability(
-    intentId: string,
-    options?: { merchantId?: string },
-  ): Promise<RefundabilityResponse> {
-    const merchantId = options?.merchantId ?? this.configMerchantId;
-    const qs = merchantId ? `?merchantId=${encodeURIComponent(merchantId)}` : '';
-    return this.request<RefundabilityResponse>(
-      'GET',
-      `/v1/payment-intents/${intentId}/refundability${qs}`,
-    );
+  async refreshProviderStatus(intentId: string, transactionId: string, input: RefreshProviderStatusRequest): Promise<RefreshProviderStatusResponse> {
+    return this.request<RefreshProviderStatusResponse>('POST', `/v1/payment-intents/${encodeURIComponent(intentId)}/transactions/${encodeURIComponent(transactionId)}/refresh-status`, this.withMerchantId(input));
   }
 
-  /**
-   * reconcilePaymentIntentTotals — recompute intent totals from transaction state.
-   *
-   * POST /v1/payment-intents/:intentId/reconcile
-   *
-   * This is an operator/service-token protected crash-recovery endpoint, not a
-   * customer-facing payment action. merchantId from input or config.merchantId.
-   */
-  async reconcilePaymentIntentTotals(
-    intentId: string,
-    input?: ReconcilePaymentIntentTotalsRequest,
-  ): Promise<ReconcilePaymentIntentTotalsResponse> {
-    return this.request<ReconcilePaymentIntentTotalsResponse>(
-      'POST',
-      `/v1/payment-intents/${intentId}/reconcile`,
-      this.injectMerchantId(input ?? {}),
-    );
+  async getPaymentOptions(intentId: string, merchantId?: string): Promise<PaymentIntentPaymentOptionsResponse> {
+    return this.request<PaymentIntentPaymentOptionsResponse>('GET', `/v1/payment-intents/${encodeURIComponent(intentId)}/payment-options`, undefined, this.merchantHeader(merchantId));
   }
 
-  /**
-   * refundPaymentTransaction — refund a succeeded payment transaction.
-   *
-   * POST /v1/payment-transactions/:transactionId/refund
-   *
-   * merchantId from input or falls back to config.merchantId. idempotencyKey is
-   * passed through in the JSON body when supplied.
-   */
-  async refundPaymentTransaction(
-    transactionId: string,
-    input: RefundPaymentTransactionRequest,
-  ): Promise<RefundPaymentTransactionResponse> {
-    return this.request<RefundPaymentTransactionResponse>(
-      'POST',
-      `/v1/payment-transactions/${transactionId}/refund`,
-      this.injectMerchantId(input),
-    );
+  // ── Payment Operations ──────────────────────────────────────────────────────
+
+  async refundTransaction(intentId: string, transactionId: string, input: RefundPaymentTransactionRequest): Promise<RefundPaymentTransactionResponse> {
+    return this.request<RefundPaymentTransactionResponse>('POST', `/v1/payment-intents/${encodeURIComponent(intentId)}/transactions/${encodeURIComponent(transactionId)}/refund`, this.withMerchantId(input));
   }
 
-  /**
-   * voidPaymentTransaction — cancel/void a pending or requires_action transaction.
-   *
-   * POST /v1/payment-transactions/:transactionId/void
-   *
-   * merchantId from input or falls back to config.merchantId. idempotencyKey is
-   * passed through in the JSON body when supplied.
-   */
-  async voidPaymentTransaction(
-    transactionId: string,
-    input?: VoidPaymentTransactionRequest,
-  ): Promise<VoidPaymentTransactionResponse> {
-    return this.request<VoidPaymentTransactionResponse>(
-      'POST',
-      `/v1/payment-transactions/${transactionId}/void`,
-      this.injectMerchantId(input ?? {}),
-    );
+  async voidTransaction(intentId: string, transactionId: string, input: VoidPaymentTransactionRequest): Promise<VoidPaymentTransactionResponse> {
+    return this.request<VoidPaymentTransactionResponse>('POST', `/v1/payment-intents/${encodeURIComponent(intentId)}/transactions/${encodeURIComponent(transactionId)}/void`, this.withMerchantId(input));
   }
 
-  // ── Phase 8D: merchant + provider account methods ────────────────────────────
+  async reconcilePaymentIntentTotals(intentId: string, input: ReconcilePaymentIntentTotalsRequest): Promise<ReconcilePaymentIntentTotalsResponse> {
+    return this.request<ReconcilePaymentIntentTotalsResponse>('POST', `/v1/payment-intents/${encodeURIComponent(intentId)}/reconcile-totals`, this.withMerchantId(input));
+  }
 
-  /**
-   * createMerchant — create or return an existing merchant.
-   *
-   * POST /v1/merchants
-   */
+  // ── Merchant / Provider Admin ───────────────────────────────────────────────
+
   async createMerchant(input: CreateMerchantRequest): Promise<MerchantResponse> {
     return this.request<MerchantResponse>('POST', '/v1/merchants', input);
   }
 
-  /**
-   * getMerchant — retrieve a merchant by ID.
-   *
-   * GET /v1/merchants/:id
-   */
-  async getMerchant(id: string): Promise<MerchantResponse> {
-    return this.request<MerchantResponse>('GET', `/v1/merchants/${id}`);
+  async createProviderAccount(input: CreateProviderAccountRequest): Promise<ProviderAccountResponse> {
+    return this.request<ProviderAccountResponse>('POST', '/v1/provider-accounts', this.withMerchantId(input));
   }
 
-  /**
-   * createProviderAccount — create a provider account for a merchant.
-   *
-   * POST /v1/merchants/:merchantId/provider-accounts
-   */
-  async createProviderAccount(
-    merchantId: string,
-    input: CreateProviderAccountRequest,
-  ): Promise<ProviderAccountResponse> {
-    return this.request<ProviderAccountResponse>(
-      'POST',
-      `/v1/merchants/${merchantId}/provider-accounts`,
-      input,
-    );
+  async listProviderAccountMethods(providerAccountId: string, merchantId?: string): Promise<ListProviderAccountMethodsResponse> {
+    return this.request<ListProviderAccountMethodsResponse>('GET', `/v1/provider-accounts/${encodeURIComponent(providerAccountId)}/methods`, undefined, this.merchantHeader(merchantId));
   }
 
-  /**
-   * getProviderAccount — retrieve a provider account.
-   *
-   * GET /v1/merchants/:merchantId/provider-accounts/:id
-   */
-  async getProviderAccount(
-    merchantId: string,
-    id: string,
-  ): Promise<ProviderAccountResponse> {
-    return this.request<ProviderAccountResponse>(
-      'GET',
-      `/v1/merchants/${merchantId}/provider-accounts/${id}`,
-    );
+  async upsertProviderAccountMethod(providerAccountId: string, input: UpsertProviderAccountMethodRequest): Promise<UpsertProviderAccountMethodResponse> {
+    return this.request<UpsertProviderAccountMethodResponse>('PUT', `/v1/provider-accounts/${encodeURIComponent(providerAccountId)}/methods/${encodeURIComponent(input.method)}`, this.withMerchantId(input));
   }
 
-  /**
-   * confirmFakeGatewayPayment — manually confirm a FakeGateway transaction.
-   *
-   * POST /v1/dev/fake-gateway/transactions/:transactionId/confirm
-   *
-   * ⚠ DEV/TEST ONLY. Not available in production.
-   *
-   * merchantId from input or falls back to config.merchantId.
-   */
-  async confirmFakeGatewayPayment(
-    transactionId: string,
-    input?: ConfirmFakeGatewayPaymentRequest,
-  ): Promise<ConfirmFakeGatewayPaymentResponse> {
-    return this.request<ConfirmFakeGatewayPaymentResponse>(
-      'POST',
-      `/v1/dev/fake-gateway/transactions/${transactionId}/confirm`,
-      this.injectMerchantId(input ?? {}),
-    );
+  async deleteProviderAccountMethod(providerAccountId: string, method: string, merchantId?: string): Promise<{ ok: true }> {
+    return this.request<{ ok: true }>('DELETE', `/v1/provider-accounts/${encodeURIComponent(providerAccountId)}/methods/${encodeURIComponent(method)}`, undefined, this.merchantHeader(merchantId));
   }
 
-  // ── Phase 8K: refresh provider status + readiness ────────────────────────────
-
-  /**
-   * refreshProviderStatus — poll the payment provider for the current transaction status.
-   *
-   * POST /v1/payment-transactions/:transactionId/refresh-provider-status
-   *
-   * merchantId from input or falls back to config.merchantId.
-   */
-  async refreshProviderStatus(
-    transactionId: string,
-    input?: RefreshProviderStatusRequest,
-  ): Promise<RefreshProviderStatusResponse> {
-    return this.request<RefreshProviderStatusResponse>(
-      'POST',
-      `/v1/payment-transactions/${transactionId}/refresh-provider-status`,
-      this.injectMerchantId(input ?? {}),
-    );
+  async syncProviderAccountMethods(providerAccountId: string, merchantId?: string): Promise<SyncProviderAccountMethodsResponse> {
+    return this.request<SyncProviderAccountMethodsResponse>('POST', `/v1/provider-accounts/${encodeURIComponent(providerAccountId)}/methods/sync`, undefined, this.merchantHeader(merchantId));
   }
 
-  /**
-   * getReadiness — check service runtime readiness.
-   *
-   * GET /ready
-   *
-   * No auth required. Returns DB configuration state, registered providers,
-   * and Xendit sandbox config. Does not expose secrets or service token.
-   */
+  // ── Signing Key Admin ───────────────────────────────────────────────────────
+
+  async createSigningKey(input: CreateSigningKeyRequest): Promise<CreateSigningKeyResponse> {
+    return this.request<CreateSigningKeyResponse>('POST', '/v1/signing-keys', input);
+  }
+
+  async listSigningKeys(clientId: string): Promise<ListSigningKeysResponse> {
+    return this.request<ListSigningKeysResponse>('GET', `/v1/signing-keys?clientId=${encodeURIComponent(clientId)}`);
+  }
+
+  async rotateSigningKey(keyId: string, input: RotateSigningKeyRequest): Promise<RotateSigningKeyResponse> {
+    return this.request<RotateSigningKeyResponse>('POST', `/v1/signing-keys/${encodeURIComponent(keyId)}/rotate`, input);
+  }
+
+  async revokeSigningKey(keyId: string): Promise<ClientSigningKeyResponse> {
+    return this.request<ClientSigningKeyResponse>('POST', `/v1/signing-keys/${encodeURIComponent(keyId)}/revoke`);
+  }
+
+  // ── Dev/Test ────────────────────────────────────────────────────────────────
+
+  async confirmFakeGatewayPayment(input: ConfirmFakeGatewayPaymentRequest): Promise<ConfirmFakeGatewayPaymentResponse> {
+    return this.request<ConfirmFakeGatewayPaymentResponse>('POST', '/v1/dev/fake-gateway/confirm', this.withMerchantId(input));
+  }
+
   async getReadiness(): Promise<ReadinessResponse> {
     return this.request<ReadinessResponse>('GET', '/ready');
   }
 
-  // ── S7.5: Payment Method Options ─────────────────────────────────────────────
+  // ── Helpers ─────────────────────────────────────────────────────────────────
 
-  /**
-   * listProviderAccountMethods — list all payment methods for a specific provider account.
-   *
-   * GET /v1/merchants/:merchantId/provider-accounts/:providerAccountId/methods
-   *
-   * Required scope: payment_method:read OR provider_account:read
-   */
-  async listProviderAccountMethods(
-    merchantId: string,
-    providerAccountId: string,
-  ): Promise<ProviderAccountMethodResponse[]> {
-    const mid = merchantId || this.configMerchantId || '';
-    return this.request<ProviderAccountMethodResponse[]>(
-      'GET',
-      `/v1/merchants/${encodeURIComponent(mid)}/provider-accounts/${encodeURIComponent(providerAccountId)}/methods`,
-    );
+  private withMerchantId<T extends Record<string, unknown>>(input: T): T {
+    if (input['merchantId'] || !this.configMerchantId) return input;
+    return { ...input, merchantId: this.configMerchantId };
   }
 
-  /**
-   * listMerchantPaymentMethods — list all active payment methods across all provider accounts for a merchant.
-   *
-   * GET /v1/merchants/:merchantId/payment-methods
-   *
-   * Required scope: payment_method:read OR provider_account:read OR intent:read
-   */
-  async listMerchantPaymentMethods(merchantId?: string): Promise<ProviderAccountMethodResponse[]> {
-    const mid = merchantId || this.configMerchantId || '';
-    return this.request<ProviderAccountMethodResponse[]>(
-      'GET',
-      `/v1/merchants/${encodeURIComponent(mid)}/payment-methods`,
-    );
-  }
-
-  /**
-   * upsertProviderAccountMethod — create or update a payment method for a provider account.
-   *
-   * PUT /v1/merchants/:merchantId/provider-accounts/:providerAccountId/methods/:method
-   *
-   * Required scope: payment_method:write OR provider_account:create
-   */
-  async upsertProviderAccountMethod(
-    merchantId: string,
-    providerAccountId: string,
-    method: string,
-    input: UpsertProviderAccountMethodRequest,
-  ): Promise<UpsertProviderAccountMethodResponse> {
-    const mid = merchantId || this.configMerchantId || '';
-    return this.request<UpsertProviderAccountMethodResponse>(
-      'PUT',
-      `/v1/merchants/${encodeURIComponent(mid)}/provider-accounts/${encodeURIComponent(providerAccountId)}/methods/${encodeURIComponent(method)}`,
-      input,
-    );
-  }
-
-  /**
-   * syncProviderAccountMethods — sync provider adapter capabilities into the DB for a provider account.
-   *
-   * POST /v1/merchants/:merchantId/provider-accounts/:providerAccountId/methods/sync
-   *
-   * Required scope: payment_method:sync OR provider_account:create
-   *
-   * Layer 1 (static capabilities from adapter) and optionally Layer 2 (live provider API call).
-   * Idempotent — safe to call multiple times.
-   */
-  async syncProviderAccountMethods(
-    merchantId: string,
-    providerAccountId: string,
-  ): Promise<SyncProviderAccountMethodsResponse['data']> {
-    const mid = merchantId || this.configMerchantId || '';
-    return this.request<SyncProviderAccountMethodsResponse['data']>(
-      'POST',
-      `/v1/merchants/${encodeURIComponent(mid)}/provider-accounts/${encodeURIComponent(providerAccountId)}/methods/sync`,
-    );
-  }
-
-  /**
-   * getPaymentIntentPaymentOptions — get available payment method options for a specific payment intent.
-   *
-   * GET /v1/payment-intents/:intentId/payment-options?merchantId=...
-   *
-   * Required scope: payment_method:read OR intent:read
-   *
-   * Returns options filtered by intent currency and amount.
-   * Use this before calling createGatewayPayment to discover valid methods.
-   */
-  async getPaymentIntentPaymentOptions(
-    intentId: string,
-    merchantId?: string,
-  ): Promise<PaymentIntentPaymentOptionsResponse['data']> {
-    const mid = merchantId || this.configMerchantId || '';
-    return this.request<PaymentIntentPaymentOptionsResponse['data']>(
-      'GET',
-      `/v1/payment-intents/${encodeURIComponent(intentId)}/payment-options${mid ? `?merchantId=${encodeURIComponent(mid)}` : ''}`,
-    );
-  }
-
-  // ── S9.4: Signing Key Lifecycle ───────────────────────────────────────────────
-
-  /**
-   * createSigningKey — create a new HMAC signing key for an API client.
-   *
-   * POST /v1/api-clients/:clientId/signing-keys
-   *
-   * Required scope: api_client:signing_key:create
-   *
-   * Returns rawSigningSecret ONCE — store securely, never log.
-   */
-  async createSigningKey(
-    clientId: string,
-    input?: CreateSigningKeyRequest,
-  ): Promise<CreateSigningKeyResponse> {
-    return this.request<CreateSigningKeyResponse>(
-      'POST',
-      `/v1/api-clients/${encodeURIComponent(clientId)}/signing-keys`,
-      input ?? {},
-    );
-  }
-
-  /**
-   * listSigningKeys — list all signing keys for an API client (safe view, no secrets).
-   *
-   * GET /v1/api-clients/:clientId/signing-keys
-   *
-   * Required scope: api_client:signing_key:read
-   */
-  async listSigningKeys(clientId: string): Promise<ClientSigningKeyResponse[]> {
-    return this.request<ClientSigningKeyResponse[]>(
-      'GET',
-      `/v1/api-clients/${encodeURIComponent(clientId)}/signing-keys`,
-    );
-  }
-
-  /**
-   * rotateSigningKey — create a new signing key and optionally revoke the old one.
-   *
-   * POST /v1/api-clients/:clientId/signing-keys/rotate
-   *
-   * Required scope: api_client:signing_key:rotate
-   *
-   * Returns rawSigningSecret for the new key ONCE — store securely, never log.
-   */
-  async rotateSigningKey(
-    clientId: string,
-    input?: RotateSigningKeyRequest,
-  ): Promise<RotateSigningKeyResponse> {
-    return this.request<RotateSigningKeyResponse>(
-      'POST',
-      `/v1/api-clients/${encodeURIComponent(clientId)}/signing-keys/rotate`,
-      input ?? {},
-    );
-  }
-
-  /**
-   * revokeSigningKey — revoke a signing key immediately.
-   *
-   * POST /v1/api-clients/:clientId/signing-keys/:signingKeyId/revoke
-   *
-   * Required scope: api_client:signing_key:revoke
-   *
-   * Revoked keys are rejected on all subsequent requests immediately.
-   */
-  async revokeSigningKey(
-    clientId: string,
-    signingKeyId: string,
-  ): Promise<ClientSigningKeyResponse> {
-    return this.request<ClientSigningKeyResponse>(
-      'POST',
-      `/v1/api-clients/${encodeURIComponent(clientId)}/signing-keys/${encodeURIComponent(signingKeyId)}/revoke`,
-    );
+  private merchantHeader(merchantId?: string): Record<string, string> | undefined {
+    const id = merchantId ?? this.configMerchantId;
+    return id ? { 'x-payment-merchant-id': id } : undefined;
   }
 }
+
+/** @deprecated Use PaymentOrchestrationClient instead. */
+export const PaymentEngineClient = PaymentOrchestrationClient;
