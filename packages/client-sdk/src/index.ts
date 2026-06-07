@@ -14,22 +14,31 @@
  * - No AuraPoS tenant/session dependency
  * - No @northflow/payment-orchestration-core dependency (self-contained)
  *
- * Usage:
+ * Usage (S1-S5 per-client credential — recommended):
  * ```ts
  * import { PaymentOrchestrationClient } from '@northflow/payment-orchestration-client-sdk';
  *
  * const client = new PaymentOrchestrationClient({
- *   baseUrl: 'http://localhost:5100',
- *   serviceToken: process.env.PAYMENT_ORCHESTRATION_SERVICE_TOKEN,
- *   merchantId: 'my-merchant-id',
- *   sourceApp: 'aurapos',
+ *   baseUrl: process.env.NORTHFLOW_BASE_URL,
+ *   apiKey: process.env.NORTHFLOW_API_KEY, // nf.live.<credentialId>.<secret>
  * });
  *
  * const intent = await client.createPaymentIntent({
- *   externalPayableType: 'order',
- *   externalPayableId: 'order-123',
+ *   merchantId: 'mer_abc123',
+ *   sourceApp: 'transity',
+ *   externalPayableType: 'booking',
+ *   externalPayableId: 'booking-456',
  *   currency: 'IDR',
  *   amountDue: 100000,
+ *   idempotencyKey: 'transity:tenant-1:booking-456:create-intent',
+ * });
+ * ```
+ *
+ * Legacy usage (serviceToken — deprecated, dev-only):
+ * ```ts
+ * const client = new PaymentOrchestrationClient({
+ *   baseUrl: 'http://localhost:3001',
+ *   serviceToken: process.env.PAYMENT_ORCHESTRATION_SERVICE_TOKEN,
  * });
  * ```
  */

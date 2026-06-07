@@ -17,6 +17,17 @@
 
 export interface PaymentOrchestrationClientConfig {
   baseUrl: string;
+  /**
+   * S1-S5 per-client API credential in `nf.<env>.<credentialId>.<secret>` format.
+   * Sent as `Authorization: Bearer <apiKey>` (primary auth method).
+   * Use this instead of `serviceToken` for all new integrations.
+   */
+  apiKey?: string;
+  /**
+   * @deprecated Legacy shared service token.
+   * Use `apiKey` (per-client credential) for new integrations.
+   * Sent as `x-payment-orchestration-service-token` when no `apiKey` is present.
+   */
   serviceToken?: string;
   /** Default merchantId injected into request bodies and headers when not explicitly provided. */
   merchantId?: string;

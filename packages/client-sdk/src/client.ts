@@ -2,7 +2,7 @@
  * client — typed HTTP client for payment-orchestration-service.
  *
  * Targets `/v1/...` paths for the standalone payment-orchestration-service.
- * Supports custom headers: x-payment-orchestration-service-token, x-payment-merchant-id, x-source-app.
+ * Supports custom headers: Authorization: Bearer, x-nf-api-key, x-payment-merchant-id, x-source-app.
  *
  * Fetch-compatible; uses the global `fetch` API (Node 18+ / modern browsers).
  * No React dependency. No AuraPoS tenant dependency.
@@ -19,6 +19,11 @@
  *   - Error parsing updated for frozen nested error envelope:
  *     { ok: false, error: { code, message, details } }
  *   - PaymentOrchestrationClientError now carries `details` field.
+ * Phase S6:
+ *   - Added `apiKey` config field (nf.<env>.<credentialId>.<secret>).
+ *   - apiKey is sent as `Authorization: Bearer <apiKey>` (primary S1-S5 auth method).
+ *   - Legacy `serviceToken` still supported via x-payment-orchestration-service-token.
+ *   - Auth priority: apiKey > serviceToken (legacy).
  */
 
 import { PaymentOrchestrationClientError, PaymentOrchestrationNetworkError } from './errors.ts';
@@ -58,7 +63,12 @@ export class PaymentOrchestrationClient {
     this.defaultHeaders = {
       'Content-Type': 'application/json',
     };
-    if (config.serviceToken) {
+    // Auth priority: apiKey (S1-S5 per-client credential) > serviceToken (legacy).
+    if (config.apiKey) {
+      // Primary S1-S5 auth: Authorization: Bearer <nf.env.credentialId.secret>
+      this.defaultHeaders['authorization'] = `Bearer ${config.apiKey}`;
+    } else if (config.serviceToken) {
+      // Legacy fallback — only when no apiKey is provided.
       this.defaultHeaders['x-payment-orchestration-service-token'] = config.serviceToken;
     }
     if (config.merchantId) {

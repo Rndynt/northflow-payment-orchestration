@@ -2,3 +2,4 @@
 - [DB migration approach](db-migration-approach.md) — Drizzle-only; 7-file prioritized po_* chain; no psql; no ALTER TABLE ADD; run pnpm db:migrate on fresh DB.
 - [apiErrorResponse toJSON](api-error-response-tojson.md) — error field has toJSON() returning the code string; over HTTP body.error is a string, not an object — tests must handle both forms.
 - [Pre-existing test failures](pre-existing-test-failures.md) — AC10 + S16 fixed (allowPartial); dashboard type-check has pre-existing TS2430 + TS5097 errors unrelated to service work.
+- [S6-S7 client integration validation](s6-s7-client-integration-validation.md) — S6 SDK + docs complete; S7 smoke: 35/35 pass; full suite 284/284; Void/RefundPaymentTransaction ctors take (txRepo, intentRepo, paRepo, providerRegistry) only.
