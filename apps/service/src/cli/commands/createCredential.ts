@@ -2,15 +2,16 @@
  * createCredential — S10: create a bearer credential for an API client.
  *
  * Usage:
- *   nf-admin create-credential --client-id <id> [--scopes scope1,scope2] [--expires-at ISO] [--dry-run] [--yes] [--json]
+ *   nf-admin create-credential --client-id <id> [--expires-at ISO] [--dry-run] [--yes] [--json]
  *
  * Security:
  *   - rawCredential is printed exactly once and never stored in logs or audit.
  *   - Only prefix + hash are persisted.
+ *   - Authorization scopes remain on API client and merchant grants, not on individual credentials.
  */
 
 import type { ParsedArgs } from '../parseArgs.ts';
-import { requireFlag, getFlag, parseScopes } from '../parseArgs.ts';
+import { requireFlag, getFlag } from '../parseArgs.ts';
 import { succeed, fail, dryRunNote, oneTimeSecretNote } from '../output.ts';
 import type { CliOutput } from '../output.ts';
 import type { AdminContext } from '../adminContext.ts';
@@ -31,8 +32,6 @@ export async function runCreateCredential(
     return fail(op, err.code ?? 'ADMIN_INVALID_ARGUMENT', err.message);
   }
 
-  const scopesRaw = getFlag(args, 'scopes');
-  const _scopes = scopesRaw ? parseScopes(scopesRaw) : [];
   const expiresAtStr = getFlag(args, 'expires-at');
   let expiresAt: Date | null = null;
   if (expiresAtStr) {
