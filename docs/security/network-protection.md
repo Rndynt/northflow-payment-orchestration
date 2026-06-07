@@ -139,6 +139,8 @@ If CORS is enabled, only origins in the allowlist receive `Access-Control-Allow-
 Disallowed or absent origins receive no CORS headers.
 OPTIONS preflight for disallowed origins returns 403.
 
+CORS is not the primary security boundary. Browser frontends should still call their own backend first.
+
 ---
 
 ## 5. Health / Version / Readiness Policy
@@ -188,7 +190,7 @@ PAYMENT_ORCHESTRATION_JSON_BODY_LIMIT=256kb
 ```
 
 Keep the default unless there is a specific documented need for larger bodies.
-Webhook routes capture raw body for HMAC verification — this is not affected by the JSON body limit.
+Webhook routes still capture raw body for provider signature/HMAC verification, but JSON webhook requests are still subject to the configured body size limit because the JSON parser is applied globally before webhook routing. If a provider later requires larger webhook bodies, increase the limit deliberately and document the reason.
 
 ### Security headers applied globally
 
