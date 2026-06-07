@@ -50,7 +50,7 @@ import type { PaymentOrchestrationServiceConfig } from '../apps/service/src/conf
 import { loadEnv } from '../apps/service/src/config/env.ts';
 import { generateCredential } from '../apps/service/src/middleware/auth.ts';
 import { encrypt, decrypt } from '../apps/service/src/security/signingSecretProtector.ts';
-import { StandaloneFakeGatewayProvider } from '../apps/service/src/infrastructure/providers/StandaloneFakeGatewayProvider.ts';
+import { FakeGatewayProvider } from '../apps/service/src/infrastructure/providers/FakeGatewayProvider.ts';
 import { FakeGatewayWebhookHandler } from '../apps/service/src/infrastructure/providers/FakeGatewayWebhookHandler.ts';
 
 import { CreateMerchant } from '../apps/service/src/application/use-cases/CreateMerchant.ts';
@@ -97,8 +97,8 @@ import type {
   PaymentProviderEventRepository,
   PaymentMerchant,
   PaymentProviderAccount,
-  StandalonePaymentIntentDTO,
-  StandalonePaymentTransactionDTO,
+  PaymentIntentDTO,
+  PaymentTransactionDTO,
   PaymentIdempotencyKeyDTO,
   PaymentProviderEventDTO,
 } from '@northflow/payment-orchestration-core';
@@ -179,21 +179,21 @@ class InMemoryMerchantRepo implements PaymentMerchantRepository {
 }
 
 class InMemoryIntentRepo implements PaymentIntentRepository {
-  private store: StandalonePaymentIntentDTO[] = [];
+  private store: PaymentIntentDTO[] = [];
   async findById(id: string) { return this.store.find(i => i.id === id) ?? null; }
   async findByExternalPayable(input: any) { return this.store.find(i => i.externalPayableType === input.externalPayableType && i.externalPayableId === input.externalPayableId) ?? null; }
-  async create(input: any): Promise<StandalonePaymentIntentDTO> { const i: any = { ...input, id: input.id ?? randomUUID(), amountPaid: 0, amountRefunded: 0, amountRemaining: input.amountDue, status: 'pending', createdAt: new Date(), updatedAt: new Date() }; this.store.push(i); return i; }
+  async create(input: any): Promise<PaymentIntentDTO> { const i: any = { ...input, id: input.id ?? randomUUID(), amountPaid: 0, amountRefunded: 0, amountRemaining: input.amountDue, status: 'pending', createdAt: new Date(), updatedAt: new Date() }; this.store.push(i); return i; }
   async updateTotals(input: any) { const i = this.store.find(i => i.id === input.id); if (i) Object.assign(i, input); return i!; }
   async updateStatus(input: any) { const i = this.store.find(i => i.id === input.id); if (i) i.status = input.status; return i!; }
 }
 
 class InMemoryTransactionRepo implements PaymentTransactionRepository {
-  store: StandalonePaymentTransactionDTO[] = [];
+  store: PaymentTransactionDTO[] = [];
   async findById(id: string, _merchantId: string) { return this.store.find(t => t.id === id) ?? null; }
   async findByIntentId(intentId: string, _merchantId: string) { return this.store.filter(t => t.intentId === intentId); }
   async findByProviderReference(provider: string, ref: string) { return this.store.find(t => t.provider === provider && t.providerReference === ref) ?? null; }
   async findByMerchantIdempotencyKey(_merchantId: string, key: string) { return this.store.find(t => t.idempotencyKey === key) ?? null; }
-  async create(input: any): Promise<StandalonePaymentTransactionDTO> { const t: any = { ...input, createdAt: new Date(), updatedAt: new Date() }; this.store.push(t); return t; }
+  async create(input: any): Promise<PaymentTransactionDTO> { const t: any = { ...input, createdAt: new Date(), updatedAt: new Date() }; this.store.push(t); return t; }
   async updateStatus(input: any) { const t = this.store.find(t => t.id === input.id); if (t) Object.assign(t, input); return t!; }
   async sumSucceededRefundsByParent() { return 0; }
   async markSucceededIfConfirmable(input: any) { const t = this.store.find(t => t.id === input.id); return { changed: false, transaction: t ?? null }; }
@@ -424,7 +424,7 @@ function buildSigningKeyContainer(opts: {
   const idempotencyRepo = new InMemoryIdempotencyRepo();
   const providerEventRepo = new InMemoryProviderEventRepo();
 
-  const fakeGatewayProvider = new StandaloneFakeGatewayProvider({ webhookSecret: null, nodeEnv: 'test' });
+  const fakeGatewayProvider = new FakeGatewayProvider({ webhookSecret: null, nodeEnv: 'test' });
   const providerRegistry = {
     getProvider: () => fakeGatewayProvider,
     listProviders: () => [{ name: 'fake_gateway', displayName: 'Fake Gateway', environments: ['test'] }],

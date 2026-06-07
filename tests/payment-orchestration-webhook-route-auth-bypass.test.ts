@@ -42,7 +42,7 @@ import { GetRefundability } from '../apps/service/src/application/use-cases/GetR
 import { HandleProviderWebhook } from '../apps/service/src/application/use-cases/HandleProviderWebhook.ts';
 import { ReconcilePaymentIntentTotals } from '../apps/service/src/application/use-cases/ReconcilePaymentIntentTotals.ts';
 import { FakeGatewayWebhookHandler } from '../apps/service/src/infrastructure/providers/FakeGatewayWebhookHandler.ts';
-import { StandaloneFakeGatewayProvider } from '../apps/service/src/infrastructure/providers/StandaloneFakeGatewayProvider.ts';
+import { FakeGatewayProvider } from '../apps/service/src/infrastructure/providers/FakeGatewayProvider.ts';
 
 // ── Core type imports ─────────────────────────────────────────────────────────
 
@@ -55,8 +55,8 @@ import type {
   PaymentProviderEventRepository,
   PaymentMerchant,
   PaymentProviderAccount,
-  StandalonePaymentIntentDTO,
-  StandalonePaymentTransactionDTO,
+  PaymentIntentDTO,
+  PaymentTransactionDTO,
   PaymentIdempotencyKeyDTO,
   PaymentProviderEventDTO,
   ReserveProviderEventInput,
@@ -200,9 +200,9 @@ type IntentStatus =
   | 'failed';
 
 class InMemoryIntentRepo implements PaymentIntentRepository {
-  private readonly store = new Map<string, StandalonePaymentIntentDTO>();
+  private readonly store = new Map<string, PaymentIntentDTO>();
 
-  async findById(id: string, merchantId: string): Promise<StandalonePaymentIntentDTO | null> {
+  async findById(id: string, merchantId: string): Promise<PaymentIntentDTO | null> {
     const intent = this.store.get(id);
     return !intent || intent.merchantId !== merchantId ? null : intent;
   }
@@ -212,7 +212,7 @@ class InMemoryIntentRepo implements PaymentIntentRepository {
     externalPayableType: string;
     externalPayableId: string;
     sourceApp?: string | null;
-  }): Promise<StandalonePaymentIntentDTO | null> {
+  }): Promise<PaymentIntentDTO | null> {
     for (const intent of this.store.values()) {
       if (
         intent.merchantId === input.merchantId &&
@@ -239,9 +239,9 @@ class InMemoryIntentRepo implements PaymentIntentRepository {
     allowPartial?: boolean;
     expiresAt?: Date | null;
     metadata?: Record<string, unknown> | null;
-  }): Promise<StandalonePaymentIntentDTO> {
+  }): Promise<PaymentIntentDTO> {
     const now = new Date();
-    const intent: StandalonePaymentIntentDTO = {
+    const intent: PaymentIntentDTO = {
       id: input.id,
       merchantId: input.merchantId,
       providerAccountId: input.providerAccountId ?? null,
@@ -273,7 +273,7 @@ class InMemoryIntentRepo implements PaymentIntentRepository {
     amountPaid: number;
     amountRefunded: number;
     amountRemaining: number;
-  }): Promise<StandalonePaymentIntentDTO> {
+  }): Promise<PaymentIntentDTO> {
     const intent = this.store.get(input.id);
     if (!intent || intent.merchantId !== input.merchantId)
       throw new Error(`Intent not found: ${input.id}`);
@@ -292,7 +292,7 @@ class InMemoryIntentRepo implements PaymentIntentRepository {
     id: string;
     merchantId: string;
     status: string;
-  }): Promise<StandalonePaymentIntentDTO> {
+  }): Promise<PaymentIntentDTO> {
     const intent = this.store.get(input.id);
     if (!intent || intent.merchantId !== input.merchantId)
       throw new Error(`Intent not found: ${input.id}`);
@@ -316,9 +316,9 @@ type TxStatus =
   | 'reversed';
 
 class InMemoryTransactionRepo implements PaymentTransactionRepository {
-  private readonly store = new Map<string, StandalonePaymentTransactionDTO>();
+  private readonly store = new Map<string, PaymentTransactionDTO>();
 
-  async findById(id: string, merchantId: string): Promise<StandalonePaymentTransactionDTO | null> {
+  async findById(id: string, merchantId: string): Promise<PaymentTransactionDTO | null> {
     const tx = this.store.get(id);
     return !tx || tx.merchantId !== merchantId ? null : tx;
   }
@@ -326,7 +326,7 @@ class InMemoryTransactionRepo implements PaymentTransactionRepository {
   async findByIntentId(
     intentId: string,
     merchantId: string,
-  ): Promise<StandalonePaymentTransactionDTO[]> {
+  ): Promise<PaymentTransactionDTO[]> {
     return [...this.store.values()].filter(
       (tx) => tx.intentId === intentId && tx.merchantId === merchantId,
     );
@@ -335,7 +335,7 @@ class InMemoryTransactionRepo implements PaymentTransactionRepository {
   async findByProviderReference(
     provider: string,
     providerReference: string,
-  ): Promise<StandalonePaymentTransactionDTO | null> {
+  ): Promise<PaymentTransactionDTO | null> {
     for (const tx of this.store.values()) {
       if (tx.provider === provider && tx.providerReference === providerReference) return tx;
     }
@@ -363,9 +363,9 @@ class InMemoryTransactionRepo implements PaymentTransactionRepository {
     idempotencyKey?: string | null;
     metadata?: Record<string, unknown> | null;
     rawProviderResponse?: Record<string, unknown> | null;
-  }): Promise<StandalonePaymentTransactionDTO> {
+  }): Promise<PaymentTransactionDTO> {
     const now = new Date();
-    const tx: StandalonePaymentTransactionDTO = {
+    const tx: PaymentTransactionDTO = {
       id: input.id,
       merchantId: input.merchantId,
       intentId: input.intentId,
@@ -401,7 +401,7 @@ class InMemoryTransactionRepo implements PaymentTransactionRepository {
     failureReason?: string | null;
     providerReference?: string | null;
     providerEventId?: string | null;
-  }): Promise<StandalonePaymentTransactionDTO> {
+  }): Promise<PaymentTransactionDTO> {
     const tx = this.store.get(input.id);
     if (!tx || tx.merchantId !== input.merchantId)
       throw new Error(`Transaction not found: ${input.id}`);
@@ -433,12 +433,12 @@ class InMemoryTransactionRepo implements PaymentTransactionRepository {
   async markSucceededIfConfirmable(input: {
     id: string;
     merchantId: string;
-  }): Promise<{ transaction: StandalonePaymentTransactionDTO | null; changed: boolean }> {
+  }): Promise<{ transaction: PaymentTransactionDTO | null; changed: boolean }> {
     const tx = this.store.get(input.id);
     if (!tx || tx.merchantId !== input.merchantId) return { transaction: null, changed: false };
     if (tx.status !== 'requires_action' && tx.status !== 'pending')
       return { transaction: null, changed: false };
-    const updated: StandalonePaymentTransactionDTO = {
+    const updated: PaymentTransactionDTO = {
       ...tx,
       status: 'succeeded' as TxStatus,
       updatedAt: new Date(),
@@ -594,7 +594,7 @@ function buildContainer(
     phase: '8E-test',
   };
 
-  const fakeGatewayProvider = new StandaloneFakeGatewayProvider(nodeEnv);
+  const fakeGatewayProvider = new FakeGatewayProvider(nodeEnv);
   const providerRegistry = { get: (name: string) => (name === 'fake_gateway' ? fakeGatewayProvider : null) } as any;
 
   const fakeGatewayWebhookHandler = new FakeGatewayWebhookHandler({

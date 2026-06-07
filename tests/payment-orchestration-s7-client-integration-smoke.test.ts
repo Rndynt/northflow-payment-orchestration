@@ -58,7 +58,7 @@ import { HandleProviderWebhook } from '../apps/service/src/application/use-cases
 import { VoidPaymentTransaction } from '../apps/service/src/application/use-cases/VoidPaymentTransaction.ts';
 import { RefundPaymentTransaction } from '../apps/service/src/application/use-cases/RefundPaymentTransaction.ts';
 import { FakeGatewayWebhookHandler } from '../apps/service/src/infrastructure/providers/FakeGatewayWebhookHandler.ts';
-import { StandaloneFakeGatewayProvider } from '../apps/service/src/infrastructure/providers/StandaloneFakeGatewayProvider.ts';
+import { FakeGatewayProvider } from '../apps/service/src/infrastructure/providers/FakeGatewayProvider.ts';
 
 // ── Core domain types ─────────────────────────────────────────────────────────
 
@@ -74,8 +74,8 @@ import type {
   ClientMerchantAccessRepository,
   PaymentMerchant,
   PaymentProviderAccount,
-  StandalonePaymentIntentDTO,
-  StandalonePaymentTransactionDTO,
+  PaymentIntentDTO,
+  PaymentTransactionDTO,
   PaymentIdempotencyKeyDTO,
   PaymentProviderEventDTO,
   ApiClientDTO,
@@ -153,7 +153,7 @@ class InMemoryProviderAccountRepo implements PaymentProviderAccountRepository {
 }
 
 class InMemoryIntentRepo implements PaymentIntentRepository {
-  readonly store = new Map<string, StandalonePaymentIntentDTO>();
+  readonly store = new Map<string, PaymentIntentDTO>();
   async findById(id: string, merchantId: string) { const i = this.store.get(id); return (!i || i.merchantId !== merchantId) ? null : i; }
   async findByExternalPayable(input: any) {
     for (const i of this.store.values()) {
@@ -161,9 +161,9 @@ class InMemoryIntentRepo implements PaymentIntentRepository {
     }
     return null;
   }
-  async create(input: any): Promise<StandalonePaymentIntentDTO> {
+  async create(input: any): Promise<PaymentIntentDTO> {
     const now = new Date();
-    const i: StandalonePaymentIntentDTO = { id: input.id, merchantId: input.merchantId, providerAccountId: input.providerAccountId ?? null, sourceApp: input.sourceApp ?? null, externalTenantId: input.externalTenantId ?? null, externalOutletId: input.externalOutletId ?? null, externalLocationId: input.externalLocationId ?? null, externalPayableType: input.externalPayableType, externalPayableId: input.externalPayableId, amountDue: input.amountDue, amountPaid: 0, amountRefunded: 0, amountRemaining: input.amountDue, currency: input.currency ?? 'IDR', status: 'requires_payment', allowPartial: input.allowPartial ?? false, expiresAt: null, metadata: input.metadata ?? {}, createdAt: now, updatedAt: now };
+    const i: PaymentIntentDTO = { id: input.id, merchantId: input.merchantId, providerAccountId: input.providerAccountId ?? null, sourceApp: input.sourceApp ?? null, externalTenantId: input.externalTenantId ?? null, externalOutletId: input.externalOutletId ?? null, externalLocationId: input.externalLocationId ?? null, externalPayableType: input.externalPayableType, externalPayableId: input.externalPayableId, amountDue: input.amountDue, amountPaid: 0, amountRefunded: 0, amountRemaining: input.amountDue, currency: input.currency ?? 'IDR', status: 'requires_payment', allowPartial: input.allowPartial ?? false, expiresAt: null, metadata: input.metadata ?? {}, createdAt: now, updatedAt: now };
     this.store.set(i.id, i);
     return i;
   }
@@ -172,20 +172,20 @@ class InMemoryIntentRepo implements PaymentIntentRepository {
 }
 
 class InMemoryTransactionRepo implements PaymentTransactionRepository {
-  readonly store = new Map<string, StandalonePaymentTransactionDTO>();
+  readonly store = new Map<string, PaymentTransactionDTO>();
   async findById(id: string, merchantId: string) { const t = this.store.get(id); return (!t || t.merchantId !== merchantId) ? null : t; }
   async findByIntentId(intentId: string, merchantId: string) { return [...this.store.values()].filter(t => t.intentId === intentId && t.merchantId === merchantId); }
   async findByProviderReference(provider: string, ref: string) { for (const t of this.store.values()) { if (t.provider === provider && t.providerReference === ref) return t; } return null; }
   async findByMerchantIdempotencyKey(merchantId: string, key: string) { for (const t of this.store.values()) { if (t.merchantId === merchantId && t.idempotencyKey === key) return t; } return null; }
-  async create(input: any): Promise<StandalonePaymentTransactionDTO> {
+  async create(input: any): Promise<PaymentTransactionDTO> {
     const now = new Date();
-    const t: StandalonePaymentTransactionDTO = { id: input.id, merchantId: input.merchantId, intentId: input.intentId, providerAccountId: input.providerAccountId ?? null, provider: input.provider, method: input.method, transactionType: input.transactionType, direction: input.direction, status: input.status as TxStatus, amount: input.amount, currency: input.currency ?? 'IDR', parentTransactionId: input.parentTransactionId ?? null, providerReference: input.providerReference ?? null, providerEventId: input.providerEventId ?? null, providerPaymentUrl: input.providerPaymentUrl ?? null, providerQrString: input.providerQrString ?? null, failureReason: input.failureReason ?? null, idempotencyKey: input.idempotencyKey ?? null, expiresAt: null, metadata: input.metadata ?? {}, rawProviderResponse: input.rawProviderResponse ?? null, createdAt: now, updatedAt: now };
+    const t: PaymentTransactionDTO = { id: input.id, merchantId: input.merchantId, intentId: input.intentId, providerAccountId: input.providerAccountId ?? null, provider: input.provider, method: input.method, transactionType: input.transactionType, direction: input.direction, status: input.status as TxStatus, amount: input.amount, currency: input.currency ?? 'IDR', parentTransactionId: input.parentTransactionId ?? null, providerReference: input.providerReference ?? null, providerEventId: input.providerEventId ?? null, providerPaymentUrl: input.providerPaymentUrl ?? null, providerQrString: input.providerQrString ?? null, failureReason: input.failureReason ?? null, idempotencyKey: input.idempotencyKey ?? null, expiresAt: null, metadata: input.metadata ?? {}, rawProviderResponse: input.rawProviderResponse ?? null, createdAt: now, updatedAt: now };
     this.store.set(t.id, t);
     return t;
   }
   async updateStatus(input: any) { const t = this.store.get(input.id)!; const u = { ...t, status: input.status as TxStatus, failureReason: input.failureReason !== undefined ? input.failureReason : t.failureReason, updatedAt: new Date() }; this.store.set(input.id, u); return u; }
   async sumSucceededRefundsByParent(parentId: string) { let s = 0; for (const t of this.store.values()) { if (t.parentTransactionId === parentId && t.transactionType === 'refund' && t.direction === 'outgoing' && t.status === 'succeeded') s += t.amount; } return s; }
-  async markSucceededIfConfirmable(input: any) { const t = this.store.get(input.id); if (!t || t.merchantId !== input.merchantId) return { transaction: null, changed: false }; if (t.status !== 'requires_action' && t.status !== 'pending') return { transaction: null, changed: false }; const u: StandalonePaymentTransactionDTO = { ...t, status: 'succeeded' as TxStatus, updatedAt: new Date() }; this.store.set(input.id, u); return { transaction: u, changed: true }; }
+  async markSucceededIfConfirmable(input: any) { const t = this.store.get(input.id); if (!t || t.merchantId !== input.merchantId) return { transaction: null, changed: false }; if (t.status !== 'requires_action' && t.status !== 'pending') return { transaction: null, changed: false }; const u: PaymentTransactionDTO = { ...t, status: 'succeeded' as TxStatus, updatedAt: new Date() }; this.store.set(input.id, u); return { transaction: u, changed: true }; }
 }
 
 class InMemoryIdempotencyRepo implements PaymentIdempotencyRepository {
@@ -300,7 +300,7 @@ function buildS7Container(): S7ContainerResult {
   const credentialRepo = new InMemoryCredentialRepo();
   const accessRepo = new InMemoryAccessRepo();
 
-  const fakeGateway = new StandaloneFakeGatewayProvider();
+  const fakeGateway = new FakeGatewayProvider();
   const providerRegistry = new Map([[fakeGateway.providerCode, fakeGateway]]);
   const fakeGatewayWebhookHandler = new FakeGatewayWebhookHandler({ nodeEnv });
 

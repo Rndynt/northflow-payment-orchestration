@@ -59,7 +59,7 @@ import { GetPaymentIntentStatus } from '../apps/service/src/application/use-case
 import { GetRefundability } from '../apps/service/src/application/use-cases/GetRefundability.ts';
 import { HandleProviderWebhook } from '../apps/service/src/application/use-cases/HandleProviderWebhook.ts';
 import { FakeGatewayWebhookHandler } from '../apps/service/src/infrastructure/providers/FakeGatewayWebhookHandler.ts';
-import { StandaloneFakeGatewayProvider } from '../apps/service/src/infrastructure/providers/StandaloneFakeGatewayProvider.ts';
+import { FakeGatewayProvider } from '../apps/service/src/infrastructure/providers/FakeGatewayProvider.ts';
 
 import {
   generateCredential,
@@ -82,8 +82,8 @@ import type {
   ClientMerchantAccessRepository,
   PaymentMerchant,
   PaymentProviderAccount,
-  StandalonePaymentIntentDTO,
-  StandalonePaymentTransactionDTO,
+  PaymentIntentDTO,
+  PaymentTransactionDTO,
   PaymentIdempotencyKeyDTO,
   PaymentProviderEventDTO,
   ApiClientDTO,
@@ -303,12 +303,12 @@ class InMemoryProviderAccountRepo2 implements PaymentProviderAccountRepository {
 }
 
 class InMemoryIntentRepo2 implements PaymentIntentRepository {
-  readonly store = new Map<string, StandalonePaymentIntentDTO>();
+  readonly store = new Map<string, PaymentIntentDTO>();
   async findById(id: string, merchantId: string) { const i = this.store.get(id); return (!i || i.merchantId !== merchantId) ? null : i; }
   async findByExternalPayable() { return null; }
-  async create(input: any): Promise<StandalonePaymentIntentDTO> {
+  async create(input: any): Promise<PaymentIntentDTO> {
     const now = new Date();
-    const i: StandalonePaymentIntentDTO = { id: input.id, merchantId: input.merchantId, providerAccountId: null, sourceApp: null, externalTenantId: null, externalOutletId: null, externalLocationId: null, externalPayableType: input.externalPayableType, externalPayableId: input.externalPayableId, amountDue: input.amountDue, amountPaid: 0, amountRefunded: 0, amountRemaining: input.amountDue, currency: input.currency ?? 'IDR', status: 'requires_payment', allowPartial: false, expiresAt: null, metadata: {}, createdAt: now, updatedAt: now };
+    const i: PaymentIntentDTO = { id: input.id, merchantId: input.merchantId, providerAccountId: null, sourceApp: null, externalTenantId: null, externalOutletId: null, externalLocationId: null, externalPayableType: input.externalPayableType, externalPayableId: input.externalPayableId, amountDue: input.amountDue, amountPaid: 0, amountRefunded: 0, amountRemaining: input.amountDue, currency: input.currency ?? 'IDR', status: 'requires_payment', allowPartial: false, expiresAt: null, metadata: {}, createdAt: now, updatedAt: now };
     this.store.set(i.id, i);
     return i;
   }
@@ -317,14 +317,14 @@ class InMemoryIntentRepo2 implements PaymentIntentRepository {
 }
 
 class StubTxRepo implements PaymentTransactionRepository {
-  readonly store = new Map<string, StandalonePaymentTransactionDTO>();
+  readonly store = new Map<string, PaymentTransactionDTO>();
   async findById() { return null; }
   async findByIntentId() { return []; }
   async findByProviderReference() { return null; }
   async findByMerchantIdempotencyKey() { return null; }
-  async create(input: any): Promise<StandalonePaymentTransactionDTO> {
+  async create(input: any): Promise<PaymentTransactionDTO> {
     const now = new Date();
-    const t: StandalonePaymentTransactionDTO = { id: input.id, merchantId: input.merchantId, intentId: input.intentId, providerAccountId: null, provider: input.provider, method: input.method, transactionType: input.transactionType, direction: input.direction, status: input.status, amount: input.amount, currency: input.currency ?? 'IDR', parentTransactionId: null, providerReference: input.providerReference ?? null, providerEventId: null, providerPaymentUrl: null, providerQrString: null, failureReason: null, idempotencyKey: null, expiresAt: null, metadata: {}, rawProviderResponse: null, createdAt: now, updatedAt: now };
+    const t: PaymentTransactionDTO = { id: input.id, merchantId: input.merchantId, intentId: input.intentId, providerAccountId: null, provider: input.provider, method: input.method, transactionType: input.transactionType, direction: input.direction, status: input.status, amount: input.amount, currency: input.currency ?? 'IDR', parentTransactionId: null, providerReference: input.providerReference ?? null, providerEventId: null, providerPaymentUrl: null, providerQrString: null, failureReason: null, idempotencyKey: null, expiresAt: null, metadata: {}, rawProviderResponse: null, createdAt: now, updatedAt: now };
     this.store.set(t.id, t);
     return t;
   }
@@ -421,7 +421,7 @@ function buildRouteTestContainer(opts: BuildContainerOpts = {}): {
   const credentialRepo = new InMemoryCredentialRepo2();
   const accessRepo = new InMemoryAccessRepo2();
 
-  const fakeGateway = new StandaloneFakeGatewayProvider();
+  const fakeGateway = new FakeGatewayProvider();
   const providerRegistry = new Map([[fakeGateway.providerCode, fakeGateway]]);
   const fakeGatewayWebhookHandler = new FakeGatewayWebhookHandler({ nodeEnv: 'test' });
 

@@ -67,8 +67,8 @@ import type {
   PaymentProviderEventRepository,
   PaymentMerchant,
   PaymentProviderAccount,
-  StandalonePaymentIntentDTO,
-  StandalonePaymentTransactionDTO,
+  PaymentIntentDTO,
+  PaymentTransactionDTO,
   PaymentIdempotencyKeyDTO,
 } from '@northflow/payment-orchestration-core';
 
@@ -81,7 +81,7 @@ import { GetPaymentIntentStatus } from '../apps/service/src/application/use-case
 import { GetRefundability } from '../apps/service/src/application/use-cases/GetRefundability.ts';
 import { HandleProviderWebhook } from '../apps/service/src/application/use-cases/HandleProviderWebhook.ts';
 import { FakeGatewayWebhookHandler } from '../apps/service/src/infrastructure/providers/FakeGatewayWebhookHandler.ts';
-import { StandaloneFakeGatewayProvider } from '../apps/service/src/infrastructure/providers/StandaloneFakeGatewayProvider.ts';
+import { FakeGatewayProvider } from '../apps/service/src/infrastructure/providers/FakeGatewayProvider.ts';
 import { ReconcilePaymentIntentTotals } from '../apps/service/src/application/use-cases/ReconcilePaymentIntentTotals.ts';
 import { RefreshProviderStatus } from '../apps/service/src/application/use-cases/RefreshProviderStatus.ts';
 import { RefundPaymentTransaction } from '../apps/service/src/application/use-cases/RefundPaymentTransaction.ts';
@@ -115,10 +115,10 @@ class InMemoryMerchantRepo implements PaymentMerchantRepository {
 }
 
 class InMemoryIntentRepo implements PaymentIntentRepository {
-  private store: StandalonePaymentIntentDTO[] = [];
+  private store: PaymentIntentDTO[] = [];
   async findById(id: string) { return this.store.find(i => i.id === id) ?? null; }
   async findByExternalPayable(input: any) { return this.store.find(i => i.externalPayableId === input.externalPayableId) ?? null; }
-  async create(input: any): Promise<StandalonePaymentIntentDTO> {
+  async create(input: any): Promise<PaymentIntentDTO> {
     const i: any = { ...input, id: input.id ?? randomUUID(), amountPaid: 0, amountRefunded: 0, amountRemaining: input.amountDue, status: 'pending', createdAt: new Date(), updatedAt: new Date() };
     this.store.push(i); return i;
   }
@@ -127,12 +127,12 @@ class InMemoryIntentRepo implements PaymentIntentRepository {
 }
 
 class InMemoryTransactionRepo implements PaymentTransactionRepository {
-  store: StandalonePaymentTransactionDTO[] = [];
+  store: PaymentTransactionDTO[] = [];
   async findById(id: string, _: string) { return this.store.find(t => t.id === id) ?? null; }
   async findByIntentId() { return []; }
   async findByProviderReference() { return null; }
   async findByMerchantIdempotencyKey() { return null; }
-  async create(input: any): Promise<StandalonePaymentTransactionDTO> { const t: any = { ...input, createdAt: new Date(), updatedAt: new Date() }; this.store.push(t); return t; }
+  async create(input: any): Promise<PaymentTransactionDTO> { const t: any = { ...input, createdAt: new Date(), updatedAt: new Date() }; this.store.push(t); return t; }
   async updateStatus(input: any) { return input as any; }
   async sumSucceededRefundsByParent() { return 0; }
   async markSucceededIfConfirmable(_: any) { return { changed: false, transaction: null }; }
@@ -233,7 +233,7 @@ function buildContainer(overrides: Partial<PaymentOrchestrationServiceConfig> = 
   const accessRepo = new InMemoryAccessRepo();
   const auditRepo = new InMemoryAuditRepo();
 
-  const fakeGatewayProvider = new StandaloneFakeGatewayProvider({ webhookSecret: null, nodeEnv: 'test' });
+  const fakeGatewayProvider = new FakeGatewayProvider({ webhookSecret: null, nodeEnv: 'test' });
   const providerRegistry = {
     getProvider: () => fakeGatewayProvider,
     listProviders: () => [],

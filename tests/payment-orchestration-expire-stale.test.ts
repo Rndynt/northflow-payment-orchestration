@@ -1,9 +1,9 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ExpireStalePaymentTransactions } from '../apps/service/src/application/use-cases/ExpireStalePaymentTransactions.ts';
-import type { PaymentIntentRepository, PaymentTransactionRepository, StandalonePaymentIntentDTO, StandalonePaymentTransactionDTO } from '@northflow/payment-orchestration-core';
+import type { PaymentIntentRepository, PaymentTransactionRepository, PaymentIntentDTO, PaymentTransactionDTO } from '@northflow/payment-orchestration-core';
 
-function intent(overrides: Partial<StandalonePaymentIntentDTO> = {}): StandalonePaymentIntentDTO {
+function intent(overrides: Partial<PaymentIntentDTO> = {}): PaymentIntentDTO {
   return {
     id: 'intent_1', merchantId: 'merchant_1', providerAccountId: null, sourceApp: 'test', externalTenantId: null,
     externalOutletId: null, externalLocationId: null, externalPayableType: 'invoice', externalPayableId: 'inv_1',
@@ -13,7 +13,7 @@ function intent(overrides: Partial<StandalonePaymentIntentDTO> = {}): Standalone
   };
 }
 
-function transaction(overrides: Partial<StandalonePaymentTransactionDTO> = {}): StandalonePaymentTransactionDTO {
+function transaction(overrides: Partial<PaymentTransactionDTO> = {}): PaymentTransactionDTO {
   return {
     id: 'tx_1', merchantId: 'merchant_1', intentId: 'intent_1', providerAccountId: null, provider: 'fake_gateway',
     method: 'qris', transactionType: 'payment', status: 'requires_action', direction: 'incoming', amount: 10000,
