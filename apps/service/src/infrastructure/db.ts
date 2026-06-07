@@ -28,6 +28,7 @@ import {
   poClientCredentials,
   poClientMerchantAccess,
   poProviderAccountMethods,
+  poAuditLogs,
 } from './schema.ts';
 
 export const poSchema = {
@@ -41,6 +42,7 @@ export const poSchema = {
   poClientCredentials,
   poClientMerchantAccess,
   poProviderAccountMethods,
+  poAuditLogs,
 };
 
 export type PoDb = ReturnType<typeof createPoDb>;

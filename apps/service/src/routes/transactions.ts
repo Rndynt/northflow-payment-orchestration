@@ -6,6 +6,7 @@
  * Phase 8F: added POST /:id/refund and POST /:id/void for legacy parity.
  * Phase S3/S5: merchant access guard and scope checks.
  * Phase S-Hardening P0.3/P0.4: use assertMerchantAccessWithScope (fail-closed + grant scopes).
+ * Phase S8: audit log entries for all protected operations.
  */
 
 import { Router } from 'express';
@@ -14,6 +15,8 @@ import type { ServiceContainer } from '../container.ts';
 import { resolveMerchantId, apiErrorResponse } from './utils.ts';
 import { requireScope } from '../middleware/requireScope.ts';
 import { assertMerchantAccessWithScope } from '../middleware/merchantAccess.ts';
+import { auditSuccess, auditDenied, auditError } from '../audit/auditService.ts';
+import { AuditAction } from '../audit/auditActions.ts';
 
 export function createTransactionsRouter(container: ServiceContainer): Router {
   const router = Router();
@@ -41,11 +44,29 @@ export function createTransactionsRouter(container: ServiceContainer): Router {
 
       // P0.3/P0.4: merchant access + grant scope check
       const denied = await assertMerchantAccessWithScope(req.auth!, merchantId, 'intent:read', accessRepo);
-      if (denied) { res.status(denied.status).json(denied.body); return; }
+      if (denied) {
+        void auditDenied(req, container, {
+          action: AuditAction.PAYMENT_INTENT_STATUS,
+          merchantId,
+          resourceType: 'transaction',
+          resourceId: transactionId,
+          errorCode: 'MERCHANT_ACCESS_DENIED',
+        });
+        res.status(denied.status).json(denied.body);
+        return;
+      }
 
       const result = await container.useCases.refreshProviderStatus.execute({
         merchantId,
         transactionId,
+      });
+
+      void auditSuccess(req, container, {
+        action: AuditAction.PAYMENT_INTENT_STATUS,
+        merchantId,
+        resourceType: 'transaction',
+        resourceId: transactionId,
+        statusCode: 200,
       });
 
       res.json({
@@ -58,6 +79,13 @@ export function createTransactionsRouter(container: ServiceContainer): Router {
         },
       });
     } catch (err) {
+      void auditError(req, container, {
+        action: AuditAction.PAYMENT_INTENT_STATUS,
+        merchantId: resolveMerchantId(req, (req.body as any)?.['merchantId']),
+        resourceType: 'transaction',
+        resourceId: req.params['id'],
+        errorCode: err instanceof Error ? err.constructor.name : 'INTERNAL_ERROR',
+      });
       next(err);
     }
   });
@@ -84,7 +112,17 @@ export function createTransactionsRouter(container: ServiceContainer): Router {
 
       // P0.3/P0.4: merchant access + grant scope check
       const denied = await assertMerchantAccessWithScope(req.auth!, merchantId, 'payment:refund', accessRepo);
-      if (denied) { res.status(denied.status).json(denied.body); return; }
+      if (denied) {
+        void auditDenied(req, container, {
+          action: AuditAction.PAYMENT_REFUND,
+          merchantId,
+          resourceType: 'transaction',
+          resourceId: transactionId,
+          errorCode: 'MERCHANT_ACCESS_DENIED',
+        });
+        res.status(denied.status).json(denied.body);
+        return;
+      }
 
       const amount = body['amount'];
       if (typeof amount !== 'number' || !Number.isInteger(amount) || amount <= 0) {
@@ -103,6 +141,15 @@ export function createTransactionsRouter(container: ServiceContainer): Router {
         idempotencyKey,
       });
 
+      void auditSuccess(req, container, {
+        action: AuditAction.PAYMENT_REFUND,
+        merchantId,
+        resourceType: 'transaction',
+        resourceId: result.refundTransaction.id,
+        statusCode: 201,
+        metadata: { originalTransactionId: transactionId, amount },
+      });
+
       res.status(201).json({
         ok: true,
         data: {
@@ -114,6 +161,13 @@ export function createTransactionsRouter(container: ServiceContainer): Router {
         },
       });
     } catch (err) {
+      void auditError(req, container, {
+        action: AuditAction.PAYMENT_REFUND,
+        merchantId: resolveMerchantId(req, (req.body as any)?.['merchantId']),
+        resourceType: 'transaction',
+        resourceId: req.params['id'],
+        errorCode: err instanceof Error ? err.constructor.name : 'INTERNAL_ERROR',
+      });
       next(err);
     }
   });
@@ -140,7 +194,17 @@ export function createTransactionsRouter(container: ServiceContainer): Router {
 
       // P0.3/P0.4: merchant access + grant scope check
       const denied = await assertMerchantAccessWithScope(req.auth!, merchantId, 'payment:void', accessRepo);
-      if (denied) { res.status(denied.status).json(denied.body); return; }
+      if (denied) {
+        void auditDenied(req, container, {
+          action: AuditAction.PAYMENT_VOID,
+          merchantId,
+          resourceType: 'transaction',
+          resourceId: transactionId,
+          errorCode: 'MERCHANT_ACCESS_DENIED',
+        });
+        res.status(denied.status).json(denied.body);
+        return;
+      }
 
       const reason = typeof body['reason'] === 'string' ? body['reason'] : null;
       const idempotencyKey = typeof body['idempotencyKey'] === 'string' ? body['idempotencyKey'] : null;
@@ -150,6 +214,14 @@ export function createTransactionsRouter(container: ServiceContainer): Router {
         transactionId,
         reason,
         idempotencyKey,
+      });
+
+      void auditSuccess(req, container, {
+        action: AuditAction.PAYMENT_VOID,
+        merchantId,
+        resourceType: 'transaction',
+        resourceId: result.transaction.id,
+        statusCode: 200,
       });
 
       res.json({
@@ -162,6 +234,13 @@ export function createTransactionsRouter(container: ServiceContainer): Router {
         },
       });
     } catch (err) {
+      void auditError(req, container, {
+        action: AuditAction.PAYMENT_VOID,
+        merchantId: resolveMerchantId(req, (req.body as any)?.['merchantId']),
+        resourceType: 'transaction',
+        resourceId: req.params['id'],
+        errorCode: err instanceof Error ? err.constructor.name : 'INTERNAL_ERROR',
+      });
       next(err);
     }
   });

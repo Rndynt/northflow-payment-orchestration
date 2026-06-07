@@ -32,6 +32,7 @@ import type {
   MarkIdempotencyCompletedInput,
   MarkIdempotencyFailedInput,
 } from '../domain/PaymentIdempotencyKey';
+import type { AuditLog, AuditActorType, AuditStatus } from '../domain/AuditLog';
 
 // ── Merchant ──────────────────────────────────────────────────────────────────
 
@@ -407,6 +408,42 @@ export interface ProviderAccountPaymentMethodRepository {
     id: string,
     status: ProviderAccountPaymentMethodStatus,
   ): Promise<ProviderAccountPaymentMethod>;
+}
+
+// ── Audit Log ─────────────────────────────────────────────────────────────────
+
+export interface CreateAuditLogInput {
+  id: string;
+  requestId: string;
+  clientId: string | null;
+  sourceApp: string | null;
+  merchantId: string | null;
+  actorType: AuditActorType;
+  action: string;
+  resourceType: string | null;
+  resourceId: string | null;
+  status: AuditStatus;
+  httpMethod: string | null;
+  path: string | null;
+  statusCode: number | null;
+  errorCode: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface ListAuditLogsInput {
+  merchantId?: string | null;
+  clientId?: string | null;
+  action?: string | null;
+  status?: AuditStatus | null;
+  limit?: number;
+  offset?: number;
+}
+
+export interface AuditLogRepository {
+  create(input: CreateAuditLogInput): Promise<AuditLog>;
+  list(input: ListAuditLogsInput): Promise<{ entries: AuditLog[]; total: number }>;
 }
 
 // ── Idempotency ───────────────────────────────────────────────────────────────

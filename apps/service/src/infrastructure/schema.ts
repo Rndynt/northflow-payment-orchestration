@@ -224,6 +224,35 @@ export const poProviderAccountMethods = pgTable('po_provider_account_methods', {
     .on(table.providerAccountId, table.method),
 }));
 
+export const poAuditLogs = pgTable('po_audit_logs', {
+  id: text('id').primaryKey(),
+  requestId: text('request_id').notNull(),
+  clientId: text('client_id'),
+  sourceApp: text('source_app'),
+  merchantId: text('merchant_id'),
+  actorType: text('actor_type').notNull(),
+  action: text('action').notNull(),
+  resourceType: text('resource_type'),
+  resourceId: text('resource_id'),
+  status: text('status').notNull(),
+  httpMethod: text('http_method'),
+  path: text('path'),
+  statusCode: integer('status_code'),
+  errorCode: text('error_code'),
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  metadata: jsonb('metadata').notNull().default({}),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+  requestIdIdx: index('po_audit_logs_request_id_idx').on(table.requestId),
+  clientIdIdx: index('po_audit_logs_client_id_idx').on(table.clientId),
+  merchantIdIdx: index('po_audit_logs_merchant_id_idx').on(table.merchantId),
+  actionIdx: index('po_audit_logs_action_idx').on(table.action),
+  resourceIdx: index('po_audit_logs_resource_idx').on(table.resourceType, table.resourceId),
+  statusIdx: index('po_audit_logs_status_idx').on(table.status),
+  createdAtIdx: index('po_audit_logs_created_at_idx').on(table.createdAt),
+}));
+
 export const poClientMerchantAccess = pgTable('po_client_merchant_access', {
   id: text('id').primaryKey(),
   clientId: text('client_id').notNull().references(() => poApiClients.id, { onDelete: 'cascade' }),

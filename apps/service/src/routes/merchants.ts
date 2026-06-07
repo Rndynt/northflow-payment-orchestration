@@ -9,6 +9,7 @@
  *   Normal clients cannot create an orphan merchant:
  *     - 503 SERVICE_MISCONFIGURED if accessRepo is missing before merchant creation.
  *     - Grant creation errors propagate as 500 (not swallowed).
+ * Phase S8: audit log entries for all protected operations.
  */
 
 import { Router } from 'express';
@@ -18,6 +19,8 @@ import { createMerchantWithGrantAtomic } from '../container.ts';
 import { apiErrorResponse } from './utils.ts';
 import { requireScope } from '../middleware/requireScope.ts';
 import { assertMerchantAccessWithScope, assertSourceApp } from '../middleware/merchantAccess.ts';
+import { auditSuccess, auditDenied, auditFailure, auditError } from '../audit/auditService.ts';
+import { AuditAction } from '../audit/auditActions.ts';
 
 export function createMerchantsRouter(container: ServiceContainer): Router {
   const router = Router();
@@ -36,6 +39,11 @@ export function createMerchantsRouter(container: ServiceContainer): Router {
       const { id, name, legalName, externalRef, metadata } = body;
 
       if (!name || typeof name !== 'string') {
+        void auditFailure(req, container, {
+          action: AuditAction.MERCHANT_CREATE,
+          errorCode: 'VALIDATION_ERROR',
+          statusCode: 400,
+        });
         res.status(400).json(apiErrorResponse('VALIDATION_ERROR', 'name is required and must be a string'));
         return;
       }
@@ -44,6 +52,11 @@ export function createMerchantsRouter(container: ServiceContainer): Router {
       // to be present before we create the merchant. This prevents orphan merchants.
       const isNormalClient = req.auth!.clientId !== 'legacy' && req.auth!.sourceApp !== 'internal';
       if (isNormalClient && !accessRepo) {
+        void auditFailure(req, container, {
+          action: AuditAction.MERCHANT_CREATE,
+          errorCode: 'SERVICE_MISCONFIGURED',
+          statusCode: 503,
+        });
         res.status(503).json(apiErrorResponse(
           'SERVICE_MISCONFIGURED',
           'Merchant access authorization service is unavailable.',
@@ -53,13 +66,17 @@ export function createMerchantsRouter(container: ServiceContainer): Router {
 
       // S4: enforce sourceApp matches authenticated client
       const sourceAppErr = assertSourceApp(req.auth!, body);
-      if (sourceAppErr) { res.status(403).json(sourceAppErr); return; }
+      if (sourceAppErr) {
+        void auditDenied(req, container, {
+          action: AuditAction.MERCHANT_CREATE,
+          errorCode: 'SOURCE_APP_MISMATCH',
+          statusCode: 403,
+        });
+        res.status(403).json(sourceAppErr);
+        return;
+      }
 
       // P1.1: Atomic merchant + grant creation for normal clients.
-      // createMerchantWithGrantAtomic wraps both writes in db.transaction() when a
-      // real DB is available, ensuring the merchant and its access grant are either
-      // both committed or both rolled back. An orphan merchant (no grant) cannot
-      // survive a partial failure.
       const merchantInput = {
         id: typeof id === 'string' ? id : undefined,
         name,
@@ -71,16 +88,21 @@ export function createMerchantsRouter(container: ServiceContainer): Router {
 
       let result;
       if (isNormalClient && accessRepo) {
-        // Normal client: atomic transaction guarantees merchant + grant or nothing.
         result = await createMerchantWithGrantAtomic(
           container,
           merchantInput,
           { clientId: req.auth!.clientId, scopes: req.auth!.scopes },
         );
       } else {
-        // Legacy/internal client: no grant needed.
         result = await container.useCases.createMerchant.execute(merchantInput);
       }
+
+      void auditSuccess(req, container, {
+        action: AuditAction.MERCHANT_CREATE,
+        resourceType: 'merchant',
+        resourceId: result.merchant.id,
+        statusCode: result.created ? 201 : 200,
+      });
 
       res.status(result.created ? 201 : 200).json({
         ok: true,
@@ -93,6 +115,10 @@ export function createMerchantsRouter(container: ServiceContainer): Router {
         },
       });
     } catch (err) {
+      void auditError(req, container, {
+        action: AuditAction.MERCHANT_CREATE,
+        errorCode: err instanceof Error ? err.constructor.name : 'INTERNAL_ERROR',
+      });
       next(err);
     }
   });
@@ -112,13 +138,39 @@ export function createMerchantsRouter(container: ServiceContainer): Router {
 
       // P0.3/P0.4: merchant access + grant scope check
       const denied = await assertMerchantAccessWithScope(req.auth!, id, 'merchant:read', accessRepo);
-      if (denied) { res.status(denied.status).json(denied.body); return; }
+      if (denied) {
+        void auditDenied(req, container, {
+          action: AuditAction.MERCHANT_READ,
+          merchantId: id,
+          resourceType: 'merchant',
+          resourceId: id,
+          errorCode: 'MERCHANT_ACCESS_DENIED',
+        });
+        res.status(denied.status).json(denied.body);
+        return;
+      }
 
       const merchant = await container.repos.merchantRepo.findById(id);
       if (!merchant) {
+        void auditFailure(req, container, {
+          action: AuditAction.MERCHANT_READ,
+          merchantId: id,
+          resourceType: 'merchant',
+          resourceId: id,
+          errorCode: 'MERCHANT_NOT_FOUND',
+          statusCode: 404,
+        });
         res.status(404).json(apiErrorResponse('MERCHANT_NOT_FOUND', `Merchant not found: ${id}`));
         return;
       }
+
+      void auditSuccess(req, container, {
+        action: AuditAction.MERCHANT_READ,
+        merchantId: id,
+        resourceType: 'merchant',
+        resourceId: id,
+        statusCode: 200,
+      });
 
       res.json({
         ok: true,
@@ -131,6 +183,11 @@ export function createMerchantsRouter(container: ServiceContainer): Router {
         },
       });
     } catch (err) {
+      void auditError(req, container, {
+        action: AuditAction.MERCHANT_READ,
+        merchantId: req.params['id'],
+        errorCode: err instanceof Error ? err.constructor.name : 'INTERNAL_ERROR',
+      });
       next(err);
     }
   });

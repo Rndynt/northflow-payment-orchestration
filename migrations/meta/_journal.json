@@ -57,6 +57,13 @@
       "when": 1780830195514,
       "tag": "0007_po_provider_account_methods",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1780830200000,
+      "tag": "0008_po_audit_logs",
+      "breakpoints": true
     }
   ]
 }

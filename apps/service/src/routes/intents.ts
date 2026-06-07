@@ -6,6 +6,7 @@
  * Phase 8K: use frozen error envelope via apiErrorResponse().
  * Phase S3/S4/S5: merchant access guard, sourceApp enforcement, scope checks.
  * Phase S-Hardening P0.3/P0.4: use assertMerchantAccessWithScope (fail-closed + grant scopes).
+ * Phase S8: audit log entries for all protected operations.
  *
  * Routes:
  *   POST /v1/payment-intents            [intent:create]
@@ -21,6 +22,8 @@ import type { ServiceContainer } from '../container.ts';
 import { resolveMerchantId, resolveMerchantIdQuery, apiErrorResponse } from './utils.ts';
 import { requireScope } from '../middleware/requireScope.ts';
 import { assertMerchantAccessWithScope, assertSourceApp } from '../middleware/merchantAccess.ts';
+import { auditSuccess, auditDenied, auditFailure, auditError } from '../audit/auditService.ts';
+import { AuditAction } from '../audit/auditActions.ts';
 
 export function createIntentsRouter(container: ServiceContainer): Router {
   const router = Router();
@@ -57,11 +60,27 @@ export function createIntentsRouter(container: ServiceContainer): Router {
 
       // P0.3/P0.4: merchant access + grant scope check
       const denied = await assertMerchantAccessWithScope(req.auth!, merchantId, 'intent:create', accessRepo);
-      if (denied) { res.status(denied.status).json(denied.body); return; }
+      if (denied) {
+        void auditDenied(req, container, {
+          action: AuditAction.PAYMENT_INTENT_CREATE,
+          merchantId,
+          errorCode: 'MERCHANT_ACCESS_DENIED',
+        });
+        res.status(denied.status).json(denied.body);
+        return;
+      }
 
       // S4: sourceApp enforcement
       const sourceAppErr = assertSourceApp(req.auth!, body);
-      if (sourceAppErr) { res.status(403).json(sourceAppErr); return; }
+      if (sourceAppErr) {
+        void auditDenied(req, container, {
+          action: AuditAction.PAYMENT_INTENT_CREATE,
+          merchantId,
+          errorCode: 'SOURCE_APP_MISMATCH',
+        });
+        res.status(403).json(sourceAppErr);
+        return;
+      }
 
       if (!externalPayableType || typeof externalPayableType !== 'string') {
         res.status(400).json(apiErrorResponse('VALIDATION_ERROR', 'externalPayableType is required'));
@@ -93,11 +112,24 @@ export function createIntentsRouter(container: ServiceContainer): Router {
         idempotencyKey: typeof idempotencyKey === 'string' ? idempotencyKey : null,
       });
 
+      void auditSuccess(req, container, {
+        action: AuditAction.PAYMENT_INTENT_CREATE,
+        merchantId,
+        resourceType: 'payment_intent',
+        resourceId: result.intent.id,
+        statusCode: result.created ? 201 : 200,
+      });
+
       res.status(result.created ? 201 : 200).json({
         ok: true,
         data: serializeIntent(result.intent),
       });
     } catch (err) {
+      void auditError(req, container, {
+        action: AuditAction.PAYMENT_INTENT_CREATE,
+        merchantId: resolveMerchantId(req, (req.body as any)?.['merchantId']),
+        errorCode: err instanceof Error ? err.constructor.name : 'INTERNAL_ERROR',
+      });
       next(err);
     }
   });
@@ -123,11 +155,29 @@ export function createIntentsRouter(container: ServiceContainer): Router {
 
       // P0.3/P0.4: merchant access + grant scope check
       const denied = await assertMerchantAccessWithScope(req.auth!, merchantId, 'intent:read', accessRepo);
-      if (denied) { res.status(denied.status).json(denied.body); return; }
+      if (denied) {
+        void auditDenied(req, container, {
+          action: AuditAction.PAYMENT_INTENT_STATUS,
+          merchantId,
+          resourceType: 'payment_intent',
+          resourceId: intentId,
+          errorCode: 'MERCHANT_ACCESS_DENIED',
+        });
+        res.status(denied.status).json(denied.body);
+        return;
+      }
 
       const result = await container.useCases.getPaymentIntentStatus.execute({
         intentId,
         merchantId,
+      });
+
+      void auditSuccess(req, container, {
+        action: AuditAction.PAYMENT_INTENT_STATUS,
+        merchantId,
+        resourceType: 'payment_intent',
+        resourceId: intentId,
+        statusCode: 200,
       });
 
       res.json({
@@ -143,6 +193,13 @@ export function createIntentsRouter(container: ServiceContainer): Router {
         },
       });
     } catch (err) {
+      void auditError(req, container, {
+        action: AuditAction.PAYMENT_INTENT_STATUS,
+        merchantId: resolveMerchantIdQuery(req),
+        resourceType: 'payment_intent',
+        resourceId: req.params['id'],
+        errorCode: err instanceof Error ? err.constructor.name : 'INTERNAL_ERROR',
+      });
       next(err);
     }
   });
@@ -168,11 +225,29 @@ export function createIntentsRouter(container: ServiceContainer): Router {
 
       // P0.3/P0.4: merchant access + grant scope check
       const denied = await assertMerchantAccessWithScope(req.auth!, merchantId, 'intent:read', accessRepo);
-      if (denied) { res.status(denied.status).json(denied.body); return; }
+      if (denied) {
+        void auditDenied(req, container, {
+          action: AuditAction.PAYMENT_INTENT_REFUND_CHECK,
+          merchantId,
+          resourceType: 'payment_intent',
+          resourceId: intentId,
+          errorCode: 'MERCHANT_ACCESS_DENIED',
+        });
+        res.status(denied.status).json(denied.body);
+        return;
+      }
 
       const result = await container.useCases.getRefundability.execute({
         intentId,
         merchantId,
+      });
+
+      void auditSuccess(req, container, {
+        action: AuditAction.PAYMENT_INTENT_REFUND_CHECK,
+        merchantId,
+        resourceType: 'payment_intent',
+        resourceId: intentId,
+        statusCode: 200,
       });
 
       res.json({
@@ -180,6 +255,13 @@ export function createIntentsRouter(container: ServiceContainer): Router {
         data: result,
       });
     } catch (err) {
+      void auditError(req, container, {
+        action: AuditAction.PAYMENT_INTENT_REFUND_CHECK,
+        merchantId: resolveMerchantIdQuery(req),
+        resourceType: 'payment_intent',
+        resourceId: req.params['id'],
+        errorCode: err instanceof Error ? err.constructor.name : 'INTERNAL_ERROR',
+      });
       next(err);
     }
   });
@@ -208,7 +290,17 @@ export function createIntentsRouter(container: ServiceContainer): Router {
 
       // P0.3/P0.4: merchant access + grant scope check
       const denied = await assertMerchantAccessWithScope(req.auth!, merchantId, 'payment:create', accessRepo);
-      if (denied) { res.status(denied.status).json(denied.body); return; }
+      if (denied) {
+        void auditDenied(req, container, {
+          action: AuditAction.GATEWAY_PAYMENT_CREATE,
+          merchantId,
+          resourceType: 'payment_intent',
+          resourceId: intentId,
+          errorCode: 'MERCHANT_ACCESS_DENIED',
+        });
+        res.status(denied.status).json(denied.body);
+        return;
+      }
 
       if (!provider || typeof provider !== 'string') {
         res.status(400).json(apiErrorResponse('VALIDATION_ERROR', 'provider is required'));
@@ -234,6 +326,15 @@ export function createIntentsRouter(container: ServiceContainer): Router {
         metadata: metadata != null && typeof metadata === 'object' ? (metadata as Record<string, unknown>) : null,
       });
 
+      void auditSuccess(req, container, {
+        action: AuditAction.GATEWAY_PAYMENT_CREATE,
+        merchantId,
+        resourceType: 'transaction',
+        resourceId: result.transaction.id,
+        statusCode: result.idempotentReplay ? 200 : 201,
+        metadata: { provider, method, amount, intentId },
+      });
+
       res.status(result.idempotentReplay ? 200 : 201).json({
         ok: true,
         data: {
@@ -243,6 +344,13 @@ export function createIntentsRouter(container: ServiceContainer): Router {
         },
       });
     } catch (err) {
+      void auditError(req, container, {
+        action: AuditAction.GATEWAY_PAYMENT_CREATE,
+        merchantId: resolveMerchantId(req, (req.body as any)?.['merchantId']),
+        resourceType: 'payment_intent',
+        resourceId: req.params['id'],
+        errorCode: err instanceof Error ? err.constructor.name : 'INTERNAL_ERROR',
+      });
       next(err);
     }
   });
@@ -269,11 +377,30 @@ export function createIntentsRouter(container: ServiceContainer): Router {
 
       // P0.3/P0.4: merchant access + grant scope check
       const denied = await assertMerchantAccessWithScope(req.auth!, merchantId, 'payment:reconcile', accessRepo);
-      if (denied) { res.status(denied.status).json(denied.body); return; }
+      if (denied) {
+        void auditDenied(req, container, {
+          action: AuditAction.PAYMENT_RECONCILE,
+          merchantId,
+          resourceType: 'payment_intent',
+          resourceId: intentId,
+          errorCode: 'MERCHANT_ACCESS_DENIED',
+        });
+        res.status(denied.status).json(denied.body);
+        return;
+      }
 
       const result = await container.useCases.reconcilePaymentIntentTotals.execute({
         merchantId,
         intentId,
+      });
+
+      void auditSuccess(req, container, {
+        action: AuditAction.PAYMENT_RECONCILE,
+        merchantId,
+        resourceType: 'payment_intent',
+        resourceId: intentId,
+        statusCode: 200,
+        metadata: { changed: result.changed },
       });
 
       res.json({
@@ -286,6 +413,13 @@ export function createIntentsRouter(container: ServiceContainer): Router {
         },
       });
     } catch (err) {
+      void auditError(req, container, {
+        action: AuditAction.PAYMENT_RECONCILE,
+        merchantId: resolveMerchantId(req, (req.body as any)?.['merchantId']),
+        resourceType: 'payment_intent',
+        resourceId: req.params['id'],
+        errorCode: err instanceof Error ? err.constructor.name : 'INTERNAL_ERROR',
+      });
       next(err);
     }
   });

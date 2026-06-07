@@ -26,6 +26,8 @@
  *   assertMerchantAccessWithScope (called inside) rejects normal API clients with
  *   503 SERVICE_MISCONFIGURED when accessRepo is missing — fail closed, not fail open.
  *   Only legacy (clientId='legacy') and internal (sourceApp='internal') clients bypass.
+ *
+ * Phase S8: audit log entries for all protected operations.
  */
 
 import { Router } from 'express';
@@ -40,6 +42,8 @@ import { UpsertProviderAccountMethod } from '../application/use-cases/UpsertProv
 import { SyncProviderAccountMethods } from '../application/use-cases/SyncProviderAccountMethods.ts';
 import { ListProviderAccountMethods } from '../application/use-cases/ListProviderAccountMethods.ts';
 import { GetPaymentMethodOptions } from '../application/use-cases/GetPaymentMethodOptions.ts';
+import { auditSuccess, auditDenied, auditError } from '../audit/auditService.ts';
+import { AuditAction } from '../audit/auditActions.ts';
 
 /**
  * assertMerchantAccessWithAnyScope — S7.5 local helper.
@@ -154,10 +158,32 @@ export function createProviderAccountMethodsSubRouter(container: ServiceContaine
           ['payment_method:read', 'provider_account:read'],
           accessRepo,
         );
-        if (denied) { res.status(denied.status).json(denied.body); return; }
+        if (denied) {
+          void auditDenied(req, container, {
+            action: AuditAction.PAYMENT_METHOD_LIST,
+            merchantId,
+            resourceType: 'provider_account',
+            resourceId: providerAccountId,
+            errorCode: 'MERCHANT_ACCESS_DENIED',
+          });
+          res.status(denied.status).json(denied.body);
+          return;
+        }
         const methods = await listUseCase.listByProviderAccount({ merchantId, providerAccountId });
+        void auditSuccess(req, container, {
+          action: AuditAction.PAYMENT_METHOD_LIST,
+          merchantId,
+          resourceType: 'provider_account',
+          resourceId: providerAccountId,
+          statusCode: 200,
+        });
         res.json({ ok: true, data: methods.map(serializeMethod) });
       } catch (err) {
+        void auditError(req, container, {
+          action: AuditAction.PAYMENT_METHOD_LIST,
+          merchantId: (req.params as any)['merchantId'],
+          errorCode: err instanceof Error ? err.constructor.name : 'INTERNAL_ERROR',
+        });
         next(err);
       }
     },
@@ -181,15 +207,38 @@ export function createProviderAccountMethodsSubRouter(container: ServiceContaine
           ['payment_method:write', 'provider_account:create'],
           accessRepo,
         );
-        if (denied) { res.status(denied.status).json(denied.body); return; }
+        if (denied) {
+          void auditDenied(req, container, {
+            action: AuditAction.PAYMENT_METHOD_UPSERT,
+            merchantId,
+            resourceType: 'provider_account',
+            resourceId: providerAccountId,
+            errorCode: 'MERCHANT_ACCESS_DENIED',
+          });
+          res.status(denied.status).json(denied.body);
+          return;
+        }
         const result = await upsertUseCase.execute({
           merchantId,
           providerAccountId,
           method,
           ...req.body,
         });
+        void auditSuccess(req, container, {
+          action: AuditAction.PAYMENT_METHOD_UPSERT,
+          merchantId,
+          resourceType: 'payment_method',
+          resourceId: result.method.id,
+          statusCode: result.created ? 201 : 200,
+          metadata: { method },
+        });
         res.status(result.created ? 201 : 200).json({ ok: true, data: serializeMethod(result.method), created: result.created });
       } catch (err) {
+        void auditError(req, container, {
+          action: AuditAction.PAYMENT_METHOD_UPSERT,
+          merchantId: (req.params as any)['merchantId'],
+          errorCode: err instanceof Error ? err.constructor.name : 'INTERNAL_ERROR',
+        });
         next(err);
       }
     },
@@ -213,10 +262,33 @@ export function createProviderAccountMethodsSubRouter(container: ServiceContaine
           ['payment_method:sync', 'provider_account:create'],
           accessRepo,
         );
-        if (denied) { res.status(denied.status).json(denied.body); return; }
+        if (denied) {
+          void auditDenied(req, container, {
+            action: AuditAction.PAYMENT_METHOD_SYNC,
+            merchantId,
+            resourceType: 'provider_account',
+            resourceId: providerAccountId,
+            errorCode: 'MERCHANT_ACCESS_DENIED',
+          });
+          res.status(denied.status).json(denied.body);
+          return;
+        }
         const result = await syncUseCase.execute({ merchantId, providerAccountId });
+        void auditSuccess(req, container, {
+          action: AuditAction.PAYMENT_METHOD_SYNC,
+          merchantId,
+          resourceType: 'provider_account',
+          resourceId: providerAccountId,
+          statusCode: 200,
+          metadata: { syncedCount: result.syncedCount, skippedCount: result.skippedCount },
+        });
         res.json({ ok: true, data: { methods: result.methods.map(serializeMethod), syncedCount: result.syncedCount, skippedCount: result.skippedCount, message: result.message } });
       } catch (err) {
+        void auditError(req, container, {
+          action: AuditAction.PAYMENT_METHOD_SYNC,
+          merchantId: (req.params as any)['merchantId'],
+          errorCode: err instanceof Error ? err.constructor.name : 'INTERNAL_ERROR',
+        });
         next(err);
       }
     },
@@ -260,10 +332,29 @@ export function createMerchantPaymentMethodsRouter(container: ServiceContainer):
           ['payment_method:read', 'provider_account:read', 'intent:read'],
           accessRepo,
         );
-        if (denied) { res.status(denied.status).json(denied.body); return; }
+        if (denied) {
+          void auditDenied(req, container, {
+            action: AuditAction.PAYMENT_METHOD_LIST,
+            merchantId,
+            errorCode: 'MERCHANT_ACCESS_DENIED',
+          });
+          res.status(denied.status).json(denied.body);
+          return;
+        }
         const methods = await listUseCase.listByMerchant({ merchantId });
+        void auditSuccess(req, container, {
+          action: AuditAction.PAYMENT_METHOD_LIST,
+          merchantId,
+          statusCode: 200,
+          metadata: { count: methods.length },
+        });
         res.json({ ok: true, data: methods.map(serializeMethod) });
       } catch (err) {
+        void auditError(req, container, {
+          action: AuditAction.PAYMENT_METHOD_LIST,
+          merchantId: (req.params as any)['merchantId'],
+          errorCode: err instanceof Error ? err.constructor.name : 'INTERNAL_ERROR',
+        });
         next(err);
       }
     },
@@ -315,10 +406,31 @@ export function createPaymentOptionsRouter(container: ServiceContainer): Router 
           ['payment_method:read', 'intent:read'],
           accessRepo,
         );
-        if (denied) { res.status(denied.status).json(denied.body); return; }
+        if (denied) {
+          void auditDenied(req, container, {
+            action: AuditAction.PAYMENT_OPTIONS_READ,
+            merchantId,
+            resourceType: 'payment_intent',
+            resourceId: intentId,
+            errorCode: 'MERCHANT_ACCESS_DENIED',
+          });
+          res.status(denied.status).json(denied.body);
+          return;
+        }
         const result = await useCase.execute({ intentId, merchantId });
+        void auditSuccess(req, container, {
+          action: AuditAction.PAYMENT_OPTIONS_READ,
+          merchantId,
+          resourceType: 'payment_intent',
+          resourceId: intentId,
+          statusCode: 200,
+        });
         res.json({ ok: true, data: result });
       } catch (err) {
+        void auditError(req, container, {
+          action: AuditAction.PAYMENT_OPTIONS_READ,
+          errorCode: err instanceof Error ? err.constructor.name : 'INTERNAL_ERROR',
+        });
         next(err);
       }
     },

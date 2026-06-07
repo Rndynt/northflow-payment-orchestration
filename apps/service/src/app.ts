@@ -24,6 +24,7 @@ import {
   createMerchantPaymentMethodsRouter,
   createPaymentOptionsRouter,
 } from './routes/paymentMethods.ts';
+import { createAuditLogsRouter } from './routes/auditLogs.ts';
 import { createAuthMiddleware } from './middleware/auth.ts';
 import { errorHandler } from './middleware/errors.ts';
 import { requestContextMiddleware } from './middleware/requestContext.ts';
@@ -92,6 +93,9 @@ export function createApp(container: ServiceContainer): express.Application {
 
   // ── API v1 — Payment Transactions ─────────────────────────────────────────
   app.use('/v1/payment-transactions', createTransactionsRouter(container));
+
+  // ── S8: Audit Logs (read API) ─────────────────────────────────────────────
+  app.use('/v1/audit-logs', createAuditLogsRouter(container));
 
   // ── Dev/test only: FakeGateway confirm ───────────────────────────────────
   if (container.config.nodeEnv !== 'production') {

@@ -133,6 +133,16 @@ export type {
   UpsertProviderAccountMethodInput,
 } from './application/repositories';
 
+// ── S8: Audit Log ─────────────────────────────────────────────────────────────
+
+export type { AuditLog, AuditActorType, AuditStatus } from './domain/AuditLog';
+
+export type {
+  AuditLogRepository,
+  CreateAuditLogInput,
+  ListAuditLogsInput,
+} from './application/repositories';
+
 // ── S1: API Client Registry ───────────────────────────────────────────────────
 
 export type {

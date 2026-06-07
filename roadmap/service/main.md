@@ -525,6 +525,81 @@ Expired key calls API -> 401
 
 ---
 
+# Phase S7.5 — Payment Method Options
+
+## Goal
+
+Allow API clients to discover which payment methods are available for a given merchant/provider account, and validate that a payment method is enabled before creating a gateway payment.
+
+## Required Data Model
+
+```txt
+po_provider_account_methods
+- id
+- merchant_id
+- provider_account_id
+- provider
+- method
+- method_type
+- provider_method_code
+- display_name
+- status
+- currency
+- min_amount
+- max_amount
+- sort_order
+- public_config
+- provider_metadata
+- metadata
+- created_at
+- updated_at
+```
+
+## Route-Scope Matrix
+
+```txt
+GET  /v1/merchants/:merchantId/provider-accounts/:providerAccountId/methods
+  requires one-of: payment_method:read OR provider_account:read
+
+PUT  /v1/merchants/:merchantId/provider-accounts/:providerAccountId/methods/:method
+  requires one-of: payment_method:write OR provider_account:create
+
+POST /v1/merchants/:merchantId/provider-accounts/:providerAccountId/methods/sync
+  requires one-of: payment_method:sync OR provider_account:create
+
+GET  /v1/merchants/:merchantId/payment-methods
+  requires one-of: payment_method:read OR provider_account:read OR intent:read
+
+GET  /v1/payment-intents/:intentId/payment-options
+  requires one-of: payment_method:read OR intent:read
+```
+
+## New Scopes Added
+
+```txt
+payment_method:read   — list/discover payment methods for a merchant
+payment_method:write  — create or update payment method configuration
+payment_method:sync   — trigger provider-side sync of payment methods
+```
+
+## Gateway Payment Validation
+
+When creating a gateway payment, if payment methods are configured for the provider account, the requested `method` must be active. If no methods are configured, the gateway payment proceeds (backward compatible). If methods are configured but the method is not active, return:
+
+```txt
+422 PAYMENT_METHOD_NOT_CONFIGURED
+```
+
+## Acceptance Criteria
+
+- `po_provider_account_methods` table exists with migration 0007.
+- List, upsert, sync, and options endpoints work.
+- Gateway payment creation validates method against configured methods (fail-closed when configured).
+- Tests cover list, upsert, sync, options, and gateway payment validation.
+- 324/324 tests pass.
+
+---
+
 # Phase S8 — Service Audit Log
 
 ## Goal
@@ -534,7 +609,7 @@ Create an immutable audit trail for service API activity.
 ## Required Data Model
 
 ```txt
-payment_orchestration_audit_logs
+po_audit_logs
 - id
 - request_id
 - client_id
@@ -545,45 +620,90 @@ payment_orchestration_audit_logs
 - resource_type
 - resource_id
 - status
+- http_method
+- path
+- status_code
+- error_code
 - ip_address
 - user_agent
 - metadata
 - created_at
 ```
 
-Initial `actor_type` values:
+`actor_type` values:
 
 ```txt
 api_client
+legacy_client
+internal
 system
 worker
+unknown
 ```
 
-Future dashboard work may add:
+`status` values:
 
 ```txt
-admin_user
+success
+failure
+denied
+error
 ```
 
-Required audited actions:
+## Audited Actions
 
 ```txt
 merchant.create
+merchant.read
 provider_account.create
+provider_account.read
+payment_method.list
+payment_method.upsert
+payment_method.sync
+payment_options.read
 payment_intent.create
+payment_intent.status.read
+payment_intent.refundability.read
 gateway_payment.create
-payment_status.read
 payment.refund
 payment.void
 payment.reconcile
 provider_event.reprocess
+audit_log.read
 ```
+
+## Route-Scope Matrix
+
+```txt
+GET /v1/audit-logs
+  requires: audit_log:read
+  note: internal/system clients only, or merchant-scoped clients with audit_log:read grant
+```
+
+## New Scopes Added
+
+```txt
+audit_log:read — list audit log entries (internal/system clients only or merchant-scoped with explicit grant)
+```
+
+## Security Rules
+
+- Never store API keys, authorization headers, raw secrets, or provider credentials.
+- Never store full request bodies.
+- Never store raw provider responses.
+- Metadata field must be small and safe.
+- Audit writes are best-effort: write errors must not propagate to payment operation callers.
 
 ## Acceptance Criteria
 
-- Every protected route produces an audit log entry.
-- Failed authorization attempts also produce audit logs where possible.
-- Audit logs never store API keys, raw secrets, provider secrets, or authorization headers.
+- `po_audit_logs` table exists with migration 0008.
+- Every protected route produces an audit log entry on success.
+- Authorization denial attempts produce audit log entries.
+- Unexpected errors produce audit log entries.
+- Audit writes are best-effort (non-fatal errors).
+- GET /v1/audit-logs endpoint exists with scope guard.
+- Tests cover audit creation for all major routes.
+- Audit logs never contain secrets.
 
 ---
 
@@ -700,7 +820,7 @@ Kioskoin credential can access only Kioskoin merchant(s).
 After S1-S5, continue with:
 
 ```txt
-S6 -> S7 -> S8
+S6 -> S7 -> S7.5 -> S8
 ```
 
 Then move to future hardening:
