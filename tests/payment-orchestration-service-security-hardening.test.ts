@@ -5,8 +5,10 @@
  *
  * Covers:
  *   Unit tests:
- *     U01: generateCredential/extractCredentialPrefix with dots (not underscore-breakable)
- *     U02: generateCredential with IDs that would break underscore-based parsers
+ *     U01: generateCredential/extractCredentialPrefix basic format validation
+ *     U02: generateCredential rejects underscore in credentialId (P1.2)
+ *     U02b: generateCredential rejects invalid environment inputs (P1.2)
+ *     U02c: generateCredential rejects invalid credentialId inputs (P1.2)
  *     U03: extractCredentialPrefix rejects malformed tokens
  *     U04: assertMerchantAccessWithScope — legacy client bypasses
  *     U05: assertMerchantAccessWithScope — fail closed (503) when accessRepo undefined
@@ -102,7 +104,7 @@ import type {
 // UNIT TESTS — pure function tests, no HTTP server needed
 // ════════════════════════════════════════════════════════════════════
 
-describe('Unit: generateCredential / extractCredentialPrefix (P0.1)', () => {
+describe('Unit: generateCredential / extractCredentialPrefix (P0.1 + P1.2)', () => {
 
   test('U01: generates nf.<env>.<credentialId>.<secret> format', () => {
     const credId = randomUUID().replace(/-/g, '');
@@ -114,14 +116,58 @@ describe('Unit: generateCredential / extractCredentialPrefix (P0.1)', () => {
     assert.equal(extracted, prefix, 'extracted prefix must match stored prefix');
   });
 
-  test('U02: underscore in credentialId does not break parsing', () => {
-    // Old format: nf_{8chars}_{random} — underscores caused ambiguity.
-    // New format: dots — credentialId with underscores is safe because we split on dots.
-    const credId = 'abc_def_ghi_123';
-    const { raw, prefix } = generateCredential('live', credId);
-    const extracted = extractCredentialPrefix(raw);
-    assert.equal(extracted, prefix, 'prefix must survive underscore-containing credentialId');
-    assert.equal(prefix, `nf.live.${credId}`);
+  test('U02: generateCredential rejects underscore in credentialId (P1.2)', () => {
+    // P1.2: underscores are now explicitly rejected in credentialId to eliminate
+    // any ambiguity with the legacy nf_{prefix}_{secret} underscore-delimited format.
+    assert.throws(
+      () => generateCredential('live', 'abc_def_ghi_123'),
+      (err: Error) => err.message.includes('Invalid credentialId'),
+      'underscore in credentialId must be rejected',
+    );
+    assert.throws(
+      () => generateCredential('live', 'cred_01'),
+      (err: Error) => err.message.includes('Invalid credentialId'),
+      'trailing underscore must be rejected',
+    );
+  });
+
+  test('U02b: generateCredential rejects invalid environment inputs (P1.2)', () => {
+    // P1.2: environment must be [a-z0-9-]+ — uppercase, underscores, dots, spaces rejected.
+    assert.throws(() => generateCredential('', 'abc123'), /Invalid environment/);
+    assert.throws(() => generateCredential('LIVE', 'abc123'), /Invalid environment/,
+      'uppercase letters in environment must be rejected');
+    assert.throws(() => generateCredential('live_env', 'abc123'), /Invalid environment/,
+      'underscore in environment must be rejected');
+    assert.throws(() => generateCredential('live.env', 'abc123'), /Invalid environment/,
+      'dot in environment must be rejected');
+    assert.throws(() => generateCredential('live env', 'abc123'), /Invalid environment/,
+      'whitespace in environment must be rejected');
+    assert.throws(() => generateCredential('live/env', 'abc123'), /Invalid environment/,
+      'slash in environment must be rejected');
+    // Valid: lowercase letters, digits, hyphen
+    assert.doesNotThrow(() => generateCredential('live', 'abc123'));
+    assert.doesNotThrow(() => generateCredential('prod-1', 'abc123'));
+    assert.doesNotThrow(() => generateCredential('sandbox', 'abc123'));
+  });
+
+  test('U02c: generateCredential rejects invalid credentialId inputs (P1.2)', () => {
+    // P1.2: credentialId must be [a-zA-Z0-9-]+ — underscores, dots, spaces, slashes rejected.
+    assert.throws(() => generateCredential('live', ''), /Invalid credentialId/,
+      'empty credentialId must be rejected');
+    assert.throws(() => generateCredential('live', 'cred_01'), /Invalid credentialId/,
+      'underscore in credentialId must be rejected');
+    assert.throws(() => generateCredential('live', 'cred.01'), /Invalid credentialId/,
+      'dot in credentialId must be rejected');
+    assert.throws(() => generateCredential('live', 'cred 01'), /Invalid credentialId/,
+      'whitespace in credentialId must be rejected');
+    assert.throws(() => generateCredential('live', 'cred/01'), /Invalid credentialId/,
+      'slash in credentialId must be rejected');
+    // Valid: letters (upper + lower), digits, hyphen
+    assert.doesNotThrow(() => generateCredential('live', 'abc123'));
+    assert.doesNotThrow(() => generateCredential('live', 'ABC123'));
+    assert.doesNotThrow(() => generateCredential('live', 'cred-42'));
+    const credId = randomUUID().replace(/-/g, '');  // UUID without hyphens — all hex digits
+    assert.doesNotThrow(() => generateCredential('live', credId));
   });
 
   test('U03: extractCredentialPrefix rejects tokens without nf. prefix', () => {
@@ -529,7 +575,7 @@ function buildSecurityContainer(opts: TestContainerOptions = {}): {
     return { raw, credentialId };
   }
 
-  return { container, credentialRepo, accessRepo, merchantRepo, seedClient };
+  return { container, credentialRepo, accessRepo, merchantRepo, intentRepo, transactionRepo, seedClient };
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -781,5 +827,166 @@ describe('HTTP: SourceApp enforcement (P0.4)', () => {
     });
     assert.equal(status, 201, 'merchant creation must succeed when sourceApp is absent');
     assert.equal((body as any)?.ok, true);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════
+// P1.4: Stronger HTTP negative tests for grant scopes
+// Tests that global action is allowed but merchant grant lacks action → 403 SCOPE_DENIED
+// Tests that merchant grant has action but global client lacks action → 403 SCOPE_DENIED
+// ════════════════════════════════════════════════════════════════════
+
+describe('HTTP: P1.4 — Grant-scope denial on gateway-payment, reconcile, refund routes', () => {
+  let server: http.Server;
+  let baseUrl: string;
+  let seedClient: ReturnType<typeof buildSecurityContainer>['seedClient'];
+  let accessRepo: InMemoryAccessRepo;
+  let intentRepo: InMemoryIntentRepo;
+  let transactionRepo: InMemoryTransactionRepo;
+  let testMerchantId: string;
+  let testIntentId: string;
+  let testTransactionId: string;
+
+  before(async () => {
+    const built = buildSecurityContainer();
+    server = (await startServer(built.container)).server;
+    baseUrl = `http://localhost:${(server.address() as AddressInfo).port}`;
+    seedClient = built.seedClient;
+    accessRepo = built.accessRepo;
+    intentRepo = built.intentRepo as InMemoryIntentRepo;
+    transactionRepo = built.transactionRepo as InMemoryTransactionRepo;
+
+    // Pre-seed merchant, intent, and transaction so route can find them
+    testMerchantId = randomUUID();
+    testIntentId = randomUUID();
+    testTransactionId = randomUUID();
+
+    await (built.container.repos.merchantRepo as InMemoryMerchantRepo).create({
+      id: testMerchantId,
+      name: 'P1.4 Test Merchant',
+      sourceApp: 'aurapos',
+    });
+
+    await intentRepo.create({
+      id: testIntentId,
+      merchantId: testMerchantId,
+      externalPayableType: 'order',
+      externalPayableId: 'order-p14',
+      amountDue: 10000,
+      currency: 'IDR',
+      sourceApp: 'aurapos',
+    });
+
+    // Seed a succeeded transaction for the refund tests
+    await transactionRepo.create({
+      id: testTransactionId,
+      merchantId: testMerchantId,
+      intentId: testIntentId,
+      provider: 'fake_gateway',
+      method: 'qris',
+      transactionType: 'payment',
+      direction: 'incoming',
+      status: 'succeeded',
+      amount: 10000,
+      currency: 'IDR',
+    });
+  });
+
+  after(() => stopServer(server));
+
+  // ── H15: gateway payment route ───────────────────────────────────────────
+
+  test('H15a: payment:create global allowed, grant lacks payment:create → 403 SCOPE_DENIED (gateway payment)', async () => {
+    const { raw } = seedClient('client-h15a', ['payment:create'], 'aurapos');
+    // Grant exists but only has intent:read — no payment:create in grant
+    accessRepo.grant('client-h15a', testMerchantId, ['intent:read']);
+
+    const { status, body } = await req(baseUrl, `/v1/payment-intents/${testIntentId}/gateway-payments`, {
+      bearer: raw,
+      body: { merchantId: testMerchantId, provider: 'fake_gateway', method: 'qris', amount: 5000 },
+    });
+    assert.equal(status, 403, 'must be denied when grant lacks payment:create');
+    assert.equal(errCode(body), 'SCOPE_DENIED', `expected SCOPE_DENIED, got: ${errCode(body)}`);
+  });
+
+  test('H15b: payment:create in grant but global client lacks payment:create → 403 SCOPE_DENIED (gateway payment)', async () => {
+    const { raw } = seedClient('client-h15b', ['intent:read'], 'aurapos'); // no payment:create globally
+    // Grant has payment:create but global scopes do not
+    accessRepo.grant('client-h15b', testMerchantId, ['payment:create']);
+
+    const { status, body } = await req(baseUrl, `/v1/payment-intents/${testIntentId}/gateway-payments`, {
+      bearer: raw,
+      body: { merchantId: testMerchantId, provider: 'fake_gateway', method: 'qris', amount: 5000 },
+    });
+    // requireScope('payment:create') fires first — 403 from global scope check
+    assert.equal(status, 403, 'must be denied when global client lacks payment:create');
+    assert.equal(errCode(body), 'SCOPE_DENIED', `expected SCOPE_DENIED, got: ${errCode(body)}`);
+  });
+
+  // ── H16: reconcile route ─────────────────────────────────────────────────
+
+  test('H16a: payment:reconcile global allowed, grant lacks payment:reconcile → 403 SCOPE_DENIED (reconcile)', async () => {
+    const { raw } = seedClient('client-h16a', ['payment:reconcile'], 'aurapos');
+    // Grant exists but only has intent:read — missing payment:reconcile
+    accessRepo.grant('client-h16a', testMerchantId, ['intent:read']);
+
+    const { status, body } = await req(baseUrl, `/v1/payment-intents/${testIntentId}/reconcile`, {
+      bearer: raw,
+      body: { merchantId: testMerchantId },
+    });
+    assert.equal(status, 403, 'must be denied when grant lacks payment:reconcile');
+    assert.equal(errCode(body), 'SCOPE_DENIED', `expected SCOPE_DENIED, got: ${errCode(body)}`);
+  });
+
+  test('H16b: payment:reconcile in grant but global lacks payment:reconcile → 403 SCOPE_DENIED (reconcile)', async () => {
+    const { raw } = seedClient('client-h16b', ['intent:read'], 'aurapos'); // no payment:reconcile globally
+    accessRepo.grant('client-h16b', testMerchantId, ['payment:reconcile']);
+
+    const { status, body } = await req(baseUrl, `/v1/payment-intents/${testIntentId}/reconcile`, {
+      bearer: raw,
+      body: { merchantId: testMerchantId },
+    });
+    assert.equal(status, 403, 'must be denied when global client lacks payment:reconcile');
+    assert.equal(errCode(body), 'SCOPE_DENIED', `expected SCOPE_DENIED, got: ${errCode(body)}`);
+  });
+
+  // ── H17: refund route ────────────────────────────────────────────────────
+
+  test('H17a: payment:refund global allowed, grant lacks payment:refund → 403 SCOPE_DENIED (refund)', async () => {
+    const { raw } = seedClient('client-h17a', ['payment:refund'], 'aurapos');
+    // Grant exists but only has intent:read — missing payment:refund
+    accessRepo.grant('client-h17a', testMerchantId, ['intent:read']);
+
+    const { status, body } = await req(baseUrl, `/v1/payment-transactions/${testTransactionId}/refund`, {
+      bearer: raw,
+      body: { merchantId: testMerchantId, amount: 1000, reason: 'test' },
+    });
+    assert.equal(status, 403, 'must be denied when grant lacks payment:refund');
+    assert.equal(errCode(body), 'SCOPE_DENIED', `expected SCOPE_DENIED, got: ${errCode(body)}`);
+  });
+
+  test('H17b: payment:refund in grant but global client lacks payment:refund → 403 SCOPE_DENIED (refund)', async () => {
+    const { raw } = seedClient('client-h17b', ['intent:read'], 'aurapos'); // no payment:refund globally
+    accessRepo.grant('client-h17b', testMerchantId, ['payment:refund']);
+
+    const { status, body } = await req(baseUrl, `/v1/payment-transactions/${testTransactionId}/refund`, {
+      bearer: raw,
+      body: { merchantId: testMerchantId, amount: 1000, reason: 'test' },
+    });
+    // requireScope fires first → 403 from global scope check
+    assert.equal(status, 403, 'must be denied when global client lacks payment:refund');
+    assert.equal(errCode(body), 'SCOPE_DENIED', `expected SCOPE_DENIED, got: ${errCode(body)}`);
+  });
+
+  test('H17c: payment:refund in both global and grant → scope passes (refund reaches business logic)', async () => {
+    const { raw } = seedClient('client-h17c', ['payment:refund'], 'aurapos');
+    accessRepo.grant('client-h17c', testMerchantId, ['payment:refund']);
+
+    const { status } = await req(baseUrl, `/v1/payment-transactions/${testTransactionId}/refund`, {
+      bearer: raw,
+      body: { merchantId: testMerchantId, amount: 1000, reason: 'scope-test' },
+    });
+    // Scope check passes; may fail at business logic (e.g. provider not wired), but NOT 403 SCOPE_DENIED
+    assert.notEqual(status, 403, 'must not be scope-denied when both global and grant have payment:refund');
   });
 });

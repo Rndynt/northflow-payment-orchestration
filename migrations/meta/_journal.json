@@ -6,7 +6,49 @@
       "idx": 0,
       "version": "7",
       "when": 1780782046039,
-      "tag": "0000_po_base_schema",
+      "tag": "0000_po_merchants",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1780782047039,
+      "tag": "0001_po_provider_accounts",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780782048039,
+      "tag": "0002_po_payment_intents",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1780782049039,
+      "tag": "0003_po_payment_transactions",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1780782050039,
+      "tag": "0004_po_idempotency_keys",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1780782051039,
+      "tag": "0005_po_provider_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1780782052039,
+      "tag": "0006_po_service_api_clients",
       "breakpoints": true
     }
   ]
