@@ -1,4 +1,4 @@
 - [S1-S5 per-client auth](s1-s5-auth.md) — per-client credential model implemented; legacy token stays enabled in dev by default; authRepos optional in ServiceContainer for backward-compat.
-- [DB migration approach](db-migration-approach.md) — migrations applied via psql directly; drizzle-kit journal intentionally empty; 0000_overrated_morgan_stark removed (never applied); see roadmap/service/migration-naming-cleanup.md.
+- [DB migration approach](db-migration-approach.md) — Drizzle-only; 7-file prioritized po_* chain; no psql; no ALTER TABLE ADD; run pnpm db:migrate on fresh DB.
 - [apiErrorResponse toJSON](api-error-response-tojson.md) — error field has toJSON() returning the code string; over HTTP body.error is a string, not an object — tests must handle both forms.
-- [Pre-existing test failures](pre-existing-test-failures.md) — AC10 + FakeGateway S16 fail before hardening changes; ConfirmFakeGatewayPayment throws PARTIAL_PAYMENT_NOT_ALLOWED instead of OVERPAYMENT_REJECTED.
+- [Pre-existing test failures](pre-existing-test-failures.md) — AC10 + S16 fixed (allowPartial); dashboard type-check has pre-existing TS2430 + TS5097 errors unrelated to service work.

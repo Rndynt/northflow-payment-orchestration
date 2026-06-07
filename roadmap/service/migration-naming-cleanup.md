@@ -102,5 +102,6 @@ pnpm db:generate
 | Old File | Replaced By |
 |----------|-------------|
 | `0001_payment_orchestration_initial.sql` | Split across 0000–0006 |
-| `0002_refund_void_manual_parity.sql` | Folded into 0003_po_payment_transactions |
+| `0002_refund_void_manual_parity.sql` | Folded into `0003_po_payment_transactions` |
+| `0003_s1_api_client_registry.sql` | Folded into `0006_po_service_api_clients` |
 | `0000_po_base_schema.sql` (giant single dump) | Split across 0000–0006 |
