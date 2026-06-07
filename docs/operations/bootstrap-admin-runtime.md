@@ -26,15 +26,11 @@ pnpm nf:admin <command> [flags]
 
 ## Security Model
 
-### Bootstrap Token
+### Local trusted runtime
 
-Set `PAYMENT_ORCHESTRATION_ADMIN_BOOTSTRAP_TOKEN` to harden direct server access. State-changing commands verify this token is present in the process environment.
+The CLI is a local operator tool, not an HTTP admin API. It is intended to be executed only by an operator with direct access to the service deployment environment, server shell, or trusted CI job.
 
-```bash
-export PAYMENT_ORCHESTRATION_ADMIN_BOOTSTRAP_TOKEN="<random-secure-token>"
-```
-
-If not set, the CLI trusts that having shell access to the server environment is sufficient authorization.
+The CLI does not implement dashboard login, session auth, or RBAC. Those belong to a future dashboard/admin phase.
 
 ### One-time Secrets
 
@@ -45,7 +41,7 @@ Save these values immediately after creation.
 
 ### Audit Trail
 
-All state-changing operations write to the audit log (`admin.*` action names) so they are visible in the dashboard audit log viewer and queryable via `/v1/audit-logs`.
+All state-changing operations write to the audit log (`admin.*` action names) so they are queryable via `/v1/audit-logs`.
 
 ---
 
@@ -74,14 +70,14 @@ nf-admin create-client \
 | `--source-app` | ✓ | Application identifier (e.g. `checkout-service`) |
 | `--environment` | ✓ | `sandbox`, `test`, or `production` |
 | `--client-id` | — | Custom ID (auto-generated if omitted) |
-| `--scopes` | — | Comma-separated authorization scopes |
+| `--scopes` | — | Comma-separated authorization scopes stored on the API client |
 | `--metadata` | — | JSON object with arbitrary metadata |
 
 ---
 
 ### `list-clients`
 
-List all API clients (read-only, no token required).
+List all API clients (read-only).
 
 ```bash
 nf-admin list-clients [--json]
@@ -102,6 +98,8 @@ nf-admin get-client --client-id <clientId> [--json]
 ### `create-credential`
 
 Create a bearer credential for an API client.
+
+Scopes are not stored on individual credentials. Authorization scopes live on the API client and client-to-merchant grants.
 
 ```bash
 nf-admin create-credential \
@@ -295,7 +293,7 @@ Steps performed:
 3. Create merchant (idempotent if source-app + merchant-id match existing)
 4. Grant client access to merchant
 
-On failure at any step, the partial result is returned with `ok: false`. Already-created resources must be cleaned up manually or re-run (idempotent steps will safely skip).
+On failure at any step, the partial result is returned with `ok: false`. Already-created resources must be cleaned up manually or re-run where idempotent.
 
 ---
 
@@ -317,7 +315,7 @@ On failure at any step, the partial result is returned with `ok: false`. Already
 {
   "ok": true,
   "operation": "create-client",
-  "result": { ... }
+  "result": { }
 }
 ```
 
@@ -331,16 +329,6 @@ On failure at any step, the partial result is returned with `ok: false`. Already
     "message": "API client already exists: client_abc",
     "details": null
   }
-}
-```
-
-**Dry-run:**
-```json
-{
-  "ok": true,
-  "operation": "create-client",
-  "dryRun": true,
-  "preview": "..."
 }
 ```
 
