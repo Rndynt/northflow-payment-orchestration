@@ -365,6 +365,7 @@ class InMemoryCredentialRepo2 implements ClientCredentialRepository {
   readonly store: ClientCredentialDTO[] = [];
   async findByPrefix(prefix: string) { return this.store.filter(c => c.credentialPrefix === prefix); }
   async findById(id: string) { return this.store.find(c => c.id === id) ?? null; }
+  async listByClientId(clientId: string) { return this.store.filter(c => c.clientId === clientId); }
   async create(input: CreateClientCredentialInput): Promise<ClientCredentialDTO> {
     const now = new Date();
     const c: ClientCredentialDTO = { id: input.id, clientId: input.clientId, credentialPrefix: input.credentialPrefix, credentialHash: input.credentialHash, status: 'active', expiresAt: null, lastUsedAt: null, createdAt: now, revokedAt: null };

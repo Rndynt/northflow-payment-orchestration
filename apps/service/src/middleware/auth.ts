@@ -19,6 +19,10 @@
  *   - Disabled by default in production.
  *
  * S2: req.auth attached on success with clientId, sourceApp, environment, credentialId, scopes.
+ * S9.2: auth failure rate limiting — IP + credential prefix counters.
+ *   - Invalid auth attempts are counted per-IP and optionally per-prefix.
+ *   - When threshold exceeded, 429 RATE_LIMITED is returned instead of 401.
+ *   - Prefix counting never reveals whether a prefix exists in the database.
  */
 
 import { createHash, randomBytes, timingSafeEqual } from 'crypto';
@@ -26,6 +30,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { apiErrorResponse } from '../routes/utils.ts';
 import type { ClientCredentialRepository, ApiClientRepository } from '@northflow/payment-orchestration-core';
 import type { RequestAuthContext } from '../types/auth.ts';
+import type { RateLimiterStore } from '../rate-limit/rateLimiter.ts';
 
 export function hashCredential(raw: string): string {
   return createHash('sha256').update(raw).digest('hex');
@@ -90,6 +95,18 @@ function extractLegacyToken(req: Request): string | null {
   return null;
 }
 
+/**
+ * resolveClientIp — extracts the best-effort client IP for rate limiting.
+ * Never returns credential or key material.
+ */
+function resolveClientIp(req: Request): string {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string') {
+    return forwarded.split(',')[0]?.trim() ?? req.socket?.remoteAddress ?? 'unknown';
+  }
+  return req.socket?.remoteAddress ?? 'unknown';
+}
+
 export interface AuthMiddlewareOptions {
   serviceToken: string;
   nodeEnv: string;
@@ -98,10 +115,25 @@ export interface AuthMiddlewareOptions {
   credentialRepo?: ClientCredentialRepository;
   /** Optional — when absent only legacy token auth is attempted. */
   clientRepo?: ApiClientRepository;
+  /** S9.2: Optional rate limiter for auth failure tracking. */
+  rateLimiter?: RateLimiterStore;
+  /** S9.2: Whether auth failure rate limiting is enabled. */
+  authFailureRateLimitEnabled?: boolean;
+  /** S9.2: Max failed auth attempts per IP per minute before 429. */
+  authFailurePerMinute?: number;
 }
 
 export function createAuthMiddleware(options: AuthMiddlewareOptions) {
-  const { serviceToken, nodeEnv, legacyEnabled, credentialRepo, clientRepo } = options;
+  const {
+    serviceToken,
+    nodeEnv,
+    legacyEnabled,
+    credentialRepo,
+    clientRepo,
+    rateLimiter,
+    authFailureRateLimitEnabled = false,
+    authFailurePerMinute = 30,
+  } = options;
 
   if (!serviceToken && nodeEnv === 'production' && !legacyEnabled) {
     console.warn('[payment-orchestration-service/auth] No legacy service token configured — per-client credentials required.');
@@ -127,16 +159,22 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
           if (!safeEqual(presented, cred.credentialHash)) continue;
 
           if (cred.status === 'revoked') {
+            await applyAuthFailureRateLimit(req, res, token, prefix, rateLimiter, authFailureRateLimitEnabled, authFailurePerMinute);
+            if (res.headersSent) return;
             res.status(401).json(apiErrorResponse('UNAUTHORIZED', 'Credential has been revoked.'));
             return;
           }
           if (cred.status === 'expired' || (cred.expiresAt && cred.expiresAt < new Date())) {
+            await applyAuthFailureRateLimit(req, res, token, prefix, rateLimiter, authFailureRateLimitEnabled, authFailurePerMinute);
+            if (res.headersSent) return;
             res.status(401).json(apiErrorResponse('UNAUTHORIZED', 'Credential has expired.'));
             return;
           }
 
           const client = await clientRepo.findById(cred.clientId);
           if (!client || client.status !== 'active') {
+            await applyAuthFailureRateLimit(req, res, token, prefix, rateLimiter, authFailureRateLimitEnabled, authFailurePerMinute);
+            if (res.headersSent) return;
             res.status(401).json(apiErrorResponse('UNAUTHORIZED', 'API client is inactive or not found.'));
             return;
           }
@@ -186,8 +224,60 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
       }
     }
 
+    // ── Auth failure — apply rate limiting before returning 401 ───────────────
+    await applyAuthFailureRateLimit(req, res, token, prefix, rateLimiter, authFailureRateLimitEnabled, authFailurePerMinute);
+    if (res.headersSent) return;
+
     res.status(401).json(apiErrorResponse('UNAUTHORIZED', 'Invalid or missing credential.'));
   };
+}
+
+/**
+ * applyAuthFailureRateLimit — S9.2 helper.
+ *
+ * Increments IP-based and (if parseable) prefix-based auth failure counters.
+ * If the IP counter is exceeded, sends a 429 response and returns.
+ * If the response was already sent (res.headersSent), the caller must return.
+ *
+ * Security invariants:
+ *   - Prefix counter is incremented regardless of whether the prefix exists in DB.
+ *   - Callers cannot distinguish "prefix not found" from "rate limited".
+ *   - No sensitive token material is stored in the rate limit key beyond the prefix.
+ */
+async function applyAuthFailureRateLimit(
+  req: Request,
+  res: Response,
+  _token: string,
+  prefix: string | null,
+  rateLimiter: RateLimiterStore | undefined,
+  enabled: boolean,
+  authFailurePerMinute: number,
+): Promise<void> {
+  if (!rateLimiter || !enabled) return;
+
+  const windowMs = 60_000;
+  const ip = resolveClientIp(req);
+
+  try {
+    const ipResult = await rateLimiter.hit(`ip:${ip}:auth_fail`, windowMs, authFailurePerMinute);
+
+    // Also count by prefix (best-effort, don't let it block the response).
+    if (prefix) {
+      void rateLimiter.hit(`credential_prefix:${prefix}:auth_fail`, windowMs, authFailurePerMinute).catch(() => {});
+    }
+
+    if (!ipResult.allowed) {
+      res
+        .status(429)
+        .set('Retry-After', String(ipResult.retryAfterSeconds))
+        .set('X-RateLimit-Limit', String(authFailurePerMinute))
+        .set('X-RateLimit-Remaining', '0')
+        .set('X-RateLimit-Reset', String(Math.floor(ipResult.resetAt.getTime() / 1000)))
+        .json(apiErrorResponse('RATE_LIMITED', 'Too many authentication failures. Please wait before retrying.'));
+    }
+  } catch {
+    // Best-effort: rate limiter failures must not block auth responses.
+  }
 }
 
 /**

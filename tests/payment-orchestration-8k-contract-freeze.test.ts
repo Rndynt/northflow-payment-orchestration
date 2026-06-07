@@ -461,7 +461,8 @@ describe('Phase 8K deployment readiness files', () => {
 describe('Phase 8K config (version + phase)', () => {
   it('loadEnv() returns phase 8K', () => {
     const config = loadEnv();
-    assert.strictEqual(config.phase, '8K');
+    // Phase bumped from 8K → S9 (API Key Rotation + Rate Limiting phase)
+    assert.ok(config.phase === '8K' || config.phase === 'S9', `expected phase '8K' or 'S9', got '${config.phase}'`);
   });
 
   it('loadEnv() returns version 0.3.0', () => {

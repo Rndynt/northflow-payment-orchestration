@@ -20,6 +20,7 @@
  *   PAYMENT_ORCHESTRATION_XENDIT_CALLBACK_TOKEN is reported only as configured/unconfigured.
  *
  * Phase 8K: version bumped to 0.3.0, phase updated to '8K'.
+ * Phase S9.2: rate limit configuration added.
  */
 
 export interface PaymentOrchestrationServiceConfig {
@@ -33,6 +34,11 @@ export interface PaymentOrchestrationServiceConfig {
   xenditBaseUrl?: string;
   xenditCallbackTokenConfigured?: boolean;
   legacyServiceTokenEnabled: boolean;
+  // S9.2: Rate limit configuration
+  rateLimitEnabled: boolean;
+  rateLimitClientGlobalPerMinute: number;
+  rateLimitClientRoutePerMinute: number;
+  rateLimitAuthFailurePerMinute: number;
 }
 
 export function loadEnv(): PaymentOrchestrationServiceConfig {
@@ -54,7 +60,7 @@ export function loadEnv(): PaymentOrchestrationServiceConfig {
     ''
   ).trim();
   const version = '0.3.0';
-  const phase = '8K';
+  const phase = 'S9';
   const xenditSandboxEnabled = process.env['PAYMENT_ORCHESTRATION_XENDIT_SANDBOX_ENABLED'] === 'true';
   const xenditBaseUrl = (process.env['PAYMENT_ORCHESTRATION_XENDIT_BASE_URL'] ?? 'https://api.xendit.co').trim();
   const xenditCallbackTokenConfigured = Boolean(process.env['PAYMENT_ORCHESTRATION_XENDIT_CALLBACK_TOKEN']?.trim());
@@ -64,6 +70,22 @@ export function loadEnv(): PaymentOrchestrationServiceConfig {
   const legacyServiceTokenEnabled = nodeEnv === 'production'
     ? process.env['PAYMENT_ORCHESTRATION_LEGACY_SERVICE_TOKEN_ENABLED'] === 'true'
     : (process.env['PAYMENT_ORCHESTRATION_LEGACY_SERVICE_TOKEN_ENABLED'] ?? 'true') !== 'false';
+
+  // S9.2: Rate limit configuration.
+  // Enabled by default in all environments. Disable explicitly for tests/dev if needed.
+  const rateLimitEnabled = process.env['PAYMENT_ORCHESTRATION_RATE_LIMIT_ENABLED'] !== 'false';
+  const rateLimitClientGlobalPerMinute = parseInt(
+    process.env['PAYMENT_ORCHESTRATION_RATE_LIMIT_CLIENT_GLOBAL_PER_MINUTE'] ?? '600',
+    10,
+  );
+  const rateLimitClientRoutePerMinute = parseInt(
+    process.env['PAYMENT_ORCHESTRATION_RATE_LIMIT_CLIENT_ROUTE_PER_MINUTE'] ?? '120',
+    10,
+  );
+  const rateLimitAuthFailurePerMinute = parseInt(
+    process.env['PAYMENT_ORCHESTRATION_RATE_LIMIT_AUTH_FAILURE_PER_MINUTE'] ?? '30',
+    10,
+  );
 
   return {
     port,
@@ -76,5 +98,9 @@ export function loadEnv(): PaymentOrchestrationServiceConfig {
     xenditBaseUrl,
     xenditCallbackTokenConfigured,
     legacyServiceTokenEnabled,
+    rateLimitEnabled,
+    rateLimitClientGlobalPerMinute,
+    rateLimitClientRoutePerMinute,
+    rateLimitAuthFailurePerMinute,
   };
 }

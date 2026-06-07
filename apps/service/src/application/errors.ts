@@ -8,6 +8,7 @@
  * and KNOWN_CODES together — never orphan a code in one list only.
  *
  * Phase 8F: added refund/void/cancel error codes for parity with legacy AuraPoS.
+ * Phase S9.1-S9.2: added credential lifecycle + rate limit error codes.
  */
 
 export const PAYMENT_ORCHESTRATION_ERROR_CODES = [
@@ -18,6 +19,10 @@ export const PAYMENT_ORCHESTRATION_ERROR_CODES = [
   'INTENT_NOT_FOUND',
   'TRANSACTION_NOT_FOUND',
   'PROVIDER_ACCOUNT_NOT_FOUND',
+  // API Client / Credential
+  'API_CLIENT_NOT_FOUND',
+  'CREDENTIAL_NOT_FOUND',
+  'CREDENTIAL_NOT_OWNED',
   // Provider account errors
   'PROVIDER_ACCOUNT_REQUIRED',
   'PROVIDER_ACCOUNT_DISABLED',
@@ -51,6 +56,8 @@ export const PAYMENT_ORCHESTRATION_ERROR_CODES = [
   'TRANSACTION_NOT_VOIDABLE',
   'PROVIDER_CANCEL_UNSUPPORTED',
   'PROVIDER_CANCEL_FAILED',
+  // S9.2: Rate limiting
+  'RATE_LIMITED',
 ] as const;
 
 export type PaymentOrchestrationErrorCode =
@@ -83,7 +90,9 @@ export function normalizePaymentOrchestrationError(error: unknown): NormalizedPa
       ? maybe.status
       : code === 'INTERNAL_ERROR'
         ? 500
-        : 400;
+        : code === 'RATE_LIMITED'
+          ? 429
+          : 400;
   const message = typeof maybe?.message === 'string' && maybe.message.trim().length > 0
     ? maybe.message
     : 'Payment orchestration error.';

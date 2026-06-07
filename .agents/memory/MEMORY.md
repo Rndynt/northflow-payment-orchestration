@@ -6,3 +6,4 @@
 - [S7.5 payment method options](s7-5-payment-method-options.md) — po_provider_account_methods table, sync/upsert/list/options use cases, method validation in CreateGatewayPayment; tests must use node:test not vitest; DB tests need environment field in PA seed.
 - [S8 Service Audit Log](s8-service-audit-log-validation.md) — fire-and-forget void pattern; InMemoryRepo needs seq counter for ordering; use node:http+fetch not supertest; extract intent ID from POST response not request body.
 - [S7.5 hardening validation](s7-5-hardening-validation.md) — all 8 tasks done; requireAnyScope bug fixed (auth.scopes not auth.scope); 324/324 pass; migration renamed to 0007_po_provider_account_methods.sql.
+- [S9.1-S9.2 key rotation and rate limit validation](s9-1-s9-2-key-rotation-rate-limit-validation.md) — SafeCredentialView omits hash; /rotate before /:credId/revoke ordering; RateLimiterStore interface; auth failure rate limit injected into auth middleware; 386/386 pass.

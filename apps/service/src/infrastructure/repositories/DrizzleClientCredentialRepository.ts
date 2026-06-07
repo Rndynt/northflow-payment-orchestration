@@ -4,7 +4,7 @@
  * Never stores or returns raw credential material — only prefix + hash.
  */
 
-import { eq } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import type { PoDb } from '../db.ts';
 import { poClientCredentials } from '../schema.ts';
 import type { ClientCredentialRepository, CreateClientCredentialInput } from '@northflow/payment-orchestration-core';
@@ -28,6 +28,15 @@ export class DrizzleClientCredentialRepository implements ClientCredentialReposi
       .where(eq(poClientCredentials.id, id))
       .limit(1);
     return rows[0] ? this.#map(rows[0]) : null;
+  }
+
+  async listByClientId(clientId: string): Promise<ClientCredentialDTO[]> {
+    const rows = await this.db
+      .select()
+      .from(poClientCredentials)
+      .where(eq(poClientCredentials.clientId, clientId))
+      .orderBy(desc(poClientCredentials.createdAt));
+    return rows.map((r) => this.#map(r));
   }
 
   async create(input: CreateClientCredentialInput): Promise<ClientCredentialDTO> {

@@ -4,6 +4,8 @@
  * Phase 8D: DB connection, repositories, provider registry, and use cases wired.
  * Phase 8F: RefundPaymentTransaction and VoidPaymentTransaction wired.
  * Phase S1: ApiClient, ClientCredential, ClientMerchantAccess repos added (optional authRepos).
+ * Phase S9.1: CreateCredential, ListCredentials, RevokeCredential, RotateCredential use cases.
+ * Phase S9.2: InMemoryRateLimiterStore wired; rateLimiter available to app.ts and auth middleware.
  *
  * No AuraPoS session/tenant middleware.
  * No POS order domain deps.
@@ -40,6 +42,12 @@ import { ExpireStalePaymentTransactions } from './application/use-cases/ExpireSt
 import { ReprocessProviderEvents } from './application/use-cases/ReprocessProviderEvents.ts';
 import { RefundPaymentTransaction } from './application/use-cases/RefundPaymentTransaction.ts';
 import { VoidPaymentTransaction } from './application/use-cases/VoidPaymentTransaction.ts';
+import { CreateCredential } from './application/use-cases/CreateCredential.ts';
+import { ListCredentials } from './application/use-cases/ListCredentials.ts';
+import { RevokeCredential } from './application/use-cases/RevokeCredential.ts';
+import { RotateCredential } from './application/use-cases/RotateCredential.ts';
+import { InMemoryRateLimiterStore } from './rate-limit/rateLimiter.ts';
+import type { RateLimiterStore } from './rate-limit/rateLimiter.ts';
 import type { CreateMerchantInput, CreateMerchantOutput } from './application/use-cases/CreateMerchant.ts';
 import type { ProviderAccountPaymentMethodRepository, AuditLogRepository } from '@northflow/payment-orchestration-core';
 import { randomUUID } from 'crypto';
@@ -85,6 +93,11 @@ export interface ServiceUseCases {
   voidPaymentTransaction: VoidPaymentTransaction;
   expireStalePaymentTransactions?: ExpireStalePaymentTransactions;
   reprocessProviderEvents?: ReprocessProviderEvents;
+  // S9.1: Credential lifecycle use cases (optional for backward compat with test containers)
+  createCredential?: CreateCredential;
+  listCredentials?: ListCredentials;
+  revokeCredential?: RevokeCredential;
+  rotateCredential?: RotateCredential;
 }
 
 export interface ServiceContainer {
@@ -99,6 +112,8 @@ export interface ServiceContainer {
   providerAccountMethodRepo?: ProviderAccountPaymentMethodRepository;
   /** S8: Audit log repo. Optional for backward compat with in-memory test containers. */
   auditRepo?: AuditLogRepository;
+  /** S9.2: Rate limiter store. Optional for backward compat with in-memory test containers. */
+  rateLimiter?: RateLimiterStore;
 }
 
 export function createContainer(config: PaymentOrchestrationServiceConfig): ServiceContainer {
@@ -136,6 +151,9 @@ export function createContainer(config: PaymentOrchestrationServiceConfig): Serv
 
   // ── S8: Audit log repo ────────────────────────────────────────────────────
   const auditRepo = new DrizzleAuditLogRepository(db);
+
+  // ── S9.2: Rate limiter ────────────────────────────────────────────────────
+  const rateLimiter = new InMemoryRateLimiterStore();
 
   // ── Phase 8E: FakeGateway webhook handler ────────────────────────────────
   const fakeGatewayWebhookHandler = new FakeGatewayWebhookHandler({
@@ -198,9 +216,14 @@ export function createContainer(config: PaymentOrchestrationServiceConfig): Serv
       transactionRepo,
     ),
     reprocessProviderEvents: new ReprocessProviderEvents(providerEventRepo, transactionRepo, intentRepo),
+    // S9.1: Credential lifecycle use cases
+    createCredential: new CreateCredential(apiClientRepo, clientCredentialRepo),
+    listCredentials: new ListCredentials(clientCredentialRepo),
+    revokeCredential: new RevokeCredential(clientCredentialRepo),
+    rotateCredential: new RotateCredential(apiClientRepo, clientCredentialRepo),
   };
 
-  return { config, db, repos, authRepos, providerRegistry, useCases, providerAccountMethodRepo, auditRepo };
+  return { config, db, repos, authRepos, providerRegistry, useCases, providerAccountMethodRepo, auditRepo, rateLimiter };
 }
 
 /**
@@ -263,4 +286,3 @@ export async function createMerchantWithGrantAtomic(
 
   return result;
 }
-

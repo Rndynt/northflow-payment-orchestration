@@ -356,6 +356,7 @@ export interface ApiClientRepository {
 export interface ClientCredentialRepository {
   findByPrefix(prefix: string): Promise<ClientCredentialDTO[]>;
   findById(id: string): Promise<ClientCredentialDTO | null>;
+  listByClientId(clientId: string): Promise<ClientCredentialDTO[]>;
   create(input: CreateClientCredentialInput): Promise<ClientCredentialDTO>;
   revoke(id: string): Promise<void>;
   touchLastUsed(id: string, at: Date): Promise<void>;

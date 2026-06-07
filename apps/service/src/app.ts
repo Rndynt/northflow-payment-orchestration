@@ -8,6 +8,9 @@
  *           Webhook routes bypass service-token auth.
  * Phase S2: Auth middleware updated to per-client credential model.
  *           Legacy shared service token controlled by legacyServiceTokenEnabled config.
+ * Phase S9.1: /v1/api-clients credential management routes registered.
+ * Phase S9.2: Rate limit middleware applied after auth for all /v1 routes.
+ *             Auth failure rate limiting wired into auth middleware.
  */
 
 import express from 'express';
@@ -25,7 +28,9 @@ import {
   createPaymentOptionsRouter,
 } from './routes/paymentMethods.ts';
 import { createAuditLogsRouter } from './routes/auditLogs.ts';
+import { createApiClientCredentialsRouter } from './routes/apiClientCredentials.ts';
 import { createAuthMiddleware } from './middleware/auth.ts';
+import { createRateLimitMiddleware } from './middleware/rateLimit.ts';
 import { errorHandler } from './middleware/errors.ts';
 import { requestContextMiddleware } from './middleware/requestContext.ts';
 import type { ServiceContainer } from './container.ts';
@@ -58,8 +63,26 @@ export function createApp(container: ServiceContainer): express.Application {
     legacyEnabled: container.config.legacyServiceTokenEnabled,
     credentialRepo: container.authRepos?.clientCredentialRepo,
     clientRepo: container.authRepos?.apiClientRepo,
+    // S9.2: Auth failure rate limiting
+    rateLimiter: container.rateLimiter,
+    authFailureRateLimitEnabled: container.config.rateLimitEnabled,
+    authFailurePerMinute: container.config.rateLimitAuthFailurePerMinute,
   });
   app.use('/v1', auth);
+
+  // ── S9.2: Per-client rate limit for all authenticated /v1 routes ───────────
+  if (container.rateLimiter) {
+    const rateLimitMiddleware = createRateLimitMiddleware(
+      container.rateLimiter,
+      {
+        enabled: container.config.rateLimitEnabled,
+        clientGlobalPerMinute: container.config.rateLimitClientGlobalPerMinute,
+        clientRoutePerMinute: container.config.rateLimitClientRoutePerMinute,
+      },
+      container,
+    );
+    app.use('/v1', rateLimitMiddleware);
+  }
 
   // ── API v1 — Merchants ────────────────────────────────────────────────────
   app.use('/v1/merchants', createMerchantsRouter(container));
@@ -96,6 +119,12 @@ export function createApp(container: ServiceContainer): express.Application {
 
   // ── S8: Audit Logs (read API) ─────────────────────────────────────────────
   app.use('/v1/audit-logs', createAuditLogsRouter(container));
+
+  // ── S9.1: API Client Credential Management ────────────────────────────────
+  app.use(
+    '/v1/api-clients/:clientId/credentials',
+    createApiClientCredentialsRouter(container),
+  );
 
   // ── Dev/test only: FakeGateway confirm ───────────────────────────────────
   if (container.config.nodeEnv !== 'production') {

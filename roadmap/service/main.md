@@ -703,11 +703,94 @@ audit_log:read — list audit log entries (internal/system clients only or merch
 
 ---
 
-# Phase S9 — Future Service Protection Hardening
+# Phase S9 — Service Protection Hardening
 
-This phase is part of the service roadmap but must not block S1-S8.
+## S9.1 — API Key Rotation and Credential Lifecycle ✅ COMPLETED
 
-## S9.1 — Signed Requests
+Supersedes the earlier "Signed Requests" placeholder for this slot.  
+Implemented zero-downtime credential rotation and full credential lifecycle management.
+
+### Implemented
+
+```txt
+POST   /v1/api-clients/:clientId/credentials              — create (scope: api_client:credential:create)
+GET    /v1/api-clients/:clientId/credentials              — list   (scope: api_client:credential:read)
+POST   /v1/api-clients/:clientId/credentials/rotate       — rotate (scope: api_client:credential:rotate)
+POST   /v1/api-clients/:clientId/credentials/:id/revoke   — revoke (scope: api_client:credential:revoke)
+```
+
+### Security invariants
+
+```txt
+- rawCredential shown exactly once (create/rotate response) — never stored or logged
+- credentialHash never returned in any API response
+- Revocation is immediate, irreversible, and idempotent
+- Normal clients may only manage their own clientId (403 CREDENTIAL_NOT_OWNED otherwise)
+- All lifecycle events recorded in audit log (no plaintext/hash in metadata)
+- listByClientId added to ClientCredentialRepository interface
+```
+
+### New use cases
+
+```txt
+CreateCredential  — generate nf.<env>.<id>.<secret>, store prefix+hash only
+ListCredentials   — return SafeCredentialView[] (no hash)
+RevokeCredential  — idempotent; rejects cross-client revokes
+RotateCredential  — create new + optionally revoke old (no accidental bulk revoke)
+```
+
+### Tests: 23/23 pass (13 unit + 11 HTTP integration)
+
+### Docs: docs/security/api-key-rotation.md
+
+---
+
+## S9.2 — Rate Limit and Abuse Protection ✅ COMPLETED
+
+Per-client rate limiting via `InMemoryRateLimiterStore` + auth-failure IP rate limiting.
+
+### Implementation
+
+```txt
+RateLimiterStore interface — compatible with future RedisRateLimiterStore
+InMemoryRateLimiterStore  — fixed-window, clock-aligned, pruning on hit
+createRateLimitMiddleware — applied after auth on /v1 routes
+Auth failure tracking     — IP bucket incremented on every 401; 429 replaces 401 at threshold
+```
+
+### Rate limit buckets
+
+```txt
+client:{clientId}:global              — 600 req/min (configurable)
+client:{clientId}:route:{m}:{group}   — 120 req/min (configurable)
+ip:{ip}:auth_fail                     — 30 failures/min (configurable)
+credential_prefix:{prefix}:auth_fail  — same; never reveals prefix existence
+```
+
+### Response headers
+
+```txt
+X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, Retry-After (on 429)
+```
+
+### Configuration env vars
+
+```txt
+PAYMENT_ORCHESTRATION_RATE_LIMIT_ENABLED                  (default: true)
+PAYMENT_ORCHESTRATION_RATE_LIMIT_CLIENT_GLOBAL_PER_MINUTE (default: 600)
+PAYMENT_ORCHESTRATION_RATE_LIMIT_CLIENT_ROUTE_PER_MINUTE  (default: 120)
+PAYMENT_ORCHESTRATION_RATE_LIMIT_AUTH_FAILURE_PER_MINUTE  (default: 30)
+```
+
+### Tests: 12/12 pass (4 unit + 8 HTTP integration)
+
+### Docs: docs/security/rate-limits.md
+
+### Full suite: 386/386 pass (no regressions against S1-S8)
+
+---
+
+## S9.3 — Signed Requests (Future)
 
 Upgrade from bearer-style API key auth to signed requests with:
 
