@@ -3,7 +3,7 @@
  *
  * Usage:
  *   nf-admin enable-payment-method --merchant-id <id> --provider-account-id <paId>
- *                                  --method <method> [--method-type card|bank_transfer|ewallet|qr_code|other]
+ *                                  --method <method> [--method-type qris|virtual_account|ewallet|card|retail_outlet|manual|other]
  *                                  [--display-name <name>] [--currency <code>]
  *                                  [--min-amount <n>] [--max-amount <n>]
  *                                  [--provider-method-code <code>]
@@ -21,7 +21,15 @@ import { AuditAction } from '../../audit/auditActions.ts';
 import { UpsertProviderAccountMethod } from '../../application/use-cases/UpsertProviderAccountMethod.ts';
 import type { ProviderAccountPaymentMethodType } from '@northflow/payment-orchestration-core';
 
-const VALID_METHOD_TYPES: ProviderAccountPaymentMethodType[] = ['card', 'bank_transfer', 'ewallet', 'qr_code', 'other'];
+const VALID_METHOD_TYPES: ProviderAccountPaymentMethodType[] = [
+  'qris',
+  'virtual_account',
+  'ewallet',
+  'card',
+  'retail_outlet',
+  'manual',
+  'other',
+];
 
 export async function runEnablePaymentMethod(
   args: ParsedArgs,
