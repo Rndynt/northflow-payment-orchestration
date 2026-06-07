@@ -87,6 +87,11 @@ export function assertAdminRuntimeAccess(): void {
   return;
 }
 
+/** Compatibility export for the initial S10 CLI wiring. */
+export function assertAdminToken(): void {
+  assertAdminRuntimeAccess();
+}
+
 /**
  * OFFICIAL_SCOPES — complete list of recognized Northflow authorization scopes.
  * Used for validation in grant-merchant and create-client.
