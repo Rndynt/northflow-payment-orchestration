@@ -58,6 +58,20 @@ export const AuditAction = {
   SIGNED_REQUEST_AUTH_SUCCESS:    'signed_request.auth.success',
   SIGNED_REQUEST_AUTH_FAILURE:    'signed_request.auth.failure',
   SIGNED_REQUEST_NONCE_REPLAY:    'signed_request.nonce_replay',
+
+  // S10: Admin CLI operations
+  ADMIN_API_CLIENT_CREATE:        'admin.api_client.create',
+  ADMIN_CLIENT_CREDENTIAL_CREATE: 'admin.client_credential.create',
+  ADMIN_CLIENT_CREDENTIAL_REVOKE: 'admin.client_credential.revoke',
+  ADMIN_CLIENT_SIGNING_KEY_CREATE:'admin.client_signing_key.create',
+  ADMIN_CLIENT_SIGNING_KEY_REVOKE:'admin.client_signing_key.revoke',
+  ADMIN_MERCHANT_CREATE:          'admin.merchant.create',
+  ADMIN_MERCHANT_GRANT:           'admin.merchant.grant',
+  ADMIN_MERCHANT_REVOKE:          'admin.merchant.revoke',
+  ADMIN_PROVIDER_ACCOUNT_CREATE:  'admin.provider_account.create',
+  ADMIN_PAYMENT_METHOD_ENABLE:    'admin.payment_method.enable',
+  ADMIN_PAYMENT_METHOD_DISABLE:   'admin.payment_method.disable',
+  ADMIN_BOOTSTRAP_BUNDLE:         'admin.bootstrap_bundle',
 } as const;
 
 export type AuditActionValue = typeof AuditAction[keyof typeof AuditAction];

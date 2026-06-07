@@ -738,6 +738,52 @@ docs/security/signed-requests-hmac.md
 
 ---
 
+## S10 — Operational Bootstrap & Admin Runtime ✅ COMPLETED
+
+### What was built
+
+`nf-admin` — a CLI tool for operators to bootstrap and manage the service without a running HTTP server or dashboard.
+
+**Script:** `pnpm --filter @northflow/payment-orchestration-service nf:admin <command>`
+
+**15 commands:**
+
+| Command | Description |
+|---|---|
+| `create-client` | Create an API client |
+| `list-clients` | List all API clients (read-only) |
+| `get-client` | Get client with credentials and signing keys (read-only) |
+| `create-credential` | Create bearer credential — rawCredential returned once |
+| `revoke-credential` | Revoke a bearer credential |
+| `create-signing-key` | Create HMAC signing key — rawSigningSecret returned once |
+| `revoke-signing-key` | Revoke an HMAC signing key |
+| `create-merchant` | Create a merchant (idempotent via sourceApp+externalRef) |
+| `grant-merchant` | Grant API client access to a merchant |
+| `revoke-merchant` | Revoke API client access to a merchant |
+| `create-provider-account` | Create a provider account for a merchant |
+| `list-payment-methods` | List payment methods for a provider account (read-only) |
+| `enable-payment-method` | Enable/upsert a payment method |
+| `disable-payment-method` | Disable a payment method |
+| `bootstrap-bundle` | Full bootstrap: client + credential + merchant + grant |
+
+**Global flags:** `--json`, `--dry-run`, `--yes`, `--help`
+
+**Output contract:**
+```json
+{ "ok": true, "operation": "...", "result": {} }
+{ "ok": false, "operation": "...", "error": { "code": "ADMIN_*", "message": "...", "details": null } }
+```
+
+**Error codes:** `ADMIN_INVALID_ARGUMENT`, `ADMIN_CONFIG_MISSING`, `ADMIN_NOT_FOUND`, `ADMIN_ALREADY_EXISTS`, `ADMIN_SCOPE_INVALID`, `ADMIN_CONFIRMATION_REQUIRED`, `ADMIN_OPERATION_FAILED`, `ADMIN_DRY_RUN`
+
+**Security:** rawCredential and rawSigningSecret returned once and never stored in audit metadata or logs. Bootstrap token model via `PAYMENT_ORCHESTRATION_ADMIN_BOOTSTRAP_TOKEN`. All state-changing operations write `admin.*` audit entries (sourceApp=admin-cli).
+
+**Tests:** 41 unit tests (node:test, in-memory repos). Full suite: 485/485 pass.
+
+**Docs:** `docs/operations/bootstrap-admin-runtime.md`
+
+---
+
 ## S9.5 — mTLS / Private Network
 
 Advanced future options:
@@ -757,7 +803,7 @@ Cloudflare mTLS / Zero Trust integration
 Completed service phases:
 
 ```txt
-S1 -> S2 -> S3 -> S4 -> S5 -> S6 -> S7 -> S7.5 -> S8 -> S9.1 -> S9.2 -> S9.3 -> S9.4
+S1 -> S2 -> S3 -> S4 -> S5 -> S6 -> S7 -> S7.5 -> S8 -> S9.1 -> S9.2 -> S9.3 -> S9.4 -> S10
 ```
 
 Next recommended service protection phases:
@@ -773,4 +819,5 @@ S9.1 API key rotation          ✅
 S9.2 rate limit                ✅
 S9.3 network-level protection  ✅
 S9.4 signed requests / HMAC    ✅
+S10  admin bootstrap runtime   ✅
 ```

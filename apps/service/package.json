@@ -10,7 +10,8 @@
     "type-check": "tsc -p tsconfig.json --noEmit",
     "worker": "tsx --tsconfig tsconfig.json src/workers/run.ts",
     "db:migrate": "npx drizzle-kit migrate --config=drizzle.config.ts",
-    "db:generate": "npx drizzle-kit generate --config=drizzle.config.ts"
+    "db:generate": "npx drizzle-kit generate --config=drizzle.config.ts",
+    "nf:admin": "tsx --tsconfig tsconfig.json src/cli/nf-admin.ts"
   },
   "dependencies": {
     "@northflow/payment-orchestration-core": "workspace:*",
