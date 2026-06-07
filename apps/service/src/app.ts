@@ -11,6 +11,14 @@
  * Phase S9.1: /v1/api-clients credential management routes registered.
  * Phase S9.2: Rate limit middleware applied after auth for all /v1 routes.
  *             Auth failure rate limiting wired into auth middleware.
+ * Phase S9.3: Network-level service protection.
+ *             - x-powered-by disabled
+ *             - Security headers middleware (X-Content-Type-Options, X-Frame-Options, etc.)
+ *             - Explicit CORS policy (disabled by default)
+ *             - Trusted proxy config (disabled by default)
+ *             - Configurable JSON body size limit
+ *             - Structured 404 for unknown paths
+ *             - /ready endpoint token protection (optional, via health router)
  */
 
 import express from 'express';
@@ -33,17 +41,38 @@ import { createAuthMiddleware } from './middleware/auth.ts';
 import { createRateLimitMiddleware } from './middleware/rateLimit.ts';
 import { errorHandler } from './middleware/errors.ts';
 import { requestContextMiddleware } from './middleware/requestContext.ts';
+import { securityHeadersMiddleware } from './middleware/securityHeaders.ts';
+import { createCorsMiddleware } from './middleware/cors.ts';
 import type { ServiceContainer } from './container.ts';
 
 export function createApp(container: ServiceContainer): express.Application {
   const app = express();
 
+  // ── B1: Disable x-powered-by ──────────────────────────────────────────────
+  app.disable('x-powered-by');
+
+  // ── B4: Trusted proxy (must be set before any req.ip reads) ──────────────
+  // Default: false. Enable behind Cloudflare/Nginx only — pair with origin firewall.
+  const trustProxy = container.config.trustProxy ?? false;
+  app.set('trust proxy', trustProxy);
+
+  // ── B2: Security headers (global — applied to all responses) ──────────────
+  app.use(securityHeadersMiddleware);
+
+  // ── B3: Explicit CORS policy ──────────────────────────────────────────────
+  // Disabled by default. Backend-to-backend API; browsers must not call it directly.
+  app.use(createCorsMiddleware(
+    container.config.corsEnabled ?? false,
+    container.config.corsAllowedOrigins ?? [],
+  ));
+
   app.use(requestContextMiddleware);
 
-  // ── Body parsing: capture raw bytes for HMAC webhook verification ──────────
+  // ── B5: Body parsing — configurable limit; raw bytes captured for HMAC ────
+  const jsonBodyLimit = container.config.jsonBodyLimit ?? '256kb';
   app.use(
     express.json({
-      limit: '256kb',
+      limit: jsonBodyLimit,
       verify: (req: Request, _res: Response, buf: Buffer) => {
         (req as any).rawBody = buf;
       },
@@ -134,7 +163,8 @@ export function createApp(container: ServiceContainer): express.Application {
   // ── Global error handler ──────────────────────────────────────────────────
   app.use(errorHandler);
 
-  // ── 404 catch-all ────────────────────────────────────────────────────────
+  // ── B6: Structured 404 catch-all for unknown paths ───────────────────────
+  // Preserves service error envelope. No stack traces.
   app.use((_req: Request, res: Response) => {
     res.status(404).json({
       ok: false,

@@ -21,6 +21,7 @@
  *
  * Phase 8K: version bumped to 0.3.0, phase updated to '8K'.
  * Phase S9.2: rate limit configuration added.
+ * Phase S9.3: network-level service protection — CORS, trusted proxy, body limit, ready token.
  */
 
 export interface PaymentOrchestrationServiceConfig {
@@ -39,6 +40,12 @@ export interface PaymentOrchestrationServiceConfig {
   rateLimitClientGlobalPerMinute: number;
   rateLimitClientRoutePerMinute: number;
   rateLimitAuthFailurePerMinute: number;
+  // S9.3: Network-level service protection (optional — safe defaults for test containers)
+  corsEnabled?: boolean;
+  corsAllowedOrigins?: string[];
+  trustProxy?: boolean | string;
+  jsonBodyLimit?: string;
+  readyToken?: string; // NEVER logged, NEVER returned in any response
 }
 
 export function loadEnv(): PaymentOrchestrationServiceConfig {
@@ -87,6 +94,25 @@ export function loadEnv(): PaymentOrchestrationServiceConfig {
     10,
   );
 
+  // S9.3: CORS — disabled by default. Production must not use wildcard origins.
+  const corsEnabled = process.env['PAYMENT_ORCHESTRATION_CORS_ENABLED'] === 'true';
+  const corsAllowedOrigins = (process.env['PAYMENT_ORCHESTRATION_CORS_ALLOWED_ORIGINS'] ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  // S9.3: Trusted proxy — disabled by default. Enable behind Cloudflare/Nginx origin firewall only.
+  const trustProxyRaw = (process.env['PAYMENT_ORCHESTRATION_TRUST_PROXY'] ?? 'false').trim();
+  const trustProxy: boolean | string =
+    trustProxyRaw === 'true' ? true : trustProxyRaw === 'false' ? false : trustProxyRaw;
+
+  // S9.3: JSON body size limit.
+  const jsonBodyLimit = (process.env['PAYMENT_ORCHESTRATION_JSON_BODY_LIMIT'] ?? '256kb').trim();
+
+  // S9.3: Ready endpoint token. If set, /ready requires x-nf-ready-token header.
+  // This value is NEVER logged and NEVER returned in any API response.
+  const readyToken = (process.env['PAYMENT_ORCHESTRATION_READY_TOKEN'] ?? '').trim();
+
   return {
     port,
     nodeEnv,
@@ -102,5 +128,10 @@ export function loadEnv(): PaymentOrchestrationServiceConfig {
     rateLimitClientGlobalPerMinute,
     rateLimitClientRoutePerMinute,
     rateLimitAuthFailurePerMinute,
+    corsEnabled,
+    corsAllowedOrigins,
+    trustProxy,
+    jsonBodyLimit,
+    readyToken,
   };
 }

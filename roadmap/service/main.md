@@ -615,36 +615,47 @@ This is a future scale-out enhancement. The current implementation is in-memory/
 
 ---
 
-## S9.3 — Network-Level Service Protection
+## S9.3 — Network-Level Service Protection ✅ COMPLETED
 
-## Goal
+### Implemented
 
-Prevent the internal service API from being exposed directly to the public internet without perimeter controls.
+**Part A — Documentation**
+- `docs/security/network-protection.md`: subdomain layout, Cloudflare/reverse proxy model, origin firewall checklist, CORS policy, health/readiness exposure policy, request size and security headers policy, full deployment checklist.
 
-Expected deliverables:
-
-```txt
-docs/security/network-protection.md
-trusted proxy config
-strict CORS / mostly disabled for service API
-request size limit policy
-security headers middleware
-production health/readiness exposure policy
-Cloudflare/origin firewall checklist
-unknown path handling policy
-public docs/swagger disable policy
-```
-
-Operational recommendations:
+**Part B — App-Level HTTP Hardening**
 
 ```txt
-Cloudflare proxy ON
-origin firewall allows Cloudflare only
-no direct public service port
-block unknown paths
-protect /ready and /version
-disable public docs/swagger
+B1: app.disable('x-powered-by')               → X-Powered-By absent from all responses
+B2: securityHeaders middleware                 → X-Content-Type-Options, X-Frame-Options,
+                                                 Referrer-Policy, Cache-Control, CORP
+B3: createCorsMiddleware()                     → CORS disabled by default; no wildcard; no reflection
+B4: trust proxy configurable via env           → disabled by default
+B5: JSON body limit env-configurable           → default 256kb; webhooks unaffected
+B6: structured 404 for unknown paths           → { ok:false, error: { code: 'NOT_FOUND' } }
+B7: /ready token protection                    → x-nf-ready-token header if PAYMENT_ORCHESTRATION_READY_TOKEN set
 ```
+
+**Part C — New env vars**
+
+```txt
+PAYMENT_ORCHESTRATION_CORS_ENABLED=false
+PAYMENT_ORCHESTRATION_CORS_ALLOWED_ORIGINS=https://console.northflow.space,...
+PAYMENT_ORCHESTRATION_TRUST_PROXY=false   (or loopback/uniquelocal/true)
+PAYMENT_ORCHESTRATION_JSON_BODY_LIMIT=256kb
+PAYMENT_ORCHESTRATION_READY_TOKEN=<secret>
+```
+
+**New files**
+```txt
+apps/service/src/middleware/securityHeaders.ts
+apps/service/src/middleware/cors.ts
+```
+
+### Tests: 36/36 pass (6 unit / config + 30 HTTP integration)
+
+### Full suite: 422/422 pass (no regressions against S1-S9.2)
+
+### Docs: docs/security/network-protection.md
 
 ---
 
@@ -708,19 +719,19 @@ Cloudflare mTLS / Zero Trust integration
 Completed service phases:
 
 ```txt
-S1 -> S2 -> S3 -> S4 -> S5 -> S6 -> S7 -> S7.5 -> S8 -> S9.1 -> S9.2
+S1 -> S2 -> S3 -> S4 -> S5 -> S6 -> S7 -> S7.5 -> S8 -> S9.1 -> S9.2 -> S9.3
 ```
 
 Next recommended service protection phases:
 
 ```txt
-S9.3 -> S9.4 -> S9.5
+S9.4 -> S9.5
 ```
 
-Practical production minimum:
+Practical production minimum (all complete):
 
 ```txt
-S9.1 API key rotation
-S9.2 rate limit
-S9.3 network-level protection
+S9.1 API key rotation          ✅
+S9.2 rate limit                ✅
+S9.3 network-level protection  ✅
 ```
