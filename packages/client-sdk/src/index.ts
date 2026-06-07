@@ -11,7 +11,7 @@
  * - Typed error classes (PaymentOrchestrationClientError, PaymentOrchestrationNetworkError)
  *   with `details` field for structured validation errors (Phase 8K)
  * - No React dependency
- * - No AuraPoS tenant/session dependency
+ * - No external tenant/session dependency
  * - No @northflow/payment-orchestration-core dependency (self-contained)
  *
  * Usage (S1-S5 per-client credential — recommended):
@@ -25,12 +25,12 @@
  *
  * const intent = await client.createPaymentIntent({
  *   merchantId: 'mer_abc123',
- *   sourceApp: 'transity',
+ *   sourceApp: 'consumer-b',
  *   externalPayableType: 'booking',
  *   externalPayableId: 'booking-456',
  *   currency: 'IDR',
  *   amountDue: 100000,
- *   idempotencyKey: 'transity:tenant-1:booking-456:create-intent',
+ *   idempotencyKey: 'consumer-b:tenant-1:booking-456:create-intent',
  * });
  * ```
  *

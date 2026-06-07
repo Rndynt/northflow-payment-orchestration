@@ -32,7 +32,7 @@
  *
  *   Config env tests (C01-C02):
  *     C01: loadEnv returns signedRequestsMode, maxSkew, nonceTtl
- *     C02: defaults signedRequestsMode to optional
+ *     C02: defaults signedRequestsMode to optional in non-production
  *
  * Run: pnpm test
  */
@@ -507,7 +507,7 @@ function errorCode(body: Record<string, unknown>): string {
 // ════════════════════════════════════════════════════════════════════
 
 describe('S9.4 — Signing Key Lifecycle', () => {
-  const ENC_SECRET = 'test-encryption-secret-32-bytes!!';
+  const ENC_SECRET = 'testencryptsecret32bytesexactkey';
 
   test('L01: POST /signing-keys → 201 with rawSigningSecret (encryption configured)', async () => {
     const built = buildSigningKeyContainer();
@@ -706,7 +706,7 @@ describe('S9.4 — Signing Key Lifecycle', () => {
 // ════════════════════════════════════════════════════════════════════
 
 describe('S9.4 — Signed Request Auth Flow', () => {
-  const ENC_SECRET = 'test-encryption-secret-32-bytes!!';
+  const ENC_SECRET = 'testencryptsecret32bytesexactkey';
 
   async function buildSignedAuthSetup() {
     const originalSecret = process.env['PAYMENT_ORCHESTRATION_SIGNING_KEY_ENCRYPTION_SECRET'];
@@ -926,7 +926,7 @@ describe('S9.4 — Signed Request Auth Flow', () => {
 // ════════════════════════════════════════════════════════════════════
 
 describe('S9.4 — signingSecretProtector encrypt/decrypt', () => {
-  const ENC_SECRET = 'test-encryption-secret-32-bytes!!';
+  const ENC_SECRET = 'testencryptsecret32bytesexactkey';
 
   test('E01: encrypt + decrypt round-trips correctly', () => {
     const originalSecret = process.env['PAYMENT_ORCHESTRATION_SIGNING_KEY_ENCRYPTION_SECRET'];
@@ -1005,7 +1005,7 @@ describe('S9.4 — Config env fields', () => {
     }
   });
 
-  test('C02: defaults signedRequestsMode to optional', () => {
+  test('C02: defaults signedRequestsMode to optional in non-production', () => {
     const original = process.env['PAYMENT_ORCHESTRATION_SIGNED_REQUESTS_MODE'];
     delete process.env['PAYMENT_ORCHESTRATION_SIGNED_REQUESTS_MODE'];
     try {

@@ -1,7 +1,7 @@
 /**
  * CreateMerchant — create or return an existing standalone merchant.
  *
- * Phase 8D use case. No AuraPoS tenant dependency.
+ * Phase 8D use case. No external tenant dependency.
  * If sourceApp + externalRef already exists, returns existing merchant (idempotent).
  */
 

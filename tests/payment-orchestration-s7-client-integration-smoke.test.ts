@@ -7,9 +7,9 @@
  *   S7.1: Seed test clients and merchants (in-memory repos)
  *
  *   S7.2: Positive smoke flows
- *     AuraPoS REST: create merchant → provider account → intent → gateway payment → get status → void
- *     Transity SDK: create merchant → provider account → intent → gateway payment → get status
- *     Kioskoin REST: create merchant → provider account → intent → gateway payment → get status
+ *     Consumer A REST: create merchant → provider account → intent → gateway payment → get status → void
+ *     Consumer B SDK: create merchant → provider account → intent → gateway payment → get status
+ *     Consumer C REST: create merchant → provider account → intent → gateway payment → get status
  *
  *   S7.3: Negative isolation tests
  *     N01-N06: Cross-app merchant access → 403 MERCHANT_ACCESS_DENIED
@@ -422,12 +422,12 @@ function errCode(body: Record<string, unknown>): string {
 // S7.2 — AURAPOS REST POSITIVE SMOKE FLOW
 // ════════════════════════════════════════════════════════════════════
 
-describe('S7.2 AuraPoS REST: positive smoke flow', () => {
+describe('S7.2 Consumer A REST: positive smoke flow', () => {
   let server: http.Server;
   let baseUrl: string;
   let token: string;
   let accessRepo: InMemoryAccessRepo;
-  const clientId = 'client-aurapos-s7';
+  const clientId = 'client-consumer-a-s7';
 
   // Shared state across sequential tests
   let merchantId: string;
@@ -438,7 +438,7 @@ describe('S7.2 AuraPoS REST: positive smoke flow', () => {
   before(async () => {
     const built = buildS7Container();
     accessRepo = built.accessRepo;
-    token = built.seedClient({ id: clientId, sourceApp: 'aurapos', scopes: FULL_SCOPES });
+    token = built.seedClient({ id: clientId, sourceApp: 'consumer-a', scopes: FULL_SCOPES });
     const srv = await startServer(built.container);
     server = srv.server;
     baseUrl = srv.baseUrl;
@@ -450,9 +450,9 @@ describe('S7.2 AuraPoS REST: positive smoke flow', () => {
     const { status, body } = await req(baseUrl, '/v1/merchants', {
       bearer: token,
       body: {
-        name: 'AuraPoS Cafe Test',
-        sourceApp: 'aurapos',
-        externalRef: 'mer_aurapos_cafe_test',
+        name: 'Consumer A Cafe Test',
+        sourceApp: 'consumer-a',
+        externalRef: 'mer_consumer-a_cafe_test',
       },
     });
     assert.equal(status, 201, `expected 201, got ${status}: ${JSON.stringify(body)}`);
@@ -469,7 +469,7 @@ describe('S7.2 AuraPoS REST: positive smoke flow', () => {
       body: {
         provider: 'fake_gateway',
         environment: 'test',
-        providerAccountRef: 'fake-account-aurapos',
+        providerAccountRef: 'fake-account-consumer-a',
       },
     });
     assert.equal(status, 201, `expected 201, got ${status}: ${JSON.stringify(body)}`);
@@ -484,15 +484,15 @@ describe('S7.2 AuraPoS REST: positive smoke flow', () => {
       bearer: token,
       body: {
         merchantId,
-        sourceApp: 'aurapos',
-        externalTenantId: 'tenant-aurapos-001',
+        sourceApp: 'consumer-a',
+        externalTenantId: 'tenant-consumer-a-001',
         externalOutletId: 'outlet-42',
         externalPayableType: 'pos_order',
         externalPayableId: `order-${randomUUID()}`,
         currency: 'IDR',
         amountDue: 75000,
         allowPartial: false,
-        idempotencyKey: `aurapos:tenant-001:${randomUUID()}:create-intent`,
+        idempotencyKey: `consumer-a:tenant-001:${randomUUID()}:create-intent`,
       },
     });
     assert.equal(status, 201, `expected 201, got ${status}: ${JSON.stringify(body)}`);
@@ -513,7 +513,7 @@ describe('S7.2 AuraPoS REST: positive smoke flow', () => {
         method: 'qris',
         amount: 75000,
         providerAccountId,
-        idempotencyKey: `aurapos:tenant-001:${intentId}:gateway-payment:qris`,
+        idempotencyKey: `consumer-a:tenant-001:${intentId}:gateway-payment:qris`,
       },
     });
     assert.equal(status, 201, `expected 201, got ${status}: ${JSON.stringify(body)}`);
@@ -544,7 +544,7 @@ describe('S7.2 AuraPoS REST: positive smoke flow', () => {
       body: {
         merchantId,
         reason: 'order_cancelled',
-        idempotencyKey: `aurapos:tenant-001:${transactionId}:void`,
+        idempotencyKey: `consumer-a:tenant-001:${transactionId}:void`,
       },
     });
     assert.equal(status, 200, `expected 200, got ${status}: ${JSON.stringify(body)}`);
@@ -559,12 +559,12 @@ describe('S7.2 AuraPoS REST: positive smoke flow', () => {
 // S7.2 — TRANSITY SDK POSITIVE SMOKE FLOW
 // ════════════════════════════════════════════════════════════════════
 
-describe('S7.2 Transity SDK: positive smoke flow', () => {
+describe('S7.2 Consumer B SDK: positive smoke flow', () => {
   let server: http.Server;
   let baseUrl: string;
   let sdkClient: PaymentOrchestrationClient;
   let accessRepo: InMemoryAccessRepo;
-  const clientId = 'client-transity-s7';
+  const clientId = 'client-consumer-b-s7';
 
   let merchantId: string;
   let providerAccountId: string;
@@ -573,7 +573,7 @@ describe('S7.2 Transity SDK: positive smoke flow', () => {
   before(async () => {
     const built = buildS7Container();
     accessRepo = built.accessRepo;
-    const token = built.seedClient({ id: clientId, sourceApp: 'transity', scopes: FULL_SCOPES });
+    const token = built.seedClient({ id: clientId, sourceApp: 'consumer-b', scopes: FULL_SCOPES });
     const srv = await startServer(built.container);
     server = srv.server;
     baseUrl = srv.baseUrl;
@@ -584,9 +584,9 @@ describe('S7.2 Transity SDK: positive smoke flow', () => {
 
   test('TR1: SDK creates merchant (201)', async () => {
     const merchant = await sdkClient.createMerchant({
-      name: 'Transity Shuttle Test',
-      sourceApp: 'transity',
-      externalRef: 'mer_transity_shuttle_test',
+      name: 'Consumer B Shuttle Test',
+      sourceApp: 'consumer-b',
+      externalRef: 'mer_consumer-b_shuttle_test',
     });
     assert.ok(merchant.id, 'merchant id must be returned');
     assert.equal(merchant.status, 'active');
@@ -599,7 +599,7 @@ describe('S7.2 Transity SDK: positive smoke flow', () => {
     const pa = await sdkClient.createProviderAccount(merchantId, {
       provider: 'fake_gateway',
       environment: 'test',
-      providerAccountRef: 'fake-account-transity',
+      providerAccountRef: 'fake-account-consumer-b',
     });
     assert.ok(pa.id, 'provider account id must be returned');
     assert.equal(pa.merchantId, merchantId);
@@ -610,13 +610,13 @@ describe('S7.2 Transity SDK: positive smoke flow', () => {
   test('TR3: SDK creates payment intent (201)', async () => {
     const intent = await sdkClient.createPaymentIntent({
       merchantId,
-      sourceApp: 'transity',
-      externalTenantId: 'tenant-transity-001',
+      sourceApp: 'consumer-b',
+      externalTenantId: 'tenant-consumer-b-001',
       externalPayableType: 'booking',
       externalPayableId: `booking-${randomUUID()}`,
       currency: 'IDR',
       amountDue: 150000,
-      idempotencyKey: `transity:tenant-001:${randomUUID()}:create-intent`,
+      idempotencyKey: `consumer-b:tenant-001:${randomUUID()}:create-intent`,
     });
     assert.ok(intent.id, 'intent id must be returned');
     assert.equal(intent.status, 'requires_payment');
@@ -632,7 +632,7 @@ describe('S7.2 Transity SDK: positive smoke flow', () => {
       method: 'qris',
       amount: 150000,
       providerAccountId,
-      idempotencyKey: `transity:tenant-001:${intentId}:gateway-payment:qris`,
+      idempotencyKey: `consumer-b:tenant-001:${intentId}:gateway-payment:qris`,
     });
     assert.ok(result.transaction.id, 'transaction id must be returned');
     assert.equal(result.transaction.status, 'requires_action');
@@ -652,12 +652,12 @@ describe('S7.2 Transity SDK: positive smoke flow', () => {
 // S7.2 — KIOSKOIN REST POSITIVE SMOKE FLOW
 // ════════════════════════════════════════════════════════════════════
 
-describe('S7.2 Kioskoin REST: positive smoke flow', () => {
+describe('S7.2 Consumer C REST: positive smoke flow', () => {
   let server: http.Server;
   let baseUrl: string;
   let token: string;
   let accessRepo: InMemoryAccessRepo;
-  const clientId = 'client-kioskoin-s7';
+  const clientId = 'client-consumer-c-s7';
 
   let merchantId: string;
   let intentId: string;
@@ -665,7 +665,7 @@ describe('S7.2 Kioskoin REST: positive smoke flow', () => {
   before(async () => {
     const built = buildS7Container();
     accessRepo = built.accessRepo;
-    token = built.seedClient({ id: clientId, sourceApp: 'kioskoin', scopes: FULL_SCOPES });
+    token = built.seedClient({ id: clientId, sourceApp: 'consumer-c', scopes: FULL_SCOPES });
     const srv = await startServer(built.container);
     server = srv.server;
     baseUrl = srv.baseUrl;
@@ -677,9 +677,9 @@ describe('S7.2 Kioskoin REST: positive smoke flow', () => {
     const { status, body } = await req(baseUrl, '/v1/merchants', {
       bearer: token,
       body: {
-        name: 'Kioskoin Main Test',
-        sourceApp: 'kioskoin',
-        externalRef: 'mer_kioskoin_main_test',
+        name: 'Consumer C Main Test',
+        sourceApp: 'consumer-c',
+        externalRef: 'mer_consumer-c_main_test',
       },
     });
     assert.equal(status, 201, `expected 201, got ${status}: ${JSON.stringify(body)}`);
@@ -695,7 +695,7 @@ describe('S7.2 Kioskoin REST: positive smoke flow', () => {
       body: {
         provider: 'fake_gateway',
         environment: 'test',
-        providerAccountRef: 'fake-account-kioskoin',
+        providerAccountRef: 'fake-account-consumer-c',
       },
     });
     assert.equal(status, 201, `expected 201, got ${status}: ${JSON.stringify(body)}`);
@@ -709,12 +709,12 @@ describe('S7.2 Kioskoin REST: positive smoke flow', () => {
       bearer: token,
       body: {
         merchantId,
-        sourceApp: 'kioskoin',
+        sourceApp: 'consumer-c',
         externalPayableType: 'otc_order',
         externalPayableId: `otc-${randomUUID()}`,
         currency: 'IDR',
         amountDue: 25000,
-        idempotencyKey: `kioskoin:${randomUUID()}:create-intent`,
+        idempotencyKey: `consumer-c:${randomUUID()}:create-intent`,
       },
     });
     assert.equal(status, 201, `expected 201, got ${status}: ${JSON.stringify(body)}`);
@@ -733,7 +733,7 @@ describe('S7.2 Kioskoin REST: positive smoke flow', () => {
         provider: 'fake_gateway',
         method: 'qris',
         amount: 25000,
-        idempotencyKey: `kioskoin:${intentId}:gateway-payment:qris`,
+        idempotencyKey: `consumer-c:${intentId}:gateway-payment:qris`,
       },
     });
     assert.equal(status, 201, `expected 201, got ${status}: ${JSON.stringify(body)}`);
@@ -764,13 +764,13 @@ describe('S7.3 Negative: cross-app merchant access, sourceApp spoofing, and scop
 
   // 3 client tokens
   let tokenAurapos: string;
-  let tokenTransity: string;
-  let tokenKioskoin: string;
+  let tokenConsumerB: string;
+  let tokenConsumerC: string;
 
   // 3 merchant IDs — one per client
   let merchantAurapos: string;
-  let merchantTransity: string;
-  let merchantKioskoin: string;
+  let merchantConsumerB: string;
+  let merchantConsumerC: string;
 
   // A limited-scope client for scope tests
   let tokenLimitedScope: string;
@@ -780,10 +780,10 @@ describe('S7.3 Negative: cross-app merchant access, sourceApp spoofing, and scop
     const built = buildS7Container();
     const { accessRepo, merchantRepo } = built;
 
-    tokenAurapos = built.seedClient({ id: 'client-aurapos-n', sourceApp: 'aurapos', scopes: FULL_SCOPES });
-    tokenTransity = built.seedClient({ id: 'client-transity-n', sourceApp: 'transity', scopes: FULL_SCOPES });
-    tokenKioskoin = built.seedClient({ id: 'client-kioskoin-n', sourceApp: 'kioskoin', scopes: FULL_SCOPES });
-    tokenLimitedScope = built.seedClient({ id: 'client-limited-n', sourceApp: 'aurapos', scopes: LIMITED_SCOPES });
+    tokenAurapos = built.seedClient({ id: 'client-consumer-a-n', sourceApp: 'consumer-a', scopes: FULL_SCOPES });
+    tokenConsumerB = built.seedClient({ id: 'client-consumer-b-n', sourceApp: 'consumer-b', scopes: FULL_SCOPES });
+    tokenConsumerC = built.seedClient({ id: 'client-consumer-c-n', sourceApp: 'consumer-c', scopes: FULL_SCOPES });
+    tokenLimitedScope = built.seedClient({ id: 'client-limited-n', sourceApp: 'consumer-a', scopes: LIMITED_SCOPES });
 
     const srv = await startServer(built.container);
     server = srv.server;
@@ -791,24 +791,24 @@ describe('S7.3 Negative: cross-app merchant access, sourceApp spoofing, and scop
 
     // Seed merchants directly in the in-memory store
     const now = new Date();
-    merchantAurapos = 'mer-aurapos-smoke';
-    merchantTransity = 'mer-transity-smoke';
-    merchantKioskoin = 'mer-kioskoin-smoke';
+    merchantAurapos = 'mer-consumer-a-smoke';
+    merchantConsumerB = 'mer-consumer-b-smoke';
+    merchantConsumerC = 'mer-consumer-c-smoke';
     merchantLimitedScope = 'mer-limited-smoke';
 
     for (const [id, app] of [
-      [merchantAurapos, 'aurapos'],
-      [merchantTransity, 'transity'],
-      [merchantKioskoin, 'kioskoin'],
-      [merchantLimitedScope, 'aurapos'],
+      [merchantAurapos, 'consumer-a'],
+      [merchantConsumerB, 'consumer-b'],
+      [merchantConsumerC, 'consumer-c'],
+      [merchantLimitedScope, 'consumer-a'],
     ] as const) {
       await merchantRepo.create({ id, name: `Smoke ${id}`, sourceApp: app });
     }
 
     // Grant each client access ONLY to its own merchant
-    accessRepo.grant('client-aurapos-n', merchantAurapos, FULL_SCOPES);
-    accessRepo.grant('client-transity-n', merchantTransity, FULL_SCOPES);
-    accessRepo.grant('client-kioskoin-n', merchantKioskoin, FULL_SCOPES);
+    accessRepo.grant('client-consumer-a-n', merchantAurapos, FULL_SCOPES);
+    accessRepo.grant('client-consumer-b-n', merchantConsumerB, FULL_SCOPES);
+    accessRepo.grant('client-consumer-c-n', merchantConsumerC, FULL_SCOPES);
     // Limited-scope client has access to its merchant but with limited scopes (no refund/void/pa:create)
     accessRepo.grant('client-limited-n', merchantLimitedScope, FULL_SCOPES);
   });
@@ -817,49 +817,49 @@ describe('S7.3 Negative: cross-app merchant access, sourceApp spoofing, and scop
 
   // ── N01-N06: Cross-app merchant access ───────────────────────────
 
-  test('N01: AuraPoS credential → Transity merchant → 403 MERCHANT_ACCESS_DENIED', async () => {
-    const { status, body } = await req(baseUrl, '/v1/merchants/' + merchantTransity, {
+  test('N01: Consumer A credential → Consumer B merchant → 403 MERCHANT_ACCESS_DENIED', async () => {
+    const { status, body } = await req(baseUrl, '/v1/merchants/' + merchantConsumerB, {
       bearer: tokenAurapos,
     });
     assert.equal(status, 403);
     assert.equal(errCode(body), 'MERCHANT_ACCESS_DENIED');
   });
 
-  test('N02: AuraPoS credential → Kioskoin merchant → 403 MERCHANT_ACCESS_DENIED', async () => {
-    const { status, body } = await req(baseUrl, '/v1/merchants/' + merchantKioskoin, {
+  test('N02: Consumer A credential → Consumer C merchant → 403 MERCHANT_ACCESS_DENIED', async () => {
+    const { status, body } = await req(baseUrl, '/v1/merchants/' + merchantConsumerC, {
       bearer: tokenAurapos,
     });
     assert.equal(status, 403);
     assert.equal(errCode(body), 'MERCHANT_ACCESS_DENIED');
   });
 
-  test('N03: Transity credential → AuraPoS merchant → 403 MERCHANT_ACCESS_DENIED', async () => {
+  test('N03: Consumer B credential → Consumer A merchant → 403 MERCHANT_ACCESS_DENIED', async () => {
     const { status, body } = await req(baseUrl, '/v1/merchants/' + merchantAurapos, {
-      bearer: tokenTransity,
+      bearer: tokenConsumerB,
     });
     assert.equal(status, 403);
     assert.equal(errCode(body), 'MERCHANT_ACCESS_DENIED');
   });
 
-  test('N04: Transity credential → Kioskoin merchant → 403 MERCHANT_ACCESS_DENIED', async () => {
-    const { status, body } = await req(baseUrl, '/v1/merchants/' + merchantKioskoin, {
-      bearer: tokenTransity,
+  test('N04: Consumer B credential → Consumer C merchant → 403 MERCHANT_ACCESS_DENIED', async () => {
+    const { status, body } = await req(baseUrl, '/v1/merchants/' + merchantConsumerC, {
+      bearer: tokenConsumerB,
     });
     assert.equal(status, 403);
     assert.equal(errCode(body), 'MERCHANT_ACCESS_DENIED');
   });
 
-  test('N05: Kioskoin credential → AuraPoS merchant → 403 MERCHANT_ACCESS_DENIED', async () => {
+  test('N05: Consumer C credential → Consumer A merchant → 403 MERCHANT_ACCESS_DENIED', async () => {
     const { status, body } = await req(baseUrl, '/v1/merchants/' + merchantAurapos, {
-      bearer: tokenKioskoin,
+      bearer: tokenConsumerC,
     });
     assert.equal(status, 403);
     assert.equal(errCode(body), 'MERCHANT_ACCESS_DENIED');
   });
 
-  test('N06: Kioskoin credential → Transity merchant → 403 MERCHANT_ACCESS_DENIED', async () => {
-    const { status, body } = await req(baseUrl, '/v1/merchants/' + merchantTransity, {
-      bearer: tokenKioskoin,
+  test('N06: Consumer C credential → Consumer B merchant → 403 MERCHANT_ACCESS_DENIED', async () => {
+    const { status, body } = await req(baseUrl, '/v1/merchants/' + merchantConsumerB, {
+      bearer: tokenConsumerC,
     });
     assert.equal(status, 403);
     assert.equal(errCode(body), 'MERCHANT_ACCESS_DENIED');
@@ -867,12 +867,12 @@ describe('S7.3 Negative: cross-app merchant access, sourceApp spoofing, and scop
 
   // ── N07-N09: sourceApp spoofing ───────────────────────────────────
 
-  test('N07: AuraPoS credential sends sourceApp=transity → 403 SOURCE_APP_MISMATCH', async () => {
+  test('N07: Consumer A credential sends sourceApp=consumer-b → 403 SOURCE_APP_MISMATCH', async () => {
     const { status, body } = await req(baseUrl, '/v1/payment-intents', {
       bearer: tokenAurapos,
       body: {
         merchantId: merchantAurapos,
-        sourceApp: 'transity',          // spoofed — credential is aurapos
+        sourceApp: 'consumer-b',          // spoofed — credential is consumer-a
         externalPayableType: 'pos_order',
         externalPayableId: `order-spoof-${randomUUID()}`,
         currency: 'IDR',
@@ -883,12 +883,12 @@ describe('S7.3 Negative: cross-app merchant access, sourceApp spoofing, and scop
     assert.equal(errCode(body), 'SOURCE_APP_MISMATCH');
   });
 
-  test('N08: Transity credential sends sourceApp=kioskoin → 403 SOURCE_APP_MISMATCH', async () => {
+  test('N08: Consumer B credential sends sourceApp=consumer-c → 403 SOURCE_APP_MISMATCH', async () => {
     const { status, body } = await req(baseUrl, '/v1/payment-intents', {
-      bearer: tokenTransity,
+      bearer: tokenConsumerB,
       body: {
-        merchantId: merchantTransity,
-        sourceApp: 'kioskoin',           // spoofed — credential is transity
+        merchantId: merchantConsumerB,
+        sourceApp: 'consumer-c',           // spoofed — credential is consumer-b
         externalPayableType: 'booking',
         externalPayableId: `booking-spoof-${randomUUID()}`,
         currency: 'IDR',
@@ -899,12 +899,12 @@ describe('S7.3 Negative: cross-app merchant access, sourceApp spoofing, and scop
     assert.equal(errCode(body), 'SOURCE_APP_MISMATCH');
   });
 
-  test('N09: Kioskoin credential sends sourceApp=aurapos → 403 SOURCE_APP_MISMATCH', async () => {
+  test('N09: Consumer C credential sends sourceApp=consumer-a → 403 SOURCE_APP_MISMATCH', async () => {
     const { status, body } = await req(baseUrl, '/v1/payment-intents', {
-      bearer: tokenKioskoin,
+      bearer: tokenConsumerC,
       body: {
-        merchantId: merchantKioskoin,
-        sourceApp: 'aurapos',            // spoofed — credential is kioskoin
+        merchantId: merchantConsumerC,
+        sourceApp: 'consumer-a',            // spoofed — credential is consumer-c
         externalPayableType: 'otc_order',
         externalPayableId: `otc-spoof-${randomUUID()}`,
         currency: 'IDR',
@@ -980,7 +980,7 @@ describe('S7.4 REST vs SDK parity', () => {
         apiKey: 'nf.live.testcred.fakesecret',
       });
       // Fire-and-forget — we just need the headers captured
-      client.createMerchant({ name: 'Test', sourceApp: 'transity' }).catch(() => {});
+      client.createMerchant({ name: 'Test', sourceApp: 'consumer-b' }).catch(() => {});
       // Verify header immediately after call is made
       assert.equal(calls.length, 1);
       const headers = calls[0]!.init.headers as Record<string, string>;
@@ -1052,12 +1052,12 @@ describe('S7.4 REST vs SDK parity', () => {
         externalPayableId: 'b-1',
         currency: 'IDR',
         amountDue: 100000,
-        idempotencyKey: 'transity:t1:b-1:create-intent',
+        idempotencyKey: 'consumer-b:t1:b-1:create-intent',
       }).catch(() => {});
       assert.equal(calls.length, 1);
       const sentBody = JSON.parse(calls[0]!.init.body as string);
       assert.equal(sentBody.merchantId, 'mer-abc', 'merchantId must be injected from config');
-      assert.equal(sentBody.idempotencyKey, 'transity:t1:b-1:create-intent', 'idempotencyKey must pass through');
+      assert.equal(sentBody.idempotencyKey, 'consumer-b:t1:b-1:create-intent', 'idempotencyKey must pass through');
     } finally {
       globalThis.fetch = savedFetch;
     }
@@ -1164,12 +1164,12 @@ describe('S7.4 REST vs SDK parity', () => {
       const client = new PaymentOrchestrationClient({
         baseUrl: 'http://localhost:3001',
         apiKey: 'nf.live.testcred.fakesecret',
-        sourceApp: 'transity',
+        sourceApp: 'consumer-b',
       });
-      client.createMerchant({ name: 'Test', sourceApp: 'transity' }).catch(() => {});
+      client.createMerchant({ name: 'Test', sourceApp: 'consumer-b' }).catch(() => {});
       assert.equal(calls.length, 1);
       const sentBody = JSON.parse(calls[0]!.init.body as string);
-      assert.equal(sentBody.sourceApp, 'transity',
+      assert.equal(sentBody.sourceApp, 'consumer-b',
         'sourceApp must pass through in the body — same semantics as REST');
     } finally {
       globalThis.fetch = savedFetch;

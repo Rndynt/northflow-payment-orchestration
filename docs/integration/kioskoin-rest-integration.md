@@ -1,6 +1,6 @@
-# Kioskoin — REST Integration Guide
+# Consumer C — REST Integration Guide
 
-> Consumer: Kioskoin backend  
+> Consumer: Consumer C backend  
 > Method: Direct REST API  
 > See also: [Client Integration Contract](client-integration-contract.md)
 
@@ -8,25 +8,25 @@
 
 ## Identity Mapping
 
-| Kioskoin concept  | Northflow concept      |
+| Consumer C concept  | Northflow concept      |
 |-------------------|------------------------|
-| Kioskoin merchant | Merchant               |
+| Consumer C merchant | Merchant               |
 | OTC order         | Payment intent         |
-| Kioskoin backend  | API client credential  |
+| Consumer C backend  | API client credential  |
 
-Kioskoin must store the Northflow `merchantId` alongside each merchant record.
+Consumer C must store the Northflow `merchantId` alongside each merchant record.
 
 ---
 
 ## Credential Setup
 
-Kioskoin backend receives one per-client credential per environment:
+Consumer C backend receives one per-client credential per environment:
 
 ```
 nf.live.<credentialId>.<secret>
 ```
 
-Store this as a secret in the Kioskoin backend. Never log or expose it.
+Store this as a secret in the Consumer C backend. Never log or expose it.
 
 ---
 
@@ -35,23 +35,23 @@ Store this as a secret in the Kioskoin backend. Never log or expose it.
 All API requests must include:
 
 ```
-Authorization: Bearer nf.live.<kioskoin-credential>
+Authorization: Bearer nf.live.<consumer-c-credential>
 ```
 
 ---
 
 ## Merchant Onboarding
 
-Create a Northflow merchant when a new Kioskoin merchant is onboarded.
+Create a Northflow merchant when a new Consumer C merchant is onboarded.
 
 ```http
 POST /v1/merchants
-Authorization: Bearer nf.live.<kioskoin-credential>
+Authorization: Bearer nf.live.<consumer-c-credential>
 Content-Type: application/json
 
 {
   "name": "Warung Serba Ada",
-  "sourceApp": "kioskoin",
+  "sourceApp": "consumer-c",
   "externalRef": "merchant-kiosk-001"
 }
 ```
@@ -71,7 +71,7 @@ Response `201 Created`:
 }
 ```
 
-Store `mer_ksk001` as `northflow_merchant_id` on the Kioskoin merchant record.
+Store `mer_ksk001` as `northflow_merchant_id` on the Consumer C merchant record.
 
 ---
 
@@ -79,14 +79,14 @@ Store `mer_ksk001` as `northflow_merchant_id` on the Kioskoin merchant record.
 
 ```http
 POST /v1/merchants/mer_ksk001/provider-accounts
-Authorization: Bearer nf.live.<kioskoin-credential>
+Authorization: Bearer nf.live.<consumer-c-credential>
 Content-Type: application/json
 
 {
   "provider": "xendit_sandbox",
   "environment": "sandbox",
   "providerAccountRef": "xendit-account-id-here",
-  "credentialsRef": "secret-store://xendit/kioskoin/api-key"
+  "credentialsRef": "secret-store://xendit/consumer-c/api-key"
 }
 ```
 
@@ -115,22 +115,22 @@ Create a payment intent when an OTC order requires payment.
 
 ```http
 POST /v1/payment-intents
-Authorization: Bearer nf.live.<kioskoin-credential>
+Authorization: Bearer nf.live.<consumer-c-credential>
 Content-Type: application/json
 
 {
   "merchantId": "mer_ksk001",
-  "sourceApp": "kioskoin",
+  "sourceApp": "consumer-c",
   "externalPayableType": "otc_order",
   "externalPayableId": "otc-order-555",
   "currency": "IDR",
   "amountDue": 25000,
   "allowPartial": false,
-  "idempotencyKey": "kioskoin:otc-order-555:create-intent"
+  "idempotencyKey": "consumer-c:otc-order-555:create-intent"
 }
 ```
 
-Note: Kioskoin OTC orders do not require `externalTenantId` or `externalOutletId`.
+Note: Consumer C OTC orders do not require `externalTenantId` or `externalOutletId`.
 
 Response `201 Created`:
 
@@ -162,7 +162,7 @@ Response `201 Created`:
 
 ```http
 POST /v1/payment-intents/intent_ksk456/gateway-payments
-Authorization: Bearer nf.live.<kioskoin-credential>
+Authorization: Bearer nf.live.<consumer-c-credential>
 Content-Type: application/json
 
 {
@@ -171,7 +171,7 @@ Content-Type: application/json
   "method": "qris",
   "amount": 25000,
   "providerAccountId": "pa_ksk789",
-  "idempotencyKey": "kioskoin:otc-order-555:gateway-payment:qris"
+  "idempotencyKey": "consumer-c:otc-order-555:gateway-payment:qris"
 }
 ```
 
@@ -206,7 +206,7 @@ Response `201 Created`:
 
 ```http
 GET /v1/payment-intents/intent_ksk456/status?merchantId=mer_ksk001
-Authorization: Bearer nf.live.<kioskoin-credential>
+Authorization: Bearer nf.live.<consumer-c-credential>
 ```
 
 Response `200 OK`:
@@ -226,7 +226,7 @@ Response `200 OK`:
 
 ---
 
-## Required Client Scopes for Kioskoin
+## Required Client Scopes for Consumer C
 
 ```
 merchant:create
@@ -242,11 +242,11 @@ payment:create
 
 ## Error Handling
 
-| Code                    | Kioskoin action                              |
+| Code                    | Consumer C action                              |
 |-------------------------|----------------------------------------------|
 | `UNAUTHORIZED`          | Rotate credential; alert ops                 |
 | `MERCHANT_ACCESS_DENIED`| Check merchant → northflowMerchantId mapping |
-| `SOURCE_APP_MISMATCH`   | Bug in integration — sourceApp must be `kioskoin` |
+| `SOURCE_APP_MISMATCH`   | Bug in integration — sourceApp must be `consumer-c` |
 | `SCOPE_DENIED`          | Credential missing scope; contact Northflow ops |
 | `VALIDATION_ERROR`      | Fix request body — check `details` field     |
 | `IDEMPOTENCY_CONFLICT`  | Different request sent with same key — check logic |

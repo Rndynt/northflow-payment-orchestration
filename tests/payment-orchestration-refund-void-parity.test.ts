@@ -4,7 +4,7 @@
  * Phase 8F — Refund, Void, and Manual Provider Parity Tests
  *
  * Validates that the standalone northflow payment-orchestration-service has feature
- * parity with the legacy AuraPoS RefundPaymentTransaction and VoidPaymentTransaction
+ * parity with the legacy Consumer A RefundPaymentTransaction and VoidPaymentTransaction
  * use cases, and that StandaloneManualProvider behaves correctly.
  *
  * Strategy: in-memory repos + real use-case classes (no HTTP server, no DB).

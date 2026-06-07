@@ -1,6 +1,6 @@
-# Transity — SDK Integration Guide
+# Consumer B — SDK Integration Guide
 
-> Consumer: Transity backend  
+> Consumer: Consumer B backend  
 > Method: `@northflow/payment-orchestration-client-sdk`  
 > See also: [Client Integration Contract](client-integration-contract.md)
 
@@ -8,13 +8,13 @@
 
 ## Identity Mapping
 
-| Transity concept  | Northflow concept      |
+| Consumer B concept  | Northflow concept      |
 |-------------------|------------------------|
-| Transity tenant   | Merchant               |
+| Consumer B tenant   | Merchant               |
 | Booking / trip    | Payment intent         |
-| Transity backend  | API client credential  |
+| Consumer B backend  | API client credential  |
 
-Transity must store the Northflow `merchantId` alongside each tenant record.
+Consumer B must store the Northflow `merchantId` alongside each tenant record.
 
 ---
 
@@ -60,11 +60,11 @@ const northflow = new PaymentOrchestrationClient({
 const merchant = await northflow.createMerchant({
   name: 'Shuttle Express',
   legalName: 'PT Shuttle Express Indonesia',
-  sourceApp: 'transity',
+  sourceApp: 'consumer-b',
   externalRef: 'tenant-shuttle-express',
 });
 
-// Persist merchant.id alongside the Transity tenant
+// Persist merchant.id alongside the Consumer B tenant
 await db.tenant.update({ northflowMerchantId: merchant.id });
 ```
 
@@ -77,7 +77,7 @@ const providerAccount = await northflow.createProviderAccount(merchant.id, {
   provider: 'xendit_sandbox',
   environment: 'sandbox',
   providerAccountRef: 'xendit-account-id-here',
-  credentialsRef: 'secret-store://xendit/transity/api-key',
+  credentialsRef: 'secret-store://xendit/consumer-b/api-key',
 });
 ```
 
@@ -90,13 +90,13 @@ const providerAccount = await northflow.createProviderAccount(merchant.id, {
 ```ts
 const intent = await northflow.createPaymentIntent({
   merchantId: tenant.northflowMerchantId,
-  sourceApp: 'transity',
+  sourceApp: 'consumer-b',
   externalTenantId: tenant.id,
   externalPayableType: 'booking',
   externalPayableId: booking.id,
   currency: 'IDR',
   amountDue: booking.totalFare,
-  idempotencyKey: `transity:${tenant.id}:${booking.id}:create-intent`,
+  idempotencyKey: `consumer-b:${tenant.id}:${booking.id}:create-intent`,
 });
 ```
 
@@ -113,7 +113,7 @@ const payment = await northflow.createGatewayPayment(intent.id, {
   method: 'qris',
   amount: booking.totalFare,
   providerAccountId: providerAccount.id,
-  idempotencyKey: `transity:${tenant.id}:${booking.id}:gateway-payment:qris`,
+  idempotencyKey: `consumer-b:${tenant.id}:${booking.id}:gateway-payment:qris`,
 });
 
 // Present to customer
@@ -194,7 +194,7 @@ The SDK sends the same `Authorization: Bearer` header, the same `merchantId` / `
 
 ---
 
-## Required Client Scopes for Transity
+## Required Client Scopes for Consumer B
 
 ```
 merchant:create
@@ -206,4 +206,4 @@ intent:read
 payment:create
 ```
 
-Transity does not require `payment:refund` or `payment:void` unless it handles refunds directly.
+Consumer B does not require `payment:refund` or `payment:void` unless it handles refunds directly.

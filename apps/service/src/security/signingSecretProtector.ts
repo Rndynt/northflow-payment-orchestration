@@ -18,7 +18,7 @@
  *   <keyVersion>:<base64url(iv)>:<base64url(ciphertextWithAuthTag)>
  *
  * AES-256-GCM:
- *   - Key: 32 bytes derived from the env secret (treated as base64 or raw UTF-8 padded to 32 bytes).
+ *   - Key: 32 bytes derived from the env secret — must decode to exactly 32 bytes (base64) or be exactly 32 UTF-8 bytes. No padding or truncation.
  *   - IV: 12 random bytes per encryption.
  *   - Auth tag: 16 bytes appended to ciphertext.
  *
@@ -38,29 +38,40 @@ const AUTH_TAG_LENGTH = 16;
 
 /**
  * deriveKey — derive a 32-byte Buffer from the env secret.
- * If the value is valid base64 and decodes to >= 32 bytes, the first 32 bytes are used.
- * Otherwise the raw UTF-8 bytes are used, zero-padded to 32 bytes.
- * This is intentionally simple — the secret itself should be 32 random bytes in base64.
+ *
+ * Accepts exactly one of:
+ *   - A base64-encoded value that decodes to exactly 32 bytes.
+ *   - A raw UTF-8 string that is exactly 32 bytes long.
+ *
+ * Throws on any other input. Silent padding and truncation are forbidden —
+ * they would allow weak or unintended key material to silently produce a
+ * different effective key, breaking decryption correctness and key hygiene.
  */
 function deriveKey(secret: string): Buffer {
-  let buf: Buffer;
-  try {
-    const decoded = Buffer.from(secret, 'base64');
-    buf = decoded.length >= 32 ? decoded.subarray(0, 32) : Buffer.from(secret, 'utf8');
-  } catch {
-    buf = Buffer.from(secret, 'utf8');
+  // Try base64 decode first — must produce exactly 32 bytes.
+  const b64decoded = Buffer.from(secret, 'base64');
+  if (b64decoded.length === 32) {
+    return b64decoded;
   }
-  if (buf.length === 32) return buf;
-  const key = Buffer.alloc(32, 0);
-  buf.copy(key, 0, 0, Math.min(buf.length, 32));
-  return key;
+
+  // Fall back to raw UTF-8 — must be exactly 32 bytes.
+  const utf8buf = Buffer.from(secret, 'utf8');
+  if (utf8buf.length === 32) {
+    return utf8buf;
+  }
+
+  throw new Error(
+    '[signingSecretProtector] Encryption key must be exactly 32 bytes. ' +
+    'Provide a base64-encoded 32-byte value or a 32-character ASCII/UTF-8 string. ' +
+    'Silent padding and truncation are not allowed.',
+  );
 }
 
 function getEncryptionSecret(): string {
   const secret = process.env['PAYMENT_ORCHESTRATION_SIGNING_KEY_ENCRYPTION_SECRET'];
-  if (!secret || secret.trim().length < 16) {
+  if (!secret || secret.trim().length < 32) {
     throw new Error(
-      '[signingSecretProtector] PAYMENT_ORCHESTRATION_SIGNING_KEY_ENCRYPTION_SECRET is not configured or too short. ' +
+      '[signingSecretProtector] PAYMENT_ORCHESTRATION_SIGNING_KEY_ENCRYPTION_SECRET is not configured or too short (minimum 32 characters). ' +
       'Signing key creation is disabled until this secret is set.',
     );
   }
@@ -134,5 +145,5 @@ export function decrypt(ciphertext: string): string {
  */
 export function isEncryptionConfigured(): boolean {
   const secret = process.env['PAYMENT_ORCHESTRATION_SIGNING_KEY_ENCRYPTION_SECRET'];
-  return Boolean(secret && secret.trim().length >= 16);
+  return Boolean(secret && secret.trim().length >= 32);
 }

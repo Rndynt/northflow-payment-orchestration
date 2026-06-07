@@ -13,12 +13,12 @@ The service supports three authentication modes for protected `/v1/...` routes:
 | Mode | Description |
 |---|---|
 | `disabled` | Only bearer token auth is accepted. Signed headers are ignored. |
-| `optional` | Both bearer tokens and signed requests are accepted. When signed headers are present, they are used exclusively (no bearer fallback). Default. |
-| `required` | Only signed requests are accepted. Bearer-only requests are rejected with `SIGNED_REQUEST_REQUIRED`. |
+| `optional` | Both bearer tokens and signed requests are accepted. When signed headers are present, they are used exclusively (no bearer fallback). Default in non-production. |
+| `required` | Only signed requests are accepted. Bearer-only requests are rejected with `SIGNED_REQUEST_REQUIRED`. **Default in production.** |
 
-Configure via environment variable:
+Configure via environment variable (override the environment-based default):
 ```
-PAYMENT_ORCHESTRATION_SIGNED_REQUESTS_MODE=optional
+PAYMENT_ORCHESTRATION_SIGNED_REQUESTS_MODE=required
 ```
 
 ---
@@ -173,10 +173,10 @@ signing: { ..., enabled: false }
 
 | Environment Variable | Default | Description |
 |---|---|---|
-| `PAYMENT_ORCHESTRATION_SIGNED_REQUESTS_MODE` | `optional` | `disabled`, `optional`, or `required` |
+| `PAYMENT_ORCHESTRATION_SIGNED_REQUESTS_MODE` | `required` in production, `optional` elsewhere | `disabled`, `optional`, or `required` |
 | `PAYMENT_ORCHESTRATION_SIGNED_REQUEST_MAX_SKEW_SECONDS` | `300` | Max allowed timestamp skew (seconds) |
 | `PAYMENT_ORCHESTRATION_SIGNED_REQUEST_NONCE_TTL_SECONDS` | `600` | Nonce expiry window (seconds). Must be ≥ max skew. |
-| `PAYMENT_ORCHESTRATION_SIGNING_KEY_ENCRYPTION_SECRET` | (required for key create/rotate) | AES-256-GCM master key for signing secret encryption. Min 16 chars. |
+| `PAYMENT_ORCHESTRATION_SIGNING_KEY_ENCRYPTION_SECRET` | (required for key create/rotate) | AES-256-GCM master key for signing secret encryption. Must be exactly 32 bytes: a base64-encoded 32-byte value or a 32-character ASCII string. No padding or truncation. |
 | `PAYMENT_ORCHESTRATION_SIGNING_KEY_ENCRYPTION_KEY_VERSION` | `v1` | Encryption key version label stored with ciphertext. |
 
 ---

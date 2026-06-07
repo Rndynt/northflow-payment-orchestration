@@ -64,7 +64,7 @@ method/path/query modification
 proxy/log replay of old requests
 ```
 
-S9.4 must be migration-safe and client-migration-safe for AuraPoS, Transity SDK, and Kioskoin.
+S9.4 must be migration-safe and client-migration-safe for REST and SDK consumer backends.
 
 ---
 
@@ -493,7 +493,7 @@ Rules:
 
 # Part J - SDK Support
 
-Update `packages/client-sdk` so Transity and any SDK consumer can sign requests automatically.
+Update `packages/client-sdk` so SDK consumers can sign requests automatically.
 
 SDK config should support:
 
@@ -517,7 +517,7 @@ Rules:
 - SDK must use the exact same canonical request builder as service tests expect.
 - SDK must not log signing secret.
 - Existing apiKey mode must still work when signing is disabled.
-- SDK docs/examples must show Transity signed mode.
+- SDK docs/examples must show signed mode for SDK consumers.
 
 ---
 
@@ -541,9 +541,9 @@ body hash
 timestamp skew
 nonce replay prevention
 optional/required migration modes
-AuraPoS REST example
-Kioskoin REST example
-Transity SDK example
+REST consumer example
+REST consumer example (minimal)
+SDK consumer example
 how to rotate signing keys
 how to migrate from bearer-only to signed requests
 ```
@@ -793,8 +793,8 @@ required mode enforces signed requests
 replay attacks are rejected by nonce store
 request tampering is rejected by signature verification
 SDK can sign requests automatically
-AuraPoS/Kioskoin REST docs explain signing
-Transity SDK docs explain signing
+REST consumer integration docs explain signing
+SDK consumer integration docs explain signing
 S9.4 validation report is committed
 ```
 

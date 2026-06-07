@@ -9,3 +9,4 @@
 - [S9.1-S9.2 key rotation and rate limit validation](s9-1-s9-2-key-rotation-rate-limit-validation.md) — SafeCredentialView omits hash; /rotate before /:credId/revoke ordering; RateLimiterStore interface; auth failure rate limit injected into auth middleware; 386/386 pass.
 - [S9.3 network-level service protection](s9-3-network-level-service-protection-validation.md) — new config fields optional in interface (backward compat); providerRegistry mock needs `has()` for /ready; CORS + securityHeaders inline (no extra dep); 422/422 pass.
 - [S9.4 HMAC signed requests](s9-4-hmac-signed-requests.md) — req.baseUrl+req.path for full path in auth middleware; use npx tsx --test not node --import tsx/esm; 444/444 pass.
+- [S9.4 final patch validation](s9-4-validation.md) — strict 32-byte key enforcement; prod default=required; SDK imports core canonical logic; ENC_SECRET must be exactly 32 bytes; consumer names genericized; 444/444 pass.

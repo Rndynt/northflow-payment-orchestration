@@ -32,7 +32,7 @@ function sourceFiles(dir: string): string[] {
 }
 
 describe('payment orchestration standalone boundary purity', () => {
-  test('standalone package/service source does not import forbidden AuraPoS runtime modules', () => {
+  test('standalone package/service source does not import forbidden Consumer A runtime modules', () => {
     const files = SCOPES.flatMap((scope) => sourceFiles(join(ROOT, scope)));
     const violations: string[] = [];
 

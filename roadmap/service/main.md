@@ -32,14 +32,14 @@ Northflow is a central payment orchestration service used by backend application
 
 Target consumers:
 
-- AuraPoS — multi-tenant POS, direct REST API integration.
-- Transity — multi-tenant transport/booking system, SDK integration.
-- Kioskoin — payment/OTC application, direct REST API integration.
+- Consumer A — multi-tenant POS, direct REST API integration.
+- Consumer B — multi-tenant transport/booking system, SDK integration.
+- Consumer C — payment/OTC application, direct REST API integration.
 
 ```txt
-AuraPoS backend  ───────┐
-Transity backend ───────┼──> Northflow Payment Orchestration
-Kioskoin backend ───────┘
+Consumer A backend  ───────┐
+Consumer B backend ───────┼──> Northflow Payment Orchestration
+Consumer C backend ───────┘
 ```
 
 Frontend clients, tenant users, cashier terminals, and customers must not call the internal service API directly. Consumer backends call Northflow on behalf of their own business tenants/orders/bookings/payment flows.
@@ -70,14 +70,14 @@ Rule:
 Examples:
 
 ```txt
-API Client: client_aurapos_prod
+API Client: client_consumer-a_prod
 Merchant:   mer_cafe_mawar
 
-API Client: client_transity_prod
+API Client: client_consumer-b_prod
 Merchant:   mer_nusa_shuttle
 
-API Client: client_kioskoin_prod
-Merchant:   mer_kioskoin
+API Client: client_consumer-c_prod
+Merchant:   mer_consumer-c
 ```
 
 ## Security Direction
@@ -174,9 +174,9 @@ Merchant   = business/tenant/payment owner
 Official `sourceApp` values:
 
 ```txt
-aurapos
-transity
-kioskoin
+consumer-a
+consumer-b
+consumer-c
 internal
 ```
 
@@ -239,8 +239,8 @@ The auth middleware attaches:
 
 ```ts
 req.auth = {
-  clientId: "client_aurapos_prod",
-  sourceApp: "aurapos",
+  clientId: "client_consumer-a_prod",
+  sourceApp: "consumer-a",
   environment: "production",
   credentialId: "...",
   scopes: [...]
@@ -285,7 +285,7 @@ Create-merchant rule:
 
 Prevent caller spoofing by requiring payload `sourceApp` to match authenticated client `sourceApp`.
 
-If the authenticated client source app is `aurapos`, accepted payload source app must also be `aurapos`.
+If the authenticated client source app is `consumer-a`, accepted payload source app must also be `consumer-a`.
 
 Mismatched source app returns:
 
@@ -333,12 +333,12 @@ Make direct REST API and SDK integrations use the same service contract.
 
 REST consumers:
 
-- AuraPoS.
-- Kioskoin.
+- Consumer A.
+- Consumer C.
 
 SDK consumer:
 
-- Transity.
+- Consumer B.
 
 Required request properties:
 
@@ -369,9 +369,9 @@ Prove multi-app integration works and isolation does not leak.
 Tested flows:
 
 ```txt
-AuraPoS REST positive flow
-Transity SDK positive flow
-Kioskoin REST positive flow
+Consumer A REST positive flow
+Consumer B SDK positive flow
+Consumer C REST positive flow
 cross-app merchant denial
 sourceApp spoofing denial
 missing-scope denial
@@ -659,43 +659,81 @@ apps/service/src/middleware/cors.ts
 
 ---
 
-## S9.4 — Signed Requests / HMAC
+## S9.4 — Signed Requests / HMAC ✅ COMPLETED
 
 ## Goal
 
 Upgrade from bearer-style API key auth to signed requests to reduce replay/tamper risk.
 
-Future headers:
+## Implemented Data Model
 
 ```txt
-x-nf-client-id
-x-nf-key-id
-x-nf-timestamp
-x-nf-nonce
-x-nf-signature
-```
-
-Server checks:
-
-```txt
-timestamp within maximum skew
-nonce has not been used before
-signature is valid
-key is active
-scope is allowed
-merchant access is allowed
-```
-
-Future nonce table:
-
-```txt
+po_client_signing_keys
 po_request_nonces
-- id
-- client_id
-- key_id
-- nonce
-- timestamp
-- expires_at
+```
+
+## Implemented Routes
+
+```txt
+POST /v1/api-clients/:clientId/signing-keys
+  requires: api_client:signing_key:create
+  returns: rawSigningSecret ONCE
+
+GET /v1/api-clients/:clientId/signing-keys
+  requires: api_client:signing_key:read
+  returns: safe view (no secrets)
+
+POST /v1/api-clients/:clientId/signing-keys/rotate
+  requires: api_client:signing_key:rotate
+
+POST /v1/api-clients/:clientId/signing-keys/:keyId/revoke
+  requires: api_client:signing_key:revoke
+```
+
+## Added Authorization Scopes
+
+```txt
+api_client:signing_key:create
+api_client:signing_key:read
+api_client:signing_key:rotate
+api_client:signing_key:revoke
+```
+
+## Signing Protocol
+
+```txt
+algorithm:   NF-HMAC-SHA256-V1
+canonical:   ALGORITHM\ntimestampMs\nnonce\nMETHOD\npath\ncanonical_query\nbody_sha256_hex
+signature:   HMAC-SHA256(rawSigningSecret, canonicalString) as lowercase hex
+```
+
+## Security Invariants
+
+```txt
+- rawSigningSecret shown exactly once (on create/rotate).
+- Signing secrets stored AES-256-GCM encrypted.
+- Encryption key must be exactly 32 bytes — no silent padding or truncation.
+- Signed headers never fall back to bearer auth on failure.
+- Nonces consumed atomically via DB unique constraint.
+- Revoked/expired keys rejected immediately.
+- Signed request failures count toward IP auth-failure rate limit.
+```
+
+## Mode Configuration
+
+```txt
+PAYMENT_ORCHESTRATION_SIGNED_REQUESTS_MODE=required  (default in production)
+PAYMENT_ORCHESTRATION_SIGNED_REQUESTS_MODE=optional  (default in non-production)
+```
+
+## Client SDK
+
+The `@northflow/payment-orchestration-client-sdk` signs requests automatically when `signing` config is provided. Canonical string and HMAC computation are shared from `@northflow/payment-orchestration-core`.
+
+## Docs
+
+```txt
+docs/security/signed-requests-hmac.md
 ```
 
 ---

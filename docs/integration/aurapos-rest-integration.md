@@ -1,6 +1,6 @@
-# AuraPoS — REST Integration Guide
+# Consumer A — REST Integration Guide
 
-> Consumer: AuraPoS backend  
+> Consumer: Consumer A backend  
 > Method: Direct REST API  
 > See also: [Client Integration Contract](client-integration-contract.md)
 
@@ -8,26 +8,26 @@
 
 ## Identity Mapping
 
-| AuraPoS concept | Northflow concept      |
+| Consumer A concept | Northflow concept      |
 |-----------------|------------------------|
-| AuraPoS tenant  | Merchant               |
+| Consumer A tenant  | Merchant               |
 | Outlet/location | `externalOutletId`     |
 | POS order       | Payment intent         |
-| AuraPoS backend env | API client credential |
+| Consumer A backend env | API client credential |
 
-AuraPoS must store the Northflow `merchantId` alongside each tenant record. One tenant = one merchant.
+Consumer A must store the Northflow `merchantId` alongside each tenant record. One tenant = one merchant.
 
 ---
 
 ## Credential Setup
 
-AuraPoS backend receives one per-client credential per environment from Northflow operations:
+Consumer A backend receives one per-client credential per environment from Northflow operations:
 
 ```
 nf.live.<credentialId>.<secret>
 ```
 
-Store this as a secret in the AuraPoS backend (e.g. environment variable). Never log or expose it.
+Store this as a secret in the Consumer A backend (e.g. environment variable). Never log or expose it.
 
 ---
 
@@ -43,17 +43,17 @@ Authorization: Bearer nf.live.<credentialId>.<secret>
 
 ## Merchant Onboarding
 
-Create a Northflow merchant when a new AuraPoS tenant is onboarded.
+Create a Northflow merchant when a new Consumer A tenant is onboarded.
 
 ```http
 POST /v1/merchants
-Authorization: Bearer nf.live.<aurapos-credential>
+Authorization: Bearer nf.live.<consumer-a-credential>
 Content-Type: application/json
 
 {
   "name": "Kopi Nusantara",
   "legalName": "PT Kopi Nusantara Indonesia",
-  "sourceApp": "aurapos",
+  "sourceApp": "consumer-a",
   "externalRef": "tenant-001"
 }
 ```
@@ -73,7 +73,7 @@ Response `201 Created`:
 }
 ```
 
-Store `mer_abc123` as `northflow_merchant_id` on the AuraPoS tenant record.
+Store `mer_abc123` as `northflow_merchant_id` on the Consumer A tenant record.
 
 ---
 
@@ -83,7 +83,7 @@ Link a payment provider to the merchant. One provider account per provider × en
 
 ```http
 POST /v1/merchants/mer_abc123/provider-accounts
-Authorization: Bearer nf.live.<aurapos-credential>
+Authorization: Bearer nf.live.<consumer-a-credential>
 Content-Type: application/json
 
 {
@@ -122,12 +122,12 @@ Create a payment intent when a POS order requires payment.
 
 ```http
 POST /v1/payment-intents
-Authorization: Bearer nf.live.<aurapos-credential>
+Authorization: Bearer nf.live.<consumer-a-credential>
 Content-Type: application/json
 
 {
   "merchantId": "mer_abc123",
-  "sourceApp": "aurapos",
+  "sourceApp": "consumer-a",
   "externalTenantId": "tenant-001",
   "externalOutletId": "outlet-42",
   "externalPayableType": "pos_order",
@@ -135,7 +135,7 @@ Content-Type: application/json
   "currency": "IDR",
   "amountDue": 75000,
   "allowPartial": false,
-  "idempotencyKey": "aurapos:tenant-001:order-789:create-intent"
+  "idempotencyKey": "consumer-a:tenant-001:order-789:create-intent"
 }
 ```
 
@@ -173,7 +173,7 @@ Initiate a payment through the provider.
 
 ```http
 POST /v1/payment-intents/intent_def456/gateway-payments
-Authorization: Bearer nf.live.<aurapos-credential>
+Authorization: Bearer nf.live.<consumer-a-credential>
 Content-Type: application/json
 
 {
@@ -182,7 +182,7 @@ Content-Type: application/json
   "method": "qris",
   "amount": 75000,
   "providerAccountId": "pa_xyz789",
-  "idempotencyKey": "aurapos:tenant-001:order-789:gateway-payment:qris"
+  "idempotencyKey": "consumer-a:tenant-001:order-789:gateway-payment:qris"
 }
 ```
 
@@ -222,7 +222,7 @@ Poll for payment completion.
 
 ```http
 GET /v1/payment-intents/intent_def456/status?merchantId=mer_abc123
-Authorization: Bearer nf.live.<aurapos-credential>
+Authorization: Bearer nf.live.<consumer-a-credential>
 ```
 
 Response `200 OK`:
@@ -248,7 +248,7 @@ Check how much can be refunded on a paid intent.
 
 ```http
 GET /v1/payment-intents/intent_def456/refundability?merchantId=mer_abc123
-Authorization: Bearer nf.live.<aurapos-credential>
+Authorization: Bearer nf.live.<consumer-a-credential>
 ```
 
 Response `200 OK`:
@@ -283,14 +283,14 @@ Refund a succeeded transaction.
 
 ```http
 POST /v1/payment-transactions/tx_ghi012/refund
-Authorization: Bearer nf.live.<aurapos-credential>
+Authorization: Bearer nf.live.<consumer-a-credential>
 Content-Type: application/json
 
 {
   "merchantId": "mer_abc123",
   "amount": 75000,
   "reason": "customer_request",
-  "idempotencyKey": "aurapos:tenant-001:order-789:refund:full"
+  "idempotencyKey": "consumer-a:tenant-001:order-789:refund:full"
 }
 ```
 
@@ -317,13 +317,13 @@ Cancel a pending or requires_action transaction.
 
 ```http
 POST /v1/payment-transactions/tx_ghi012/void
-Authorization: Bearer nf.live.<aurapos-credential>
+Authorization: Bearer nf.live.<consumer-a-credential>
 Content-Type: application/json
 
 {
   "merchantId": "mer_abc123",
   "reason": "order_cancelled",
-  "idempotencyKey": "aurapos:tenant-001:order-789:void"
+  "idempotencyKey": "consumer-a:tenant-001:order-789:void"
 }
 ```
 
@@ -343,7 +343,7 @@ Response `200 OK`:
 
 ---
 
-## Required Client Scopes for AuraPoS
+## Required Client Scopes for Consumer A
 
 ```
 merchant:create
@@ -361,7 +361,7 @@ payment:void
 
 ## Error Handling
 
-| Code                    | AuraPoS action                               |
+| Code                    | Consumer A action                               |
 |-------------------------|----------------------------------------------|
 | `UNAUTHORIZED`          | Rotate credential; alert ops                 |
 | `MERCHANT_ACCESS_DENIED`| Check tenant → merchantId mapping            |

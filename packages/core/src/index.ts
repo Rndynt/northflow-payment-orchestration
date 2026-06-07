@@ -8,7 +8,7 @@
  * - Port (repository) interfaces
  * - Error types
  *
- * No Express. No React. No AuraPoS session middleware. No POS order deps.
+ * No Express. No React. No session middleware. No POS order deps.
  * No direct environment variable reads.
  *
  * Consumers:

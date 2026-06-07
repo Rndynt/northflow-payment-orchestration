@@ -1,6 +1,6 @@
 # Northflow Payment Orchestration — Client Integration Contract
 
-> Phase S6 — Frozen contract for AuraPoS (REST), Transity (SDK), and Kioskoin (REST).
+> Phase S6 — Frozen contract for Consumer A (REST), Consumer B (SDK), and Consumer C (REST).
 
 ---
 
@@ -20,9 +20,9 @@
 
 | Consumer | Integration method |
 |----------|--------------------|
-| AuraPoS  | Direct REST API    |
-| Transity | Client SDK         |
-| Kioskoin | Direct REST API    |
+| Consumer A  | Direct REST API    |
+| Consumer B | Client SDK         |
+| Consumer C | Direct REST API    |
 
 Consumer **frontends** must never call the Northflow service API directly.  
 Consumer **backends** call Northflow on behalf of their tenant, order, or payment flow.
@@ -59,8 +59,8 @@ The legacy `x-payment-orchestration-service-token` header is supported in develo
 |------------------------|----------------------------------|--------------------------------------------|
 | `merchantId`           | All merchant-scoped requests     | Must belong to the authenticated client    |
 | `sourceApp`            | All create/mutate operations     | Must match the authenticated client's app  |
-| `externalTenantId`     | When tenant scoping is relevant  | e.g. AuraPoS tenant ID                     |
-| `externalOutletId`     | When outlet scoping is relevant  | e.g. AuraPoS outlet ID                     |
+| `externalTenantId`     | When tenant scoping is relevant  | e.g. Consumer A tenant ID                     |
+| `externalOutletId`     | When outlet scoping is relevant  | e.g. Consumer A outlet ID                     |
 | `externalPayableType`  | All payment intent requests      | e.g. `pos_order`, `booking`, `otc_order`   |
 | `externalPayableId`    | All payment intent requests      | Reference to the payable in the consumer system |
 | `amountDue` / `amount` | Create intent / gateway payment  | Integer, smallest currency unit (e.g. IDR cents) |
@@ -81,12 +81,12 @@ Every create or mutate operation **must** include an idempotency key. The key mu
 Recommended formats (these are examples — do not hard-code them in service logic):
 
 ```
-aurapos:<tenantId>:<orderId>:create-intent
-aurapos:<tenantId>:<orderId>:gateway-payment:<method>
-transity:<tenantId>:<bookingId>:create-intent
-transity:<tenantId>:<bookingId>:gateway-payment:<method>
-kioskoin:<orderId>:create-intent
-kioskoin:<orderId>:gateway-payment:<method>
+consumer-a:<tenantId>:<orderId>:create-intent
+consumer-a:<tenantId>:<orderId>:gateway-payment:<method>
+consumer-b:<tenantId>:<bookingId>:create-intent
+consumer-b:<tenantId>:<bookingId>:gateway-payment:<method>
+consumer-c:<orderId>:create-intent
+consumer-c:<orderId>:gateway-payment:<method>
 ```
 
 ---
@@ -196,7 +196,7 @@ REST and SDK calls produce equivalent request semantics:
 - Same idempotency key behavior
 - Same error codes on auth / ownership / scope failures
 
-Transity uses the SDK; AuraPoS and Kioskoin use REST directly. Both paths call the same service behavior.
+Consumer B uses the SDK; Consumer A and Consumer C use REST directly. Both paths call the same service behavior.
 
 ---
 

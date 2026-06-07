@@ -5,7 +5,7 @@
  * Supports custom headers: Authorization: Bearer, x-nf-api-key, x-payment-merchant-id, x-source-app.
  *
  * Fetch-compatible; uses the global `fetch` API (Node 18+ / modern browsers).
- * No React dependency. No AuraPoS tenant dependency.
+ * No React dependency. No external tenant dependency.
  *
  * Phase 8A: methods implemented as real HTTP wrappers.
  * Phase 8B: class renamed to PaymentOrchestrationClient. PaymentEngineClient is a deprecated alias.
@@ -26,7 +26,14 @@
  *   - Auth priority: apiKey > serviceToken (legacy).
  */
 
-import { createHmac, createHash, randomBytes } from 'crypto';
+import { randomBytes } from 'crypto';
+import {
+  hashBody,
+  buildCanonicalString,
+  computeSignature,
+  SIGNATURE_VERSION,
+  CANONICAL_ALGORITHM,
+} from '@northflow/payment-orchestration-core';
 import { PaymentOrchestrationClientError, PaymentOrchestrationNetworkError } from './errors.ts';
 import type {
   PaymentOrchestrationClientConfig,
@@ -67,32 +74,9 @@ import type {
 } from './types.ts';
 
 // ── S9.4: HMAC signing helpers ────────────────────────────────────────────────
-
-const CANONICAL_ALGORITHM = 'NF-HMAC-SHA256-V1';
-const SIGNATURE_VERSION = 'v1';
-
-function hashBodyBytes(bodyBytes: Uint8Array | null): string {
-  const hash = createHash('sha256');
-  if (bodyBytes && bodyBytes.length > 0) {
-    hash.update(bodyBytes);
-  }
-  return hash.digest('hex');
-}
-
-function buildCanonicalQuery(queryStr: string): string {
-  const raw = queryStr.startsWith('?') ? queryStr.slice(1) : queryStr;
-  if (!raw) return '';
-  const pairs = raw.split('&').map((part): [string, string] => {
-    const eq = part.indexOf('=');
-    if (eq === -1) return [decodeURIComponent(part), ''];
-    return [decodeURIComponent(part.slice(0, eq)), decodeURIComponent(part.slice(eq + 1))];
-  });
-  pairs.sort((a, b) => {
-    const k = a[0].localeCompare(b[0]);
-    return k !== 0 ? k : a[1].localeCompare(b[1]);
-  });
-  return pairs.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
-}
+// Canonical string construction and signing are delegated to
+// @northflow/payment-orchestration-core to ensure service and client use
+// identical algorithms. No local reimplementation of HMAC or body hashing.
 
 interface SigningHeaders {
   'x-nf-client-id': string;
@@ -112,22 +96,16 @@ function buildSigningHeaders(
 ): SigningHeaders {
   const timestampMs = Date.now();
   const nonce = randomBytes(16).toString('base64url');
-  const bodyHash = hashBodyBytes(bodyBytes);
-  const canonicalQuery = buildCanonicalQuery(queryStr);
-
-  const canonicalStr = [
-    CANONICAL_ALGORITHM,
-    String(timestampMs),
+  const bodyHash = hashBody(bodyBytes);
+  const canonicalStr = buildCanonicalString({
+    timestampMs,
     nonce,
-    method.toUpperCase(),
+    method,
     path,
-    canonicalQuery,
+    query: queryStr,
     bodyHash,
-  ].join('\n');
-
-  const signature = createHmac('sha256', signing.secret)
-    .update(canonicalStr)
-    .digest('hex');
+  });
+  const signature = computeSignature(signing.secret, canonicalStr);
 
   return {
     'x-nf-client-id': signing.clientId,

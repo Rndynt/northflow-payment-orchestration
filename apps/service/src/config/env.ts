@@ -2,7 +2,7 @@
  * env — Payment Orchestration Service configuration loader.
  *
  * Reads only from environment variables. No hard-coded defaults for secrets.
- * No AuraPoS tenant/session dependencies.
+ * No external tenant/session dependencies.
  *
  * Port resolution order:
  *   PAYMENT_ORCHESTRATION_SERVICE_PORT → PAYMENT_ENGINE_SERVICE_PORT (alias) → PORT → 5100 (default)
@@ -121,9 +121,10 @@ export function loadEnv(): PaymentOrchestrationServiceConfig {
   // disabled = ignore HMAC headers, bearer-only auth.
   // optional = accept either valid bearer OR valid signed request auth.
   // required = protected /v1 routes require signed request auth.
-  // Default: optional (migration-safe for all existing API clients).
+  // Default: required in production (fail-secure), optional elsewhere (migration-safe).
   const signedRequestsMode = (
-    process.env['PAYMENT_ORCHESTRATION_SIGNED_REQUESTS_MODE'] ?? 'optional'
+    process.env['PAYMENT_ORCHESTRATION_SIGNED_REQUESTS_MODE'] ??
+    (nodeEnv === 'production' ? 'required' : 'optional')
   ).trim() as 'disabled' | 'optional' | 'required';
 
   // S9.4: Maximum allowed timestamp skew for signed requests (seconds).
