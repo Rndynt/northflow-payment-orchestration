@@ -292,6 +292,94 @@ export class XenditSandboxProvider implements StandalonePaymentProvider {
         : null,
     };
   }
+
+  /**
+   * S7.5 Layer 1: static capability catalog for Xendit Sandbox.
+   * Lists the most common Xendit payment channels. In production or when the
+   * Xendit API supports listing available channels per merchant account,
+   * syncProviderAccountMethods() can be implemented to fetch live data instead.
+   */
+  getPaymentMethodCapabilities() {
+    return [
+      {
+        provider: 'xendit_sandbox',
+        method: 'qris',
+        methodType: 'qris' as const,
+        displayName: 'QRIS',
+        supportedCurrencies: ['IDR'],
+        minAmount: 1_500,
+        maxAmount: 10_000_000,
+        providerSpecificCode: 'QRIS',
+        metadata: { xenditSource: 'QRIS' },
+      },
+      {
+        provider: 'xendit_sandbox',
+        method: 'va_bca',
+        methodType: 'virtual_account' as const,
+        displayName: 'Virtual Account BCA',
+        supportedCurrencies: ['IDR'],
+        minAmount: 10_000,
+        maxAmount: 500_000_000,
+        providerSpecificCode: 'BCA',
+        metadata: { xenditBankCode: 'BCA' },
+      },
+      {
+        provider: 'xendit_sandbox',
+        method: 'va_mandiri',
+        methodType: 'virtual_account' as const,
+        displayName: 'Virtual Account Mandiri',
+        supportedCurrencies: ['IDR'],
+        minAmount: 10_000,
+        maxAmount: 500_000_000,
+        providerSpecificCode: 'MANDIRI',
+        metadata: { xenditBankCode: 'MANDIRI' },
+      },
+      {
+        provider: 'xendit_sandbox',
+        method: 'va_bni',
+        methodType: 'virtual_account' as const,
+        displayName: 'Virtual Account BNI',
+        supportedCurrencies: ['IDR'],
+        minAmount: 10_000,
+        maxAmount: 500_000_000,
+        providerSpecificCode: 'BNI',
+        metadata: { xenditBankCode: 'BNI' },
+      },
+      {
+        provider: 'xendit_sandbox',
+        method: 'va_permata',
+        methodType: 'virtual_account' as const,
+        displayName: 'Virtual Account Permata',
+        supportedCurrencies: ['IDR'],
+        minAmount: 10_000,
+        maxAmount: 500_000_000,
+        providerSpecificCode: 'PERMATA',
+        metadata: { xenditBankCode: 'PERMATA' },
+      },
+      {
+        provider: 'xendit_sandbox',
+        method: 'ewallet_ovo',
+        methodType: 'ewallet' as const,
+        displayName: 'OVO',
+        supportedCurrencies: ['IDR'],
+        minAmount: 1_000,
+        maxAmount: 10_000_000,
+        providerSpecificCode: 'OVO',
+        metadata: { xenditSource: 'OVO' },
+      },
+      {
+        provider: 'xendit_sandbox',
+        method: 'invoice',
+        methodType: 'other' as const,
+        displayName: 'Xendit Invoice (Multi-channel)',
+        supportedCurrencies: ['IDR'],
+        minAmount: 1_000,
+        maxAmount: null,
+        providerSpecificCode: 'INVOICE',
+        metadata: { xenditSource: 'invoice' },
+      },
+    ];
+  }
 }
 
 function getHeader(headers: Record<string, string | string[] | undefined>, name: string): string | null {
@@ -315,3 +403,4 @@ function safeEqual(left: string, right: string): boolean {
   const b = Buffer.from(right);
   return a.length === b.length && timingSafeEqual(a, b);
 }
+

@@ -326,6 +326,85 @@ export interface ReadinessResponse {
   };
 }
 
+// ── S7.5: Payment Method Options ─────────────────────────────────────────────
+
+export type PaymentMethodStatus = 'active' | 'disabled' | 'unsupported';
+export type PaymentMethodType = 'qris' | 'virtual_account' | 'ewallet' | 'card' | 'retail_outlet' | 'manual' | 'other';
+
+export interface ProviderAccountMethodResponse {
+  id: string;
+  merchantId: string;
+  providerAccountId: string;
+  provider: string;
+  method: string;
+  methodType: PaymentMethodType;
+  providerMethodCode: string | null;
+  displayName: string;
+  status: PaymentMethodStatus;
+  currency: string;
+  minAmount: number | null;
+  maxAmount: number | null;
+  sortOrder: number;
+  publicConfig: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertProviderAccountMethodRequest {
+  methodType?: PaymentMethodType;
+  providerMethodCode?: string | null;
+  displayName?: string;
+  status?: PaymentMethodStatus;
+  currency?: string;
+  minAmount?: number | null;
+  maxAmount?: number | null;
+  sortOrder?: number;
+  publicConfig?: Record<string, unknown>;
+  providerMetadata?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpsertProviderAccountMethodResponse {
+  data: ProviderAccountMethodResponse;
+  created: boolean;
+}
+
+export interface SyncProviderAccountMethodsResponse {
+  data: {
+    methods: ProviderAccountMethodResponse[];
+    syncedCount: number;
+    skippedCount: number;
+    message: string;
+  };
+}
+
+export interface ListProviderAccountMethodsResponse {
+  data: ProviderAccountMethodResponse[];
+}
+
+export interface PaymentOptionItem {
+  method: string;
+  methodType: PaymentMethodType;
+  displayName: string;
+  providerAccountId: string;
+  provider: string;
+  currency: string;
+  minAmount: number | null;
+  maxAmount: number | null;
+  publicConfig: Record<string, unknown>;
+}
+
+export interface PaymentIntentPaymentOptionsResponse {
+  data: {
+    intentId: string;
+    merchantId: string;
+    currency: string;
+    amountRemaining: number;
+    options: PaymentOptionItem[];
+  };
+}
+
 // ── Legacy / deprecated ───────────────────────────────────────────────────────
 
 /** @deprecated Not used by the service — use GatewayPaymentResponse instead. */

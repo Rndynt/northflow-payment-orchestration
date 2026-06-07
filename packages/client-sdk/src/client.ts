@@ -50,6 +50,12 @@ import type {
   RefreshProviderStatusRequest,
   RefreshProviderStatusResponse,
   ReadinessResponse,
+  ProviderAccountMethodResponse,
+  UpsertProviderAccountMethodRequest,
+  UpsertProviderAccountMethodResponse,
+  SyncProviderAccountMethodsResponse,
+  ListProviderAccountMethodsResponse,
+  PaymentIntentPaymentOptionsResponse,
 } from './types.ts';
 
 export class PaymentOrchestrationClient {
@@ -388,5 +394,103 @@ export class PaymentOrchestrationClient {
    */
   async getReadiness(): Promise<ReadinessResponse> {
     return this.request<ReadinessResponse>('GET', '/ready');
+  }
+
+  // ── S7.5: Payment Method Options ─────────────────────────────────────────────
+
+  /**
+   * listProviderAccountMethods — list all payment methods for a specific provider account.
+   *
+   * GET /v1/merchants/:merchantId/provider-accounts/:providerAccountId/methods
+   *
+   * Required scope: payment_method:read OR provider_account:read
+   */
+  async listProviderAccountMethods(
+    merchantId: string,
+    providerAccountId: string,
+  ): Promise<ProviderAccountMethodResponse[]> {
+    const mid = merchantId || this.configMerchantId || '';
+    return this.request<ProviderAccountMethodResponse[]>(
+      'GET',
+      `/v1/merchants/${encodeURIComponent(mid)}/provider-accounts/${encodeURIComponent(providerAccountId)}/methods`,
+    );
+  }
+
+  /**
+   * listMerchantPaymentMethods — list all active payment methods across all provider accounts for a merchant.
+   *
+   * GET /v1/merchants/:merchantId/payment-methods
+   *
+   * Required scope: payment_method:read OR provider_account:read OR intent:read
+   */
+  async listMerchantPaymentMethods(merchantId?: string): Promise<ProviderAccountMethodResponse[]> {
+    const mid = merchantId || this.configMerchantId || '';
+    return this.request<ProviderAccountMethodResponse[]>(
+      'GET',
+      `/v1/merchants/${encodeURIComponent(mid)}/payment-methods`,
+    );
+  }
+
+  /**
+   * upsertProviderAccountMethod — create or update a payment method for a provider account.
+   *
+   * PUT /v1/merchants/:merchantId/provider-accounts/:providerAccountId/methods/:method
+   *
+   * Required scope: payment_method:write OR provider_account:create
+   */
+  async upsertProviderAccountMethod(
+    merchantId: string,
+    providerAccountId: string,
+    method: string,
+    input: UpsertProviderAccountMethodRequest,
+  ): Promise<UpsertProviderAccountMethodResponse> {
+    const mid = merchantId || this.configMerchantId || '';
+    return this.request<UpsertProviderAccountMethodResponse>(
+      'PUT',
+      `/v1/merchants/${encodeURIComponent(mid)}/provider-accounts/${encodeURIComponent(providerAccountId)}/methods/${encodeURIComponent(method)}`,
+      input,
+    );
+  }
+
+  /**
+   * syncProviderAccountMethods — sync provider adapter capabilities into the DB for a provider account.
+   *
+   * POST /v1/merchants/:merchantId/provider-accounts/:providerAccountId/methods/sync
+   *
+   * Required scope: payment_method:sync OR provider_account:create
+   *
+   * Layer 1 (static capabilities from adapter) and optionally Layer 2 (live provider API call).
+   * Idempotent — safe to call multiple times.
+   */
+  async syncProviderAccountMethods(
+    merchantId: string,
+    providerAccountId: string,
+  ): Promise<SyncProviderAccountMethodsResponse['data']> {
+    const mid = merchantId || this.configMerchantId || '';
+    return this.request<SyncProviderAccountMethodsResponse['data']>(
+      'POST',
+      `/v1/merchants/${encodeURIComponent(mid)}/provider-accounts/${encodeURIComponent(providerAccountId)}/methods/sync`,
+    );
+  }
+
+  /**
+   * getPaymentIntentPaymentOptions — get available payment method options for a specific payment intent.
+   *
+   * GET /v1/payment-intents/:intentId/payment-options?merchantId=...
+   *
+   * Required scope: payment_method:read OR intent:read
+   *
+   * Returns options filtered by intent currency and amount.
+   * Use this before calling createGatewayPayment to discover valid methods.
+   */
+  async getPaymentIntentPaymentOptions(
+    intentId: string,
+    merchantId?: string,
+  ): Promise<PaymentIntentPaymentOptionsResponse['data']> {
+    const mid = merchantId || this.configMerchantId || '';
+    return this.request<PaymentIntentPaymentOptionsResponse['data']>(
+      'GET',
+      `/v1/payment-intents/${encodeURIComponent(intentId)}/payment-options${mid ? `?merchantId=${encodeURIComponent(mid)}` : ''}`,
+    );
   }
 }

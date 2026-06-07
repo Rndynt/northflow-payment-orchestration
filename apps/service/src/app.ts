@@ -19,6 +19,11 @@ import { createProviderAccountsRouter } from './routes/providerAccounts.ts';
 import { createDevFakeGatewayRouter } from './routes/devFakeGateway.ts';
 import { createWebhooksRouter } from './routes/webhooks.ts';
 import { createTransactionsRouter } from './routes/transactions.ts';
+import {
+  createProviderAccountMethodsSubRouter,
+  createMerchantPaymentMethodsRouter,
+  createPaymentOptionsRouter,
+} from './routes/paymentMethods.ts';
 import { createAuthMiddleware } from './middleware/auth.ts';
 import { errorHandler } from './middleware/errors.ts';
 import { requestContextMiddleware } from './middleware/requestContext.ts';
@@ -62,6 +67,24 @@ export function createApp(container: ServiceContainer): express.Application {
   app.use(
     '/v1/merchants/:merchantId/provider-accounts',
     createProviderAccountsRouter(container),
+  );
+
+  // ── S7.5: Payment Methods (nested under provider accounts) ─────────────────
+  app.use(
+    '/v1/merchants/:merchantId/provider-accounts/:providerAccountId',
+    createProviderAccountMethodsSubRouter(container),
+  );
+
+  // ── S7.5: Merchant-level payment methods (active methods across all PA) ────
+  app.use(
+    '/v1/merchants/:merchantId/payment-methods',
+    createMerchantPaymentMethodsRouter(container),
+  );
+
+  // ── S7.5: Payment intent payment options ───────────────────────────────────
+  app.use(
+    '/v1/payment-intents/:intentId/payment-options',
+    createPaymentOptionsRouter(container),
   );
 
   // ── API v1 — Payment Intents ──────────────────────────────────────────────

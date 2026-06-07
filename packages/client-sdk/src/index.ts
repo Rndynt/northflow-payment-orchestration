@@ -74,6 +74,16 @@ export type {
   RefreshProviderStatusResponse,
   ReadinessResponse,
   ProviderActionResponse,
+  // S7.5: Payment Method Options
+  PaymentMethodStatus,
+  PaymentMethodType,
+  ProviderAccountMethodResponse,
+  UpsertProviderAccountMethodRequest,
+  UpsertProviderAccountMethodResponse,
+  SyncProviderAccountMethodsResponse,
+  ListProviderAccountMethodsResponse,
+  PaymentOptionItem,
+  PaymentIntentPaymentOptionsResponse,
 } from './types.ts';
 
 // ── Deprecated aliases (Phase 8B) — will be removed in a future major version ──

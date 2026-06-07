@@ -139,6 +139,33 @@ export interface IdempotencyKeyRow {
   expiresAt: Date | null;
 }
 
+import type {
+  ProviderAccountPaymentMethod,
+  ProviderAccountPaymentMethodStatus,
+  ProviderAccountPaymentMethodType,
+} from '@northflow/payment-orchestration-core';
+
+export interface ProviderAccountMethodRow {
+  id: string;
+  merchantId: string;
+  providerAccountId: string;
+  provider: string;
+  method: string;
+  methodType: string;
+  providerMethodCode: string | null;
+  displayName: string;
+  status: string;
+  currency: string;
+  minAmount: number | null;
+  maxAmount: number | null;
+  sortOrder: number;
+  publicConfig: Record<string, unknown> | null;
+  providerMetadata: Record<string, unknown> | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 // ── Mappers ────────────────────────────────────────────────────────────────────
 
 /**
@@ -265,6 +292,32 @@ export function mapProviderEventRow(row: ProviderEventRow): PaymentProviderEvent
     parsedPayload: (row.parsedPayload as Record<string, unknown>) ?? null,
     receivedAt: row.receivedAt,
     processedAt: row.processedAt ?? null,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+/**
+ * mapProviderAccountMethodRow — maps a po_provider_account_methods row to ProviderAccountPaymentMethod.
+ */
+export function mapProviderAccountMethodRow(row: ProviderAccountMethodRow): ProviderAccountPaymentMethod {
+  return {
+    id: row.id,
+    merchantId: row.merchantId,
+    providerAccountId: row.providerAccountId,
+    provider: row.provider,
+    method: row.method,
+    methodType: (row.methodType as ProviderAccountPaymentMethodType) ?? 'other',
+    providerMethodCode: row.providerMethodCode ?? null,
+    displayName: row.displayName,
+    status: (row.status as ProviderAccountPaymentMethodStatus) ?? 'active',
+    currency: row.currency,
+    minAmount: row.minAmount ?? null,
+    maxAmount: row.maxAmount ?? null,
+    sortOrder: row.sortOrder,
+    publicConfig: (row.publicConfig as Record<string, unknown>) ?? {},
+    providerMetadata: (row.providerMetadata as Record<string, unknown>) ?? {},
+    metadata: (row.metadata as Record<string, unknown>) ?? {},
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

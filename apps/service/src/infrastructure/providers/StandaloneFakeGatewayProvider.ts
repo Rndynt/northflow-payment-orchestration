@@ -227,4 +227,80 @@ export class StandaloneFakeGatewayProvider implements StandalonePaymentProvider 
       failureReason: null,
     };
   }
+
+  /**
+   * S7.5 Layer 1: static capability catalog for FakeGateway.
+   * Covers QRIS, three virtual account methods, e-wallet, and a redirect flow
+   * so integration tests can exercise method filtering without mocking the provider.
+   */
+  getPaymentMethodCapabilities() {
+    return [
+      {
+        provider: 'fake_gateway',
+        method: 'qris',
+        methodType: 'qris' as const,
+        displayName: 'QRIS',
+        supportedCurrencies: ['IDR'],
+        minAmount: 1,
+        maxAmount: 10_000_000,
+        providerSpecificCode: 'QRIS',
+        metadata: { fakeScenario: 'qris' },
+      },
+      {
+        provider: 'fake_gateway',
+        method: 'va_bca',
+        methodType: 'virtual_account' as const,
+        displayName: 'Virtual Account BCA',
+        supportedCurrencies: ['IDR'],
+        minAmount: 10_000,
+        maxAmount: 500_000_000,
+        providerSpecificCode: 'BCA',
+        metadata: { fakeScenario: 'va' },
+      },
+      {
+        provider: 'fake_gateway',
+        method: 'va_mandiri',
+        methodType: 'virtual_account' as const,
+        displayName: 'Virtual Account Mandiri',
+        supportedCurrencies: ['IDR'],
+        minAmount: 10_000,
+        maxAmount: 500_000_000,
+        providerSpecificCode: 'MANDIRI',
+        metadata: { fakeScenario: 'va' },
+      },
+      {
+        provider: 'fake_gateway',
+        method: 'va_bni',
+        methodType: 'virtual_account' as const,
+        displayName: 'Virtual Account BNI',
+        supportedCurrencies: ['IDR'],
+        minAmount: 10_000,
+        maxAmount: 500_000_000,
+        providerSpecificCode: 'BNI',
+        metadata: { fakeScenario: 'va' },
+      },
+      {
+        provider: 'fake_gateway',
+        method: 'gopay',
+        methodType: 'ewallet' as const,
+        displayName: 'GoPay',
+        supportedCurrencies: ['IDR'],
+        minAmount: 1,
+        maxAmount: 2_000_000,
+        providerSpecificCode: 'GOPAY',
+        metadata: { fakeScenario: 'redirect' },
+      },
+      {
+        provider: 'fake_gateway',
+        method: 'redirect',
+        methodType: 'ewallet' as const,
+        displayName: 'Online Payment (Redirect)',
+        supportedCurrencies: ['IDR'],
+        minAmount: 1,
+        maxAmount: null,
+        providerSpecificCode: 'REDIRECT',
+        metadata: { fakeScenario: 'redirect' },
+      },
+    ];
+  }
 }

@@ -105,6 +105,10 @@ export interface StandaloneProviderRefundResult {
   failureReason: string | null;
 }
 
+// ── S7.5: Payment method capability contract ──────────────────────────────────
+
+import type { ProviderPaymentMethodCapability } from '@northflow/payment-orchestration-core';
+
 // ── Provider interface ────────────────────────────────────────────────────────
 
 export interface StandalonePaymentProvider {
@@ -125,4 +129,18 @@ export interface StandalonePaymentProvider {
    * be refunded directly. Gateway/sandbox providers must return unsupported.
    */
   refundPayment?(input: StandaloneProviderRefundInput): Promise<StandaloneProviderRefundResult>;
+  /**
+   * S7.5 Layer 1: Return static adapter capability catalog.
+   * Declares which payment methods this provider/adapter can support in general.
+   * Used by SyncProviderAccountMethods to populate po_provider_account_methods.
+   * Can be static when the provider API does not expose a reliable list endpoint.
+   */
+  getPaymentMethodCapabilities?(): ProviderPaymentMethodCapability[];
+  /**
+   * S7.5 Layer 2: Optional live sync from provider API.
+   * If the provider supports listing enabled payment channels for a merchant account,
+   * implement this hook. Returns normalized capabilities (merged with Layer 1).
+   * Must not expose provider credentials. Must be idempotent.
+   */
+  syncProviderAccountMethods?(providerAccount: PaymentProviderAccount): Promise<ProviderPaymentMethodCapability[]>;
 }

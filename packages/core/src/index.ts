@@ -119,6 +119,20 @@ export type {
 
 export type { PaymentProviderCapabilities } from './providers/providerCapabilities';
 
+// ── S7.5: Provider Account Payment Methods ────────────────────────────────────
+
+export type {
+  ProviderAccountPaymentMethod,
+  ProviderAccountPaymentMethodStatus,
+  ProviderAccountPaymentMethodType,
+  ProviderPaymentMethodCapability,
+} from './domain/ProviderAccountPaymentMethod';
+
+export type {
+  ProviderAccountPaymentMethodRepository,
+  UpsertProviderAccountMethodInput,
+} from './application/repositories';
+
 // ── S1: API Client Registry ───────────────────────────────────────────────────
 
 export type {

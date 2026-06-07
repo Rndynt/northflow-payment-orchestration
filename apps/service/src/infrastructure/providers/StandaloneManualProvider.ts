@@ -99,4 +99,45 @@ export class StandaloneManualProvider implements StandalonePaymentProvider {
       failureReason: null,
     };
   }
+
+  /**
+   * S7.5 Layer 1: static capability catalog for the manual provider.
+   */
+  getPaymentMethodCapabilities() {
+    return [
+      {
+        provider: 'manual',
+        method: 'cash',
+        methodType: 'manual' as const,
+        displayName: 'Tunai',
+        supportedCurrencies: ['IDR'],
+        minAmount: 1,
+        maxAmount: null,
+        providerSpecificCode: null,
+        metadata: {},
+      },
+      {
+        provider: 'manual',
+        method: 'bank_transfer',
+        methodType: 'manual' as const,
+        displayName: 'Transfer Bank',
+        supportedCurrencies: ['IDR'],
+        minAmount: 1,
+        maxAmount: null,
+        providerSpecificCode: null,
+        metadata: {},
+      },
+      {
+        provider: 'manual',
+        method: 'manual',
+        methodType: 'manual' as const,
+        displayName: 'Manual (Lainnya)',
+        supportedCurrencies: ['IDR'],
+        minAmount: 1,
+        maxAmount: null,
+        providerSpecificCode: null,
+        metadata: {},
+      },
+    ];
+  }
 }

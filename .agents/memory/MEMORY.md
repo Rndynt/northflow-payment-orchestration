@@ -1,5 +1,6 @@
 - [S1-S5 per-client auth](s1-s5-auth.md) — per-client credential model implemented; legacy token stays enabled in dev by default; authRepos optional in ServiceContainer for backward-compat.
-- [DB migration approach](db-migration-approach.md) — Drizzle-only; 7-file prioritized po_* chain; no psql; no ALTER TABLE ADD; run pnpm db:migrate on fresh DB.
+- [DB migration approach](db-migration-approach.md) — Drizzle-only; 8-file prioritized po_* chain; no psql; no ALTER TABLE ADD; run pnpm db:migrate on fresh DB.
 - [apiErrorResponse toJSON](api-error-response-tojson.md) — error field has toJSON() returning the code string; over HTTP body.error is a string, not an object — tests must handle both forms.
 - [Pre-existing test failures](pre-existing-test-failures.md) — AC10 + S16 fixed (allowPartial); dashboard type-check has pre-existing TS2430 + TS5097 errors unrelated to service work.
 - [S6-S7 client integration validation](s6-s7-client-integration-validation.md) — S6 SDK + docs complete; S7 smoke: 35/35 pass; full suite 284/284; Void/RefundPaymentTransaction ctors take (txRepo, intentRepo, paRepo, providerRegistry) only.
+- [S7.5 payment method options](s7-5-payment-method-options.md) — po_provider_account_methods table, sync/upsert/list/options use cases, method validation in CreateGatewayPayment; tests must use node:test not vitest; DB tests need environment field in PA seed.

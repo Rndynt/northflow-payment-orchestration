@@ -367,6 +367,48 @@ export interface ClientMerchantAccessRepository {
   revoke(id: string): Promise<void>;
 }
 
+// ── S7.5: Provider Account Payment Methods ────────────────────────────────────
+
+import type {
+  ProviderAccountPaymentMethod,
+  ProviderAccountPaymentMethodStatus,
+  ProviderAccountPaymentMethodType,
+} from '../domain/ProviderAccountPaymentMethod';
+
+export interface UpsertProviderAccountMethodInput {
+  id: string;
+  merchantId: string;
+  providerAccountId: string;
+  provider: string;
+  method: string;
+  methodType: ProviderAccountPaymentMethodType;
+  providerMethodCode?: string | null;
+  displayName: string;
+  status?: ProviderAccountPaymentMethodStatus;
+  currency?: string;
+  minAmount?: number | null;
+  maxAmount?: number | null;
+  sortOrder?: number;
+  publicConfig?: Record<string, unknown>;
+  providerMetadata?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ProviderAccountPaymentMethodRepository {
+  findById(id: string): Promise<ProviderAccountPaymentMethod | null>;
+  listByMerchant(merchantId: string): Promise<ProviderAccountPaymentMethod[]>;
+  listByProviderAccount(providerAccountId: string): Promise<ProviderAccountPaymentMethod[]>;
+  findByProviderAccountAndMethod(
+    providerAccountId: string,
+    method: string,
+  ): Promise<ProviderAccountPaymentMethod | null>;
+  upsert(input: UpsertProviderAccountMethodInput): Promise<ProviderAccountPaymentMethod>;
+  updateStatus(
+    id: string,
+    status: ProviderAccountPaymentMethodStatus,
+  ): Promise<ProviderAccountPaymentMethod>;
+}
+
 // ── Idempotency ───────────────────────────────────────────────────────────────
 
 export interface ReserveIdempotencyKeyResult {

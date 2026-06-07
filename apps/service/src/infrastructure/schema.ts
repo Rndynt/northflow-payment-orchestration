@@ -196,6 +196,34 @@ export const poClientCredentials = pgTable('po_client_credentials', {
   statusIdx: index('po_client_credentials_status_idx').on(table.status),
 }));
 
+export const poProviderAccountMethods = pgTable('po_provider_account_methods', {
+  id: text('id').primaryKey(),
+  merchantId: text('merchant_id').notNull().references(() => poMerchants.id, { onDelete: 'cascade' }),
+  providerAccountId: text('provider_account_id').notNull().references(() => poProviderAccounts.id, { onDelete: 'cascade' }),
+  provider: text('provider').notNull(),
+  method: text('method').notNull(),
+  methodType: text('method_type').notNull(),
+  providerMethodCode: text('provider_method_code'),
+  displayName: text('display_name').notNull(),
+  status: text('status').notNull().default('active'),
+  currency: text('currency').notNull().default('IDR'),
+  minAmount: integer('min_amount'),
+  maxAmount: integer('max_amount'),
+  sortOrder: integer('sort_order').notNull().default(0),
+  publicConfig: jsonb('public_config').notNull().default({}),
+  providerMetadata: jsonb('provider_metadata').notNull().default({}),
+  metadata: jsonb('metadata').notNull().default({}),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+  providerAccountIdx: index('po_pam_provider_account_idx').on(table.providerAccountId),
+  merchantIdx: index('po_pam_merchant_idx').on(table.merchantId),
+  providerMethodIdx: index('po_pam_provider_method_idx').on(table.provider, table.method),
+  statusIdx: index('po_pam_status_idx').on(table.status),
+  providerAccountMethodUnique: uniqueIndex('po_pam_provider_account_method_unique')
+    .on(table.providerAccountId, table.method),
+}));
+
 export const poClientMerchantAccess = pgTable('po_client_merchant_access', {
   id: text('id').primaryKey(),
   clientId: text('client_id').notNull().references(() => poApiClients.id, { onDelete: 'cascade' }),
