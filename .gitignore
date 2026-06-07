@@ -4,6 +4,7 @@ dist/
 *.local
 pnpm-lock.yaml
 .turbo/
+*.tsbuildinfo
 
 
 apps/dashboard/.next
