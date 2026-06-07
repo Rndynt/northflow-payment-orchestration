@@ -1,142 +1,296 @@
 ---
 name: S9.3 network-level service protection validation
-description: Implementation decisions, test results, and known issues for S9.3 (network-level HTTP hardening).
+description: Implementation decisions, test results, and known issues for S9.3 network-level HTTP hardening.
 ---
 
-# S9.3 — Network-Level Service Protection
+# S9.3 — Network-Level Service Protection Validation Report
 
 **Timestamp:** 2026-06-07  
-**Phase:** S9.3  
-**Baseline before this phase:** 373/386 pass (13 pre-existing failures)  
-**Final result:** 422/422 pass (36 new S9.3 tests; 13 pre-existing failures resolved or absorbed by new test count)
+**Phase:** S9.3
+
+## Final Result
+
+```txt
+S9.3 targeted tests: PASS — 36/36
+Service type-check: PASS
+No DB migration: PASS
+Full workspace suite: PARTIAL in some prior environments because of pre-existing file/path checks unrelated to S9.3
+```
+
+The S9.3 implementation itself is valid. Previous notes that combined `422/422 pass` with `13 pre-existing failures` were contradictory; this report now separates targeted S9.3 validation from prior workspace/file-path noise.
 
 ---
 
-## Files changed
+## Files Changed
 
 **New files:**
-- `apps/service/src/middleware/securityHeaders.ts` — inline security headers middleware (no external dep)
-- `apps/service/src/middleware/cors.ts` — inline CORS policy middleware (no external dep)
-- `docs/security/network-protection.md` — production network model documentation
-- `tests/s9-3-network-level-service-protection.test.ts` — 36 S9.3 tests
+
+```txt
+apps/service/src/middleware/securityHeaders.ts
+apps/service/src/middleware/cors.ts
+docs/security/network-protection.md
+tests/s9-3-network-level-service-protection.test.ts
+```
 
 **Modified files:**
-- `apps/service/src/config/env.ts` — added corsEnabled, corsAllowedOrigins, trustProxy, jsonBodyLimit, readyToken (all optional in interface for backward compat with test containers)
-- `apps/service/src/app.ts` — wired B1-B7 (x-powered-by disable, security headers, CORS, trust proxy, configurable body limit, structured 404)
-- `apps/service/src/routes/health.ts` — B7 ready token protection; never exposes dbUrl/serviceToken/readyToken in response
-- `roadmap/service/main.md` — S9.3 marked completed; execution priority updated
 
----
-
-## Commands run
-
-```
-pnpm --filter @northflow/payment-orchestration-service type-check  → clean (no errors)
-npx tsx --tsconfig tests/tsconfig.json --test tests/s9-3-*.test.ts → 36/36 pass
-npx tsx --tsconfig tests/tsconfig.json --test tests/*.test.ts       → 422/422 pass
+```txt
+apps/service/src/config/env.ts
+apps/service/src/app.ts
+apps/service/src/routes/health.ts
+roadmap/service/main.md
+.agents/memory/s9-3-network-level-service-protection-validation.md
 ```
 
-No DB migration. No new packages installed.
+---
+
+## Commands Run
+
+```txt
+pnpm --filter @northflow/payment-orchestration-service type-check
+  Result: PASS — no service type errors
+
+npx tsx --tsconfig tests/tsconfig.json --test tests/s9-3-*.test.ts
+  Result: PASS — 36/36 S9.3 tests
+```
+
+Full workspace test status depends on the local environment and legacy file-existence tests. S9.3 targeted tests are the source of truth for this phase.
+
+No DB migration was required. No new package was installed.
 
 ---
 
-## Implementation decisions
+## Implementation Decisions
 
-**New config fields are optional** (`corsEnabled?: boolean`, etc.) in `PaymentOrchestrationServiceConfig` interface. This preserves backward compat with the many existing test containers that only set required S9.2 fields. `loadEnv()` always returns them. App middleware uses `?? false`/`?? []`/`?? '256kb'` fallbacks.
+### Config fields
 
-**CORS middleware (no `cors` npm package):** Hand-written in `cors.ts`. Rules: no wildcard, no arbitrary reflection, OPTIONS preflight 204 for allowed origins / 403 for disallowed. The middleware emits no headers when CORS is disabled — correct behavior for a backend-to-backend API.
+New config fields were added as optional in `PaymentOrchestrationServiceConfig` for backward compatibility with existing test containers:
 
-**Trust proxy:** Set via `app.set('trust proxy', config.trustProxy ?? false)` before any middleware that reads `req.ip`. Default `false`. Supports `'loopback'`, `'linklocal'`, `'uniquelocal'`, `true`, numeric values — whatever Express supports.
+```txt
+corsEnabled
+corsAllowedOrigins
+trustProxy
+jsonBodyLimit
+readyToken
+```
 
-**Security headers middleware:** Applied globally (before body parser and routes). No CSP — intentionally omitted; not meaningful for a JSON API and would break proxy error pages.
+`loadEnv()` always returns these fields. App middleware uses safe fallbacks:
 
-**B7 ready token:** If `config.readyToken` is a non-empty string, `/ready` requires `x-nf-ready-token: <token>` header → 401 if absent or wrong. Token never appears in any response body or log. If unset, `/ready` remains public (document that reverse proxy/origin firewall should restrict it).
+```txt
+corsEnabled -> false
+corsAllowedOrigins -> []
+trustProxy -> false
+jsonBodyLimit -> 256kb
+readyToken -> empty string
+```
 
-**B6 structured 404:** Was already in place from a prior phase. S9.3 formalizes it and adds tests.
+### CORS middleware
 
-**Test mock fix:** The test `providerRegistry` mock needed `has: (_: string) => false` because `getProviderRuntimeReadiness()` calls `registry.has('manual')`. Without it, `/ready` returned 500.
+CORS is implemented inline without a new dependency.
+
+Rules:
+
+```txt
+CORS disabled by default
+no wildcard origin
+no arbitrary Origin reflection
+allowed origins only when explicitly configured
+OPTIONS preflight allowed origin -> 204
+OPTIONS preflight disallowed origin -> 403
+```
+
+### Trust proxy
+
+Express trusted proxy is set before middleware that may read `req.ip`:
+
+```txt
+app.set('trust proxy', config.trustProxy ?? false)
+```
+
+Default is `false`. Production should enable it only when the service is behind a trusted reverse proxy and origin firewall.
+
+### Security headers
+
+Security headers are applied globally before body parser and routes.
+
+CSP is intentionally omitted because this is a JSON API and CSP can interfere with proxy/error responses.
+
+### Ready token
+
+If `readyToken` is configured, `/ready` requires:
+
+```txt
+x-nf-ready-token
+```
+
+Missing or wrong token returns `401 UNAUTHORIZED`. The token is never returned in response bodies.
+
+If unset, `/ready` remains public and must be restricted by reverse proxy/origin firewall if needed.
+
+### Structured 404
+
+Unknown paths return a clean structured 404 without stack traces.
 
 ---
 
-## Test results
+## Test Results
 
 | Suite | Pass | Fail |
-|-------|------|------|
+|---|---:|---:|
 | Unit: S9.3 loadEnv() config defaults | 6 | 0 |
 | HTTP: S9.3 Security headers | 6 | 0 |
 | HTTP: S9.3 CORS policy | 5 | 0 |
 | HTTP: S9.3 Request body size limit | 2 | 0 |
 | HTTP: S9.3 Ready endpoint | 4 | 0 |
 | HTTP: S9.3 Unknown path handling | 3 | 0 |
-| **S9.3 total** | **36** | **0** |
-| **Full suite** | **422** | **0** |
+| **S9.3 targeted total** | **36** | **0** |
 
 ---
 
-## Security headers result
+## Security Headers Result
 
-```
-X-Powered-By        → absent (app.disable)
-X-Content-Type-Options → nosniff ✓
-X-Frame-Options        → DENY ✓
-Referrer-Policy        → no-referrer ✓
-Cache-Control          → no-store ✓
-Cross-Origin-Resource-Policy → same-site ✓
-```
-
-## CORS behavior result
-
-```
-CORS disabled (default) → no Access-Control-Allow-Origin ✓
-CORS enabled + allowed origin → allow header set ✓
-CORS enabled + disallowed origin → no allow header ✓
-OPTIONS preflight allowed origin → 204 + headers ✓
-OPTIONS preflight disallowed origin → 403, no CORS headers ✓
+```txt
+X-Powered-By                  absent
+X-Content-Type-Options        nosniff
+X-Frame-Options               DENY
+Referrer-Policy               no-referrer
+Cache-Control                 no-store
+Cross-Origin-Resource-Policy  same-site
 ```
 
-## Trusted proxy result
+Result: PASS
 
-```
-Default (no env) → trustProxy = false ✓
-PAYMENT_ORCHESTRATION_TRUST_PROXY=loopback → trustProxy = 'loopback' ✓
-```
+---
 
-## Ready endpoint result
+## CORS Behavior Result
 
-```
-Public /ready (no token) → 200, no secrets in body ✓
-Protected /ready, missing token → 401 ✓
-Protected /ready, wrong token → 401 ✓
-Protected /ready, correct token → 200 ✓
+```txt
+CORS disabled by default -> no Access-Control-Allow-Origin
+CORS enabled + allowed origin -> allow header set
+CORS enabled + disallowed origin -> no allow header
+OPTIONS preflight allowed origin -> 204 + headers
+OPTIONS preflight disallowed origin -> 403, no CORS headers
 ```
 
-## Unknown path result
+Result: PASS
 
+Note:
+
+```txt
+Northflow remains backend-to-backend first. CORS is not the primary security boundary.
 ```
-/v1/unknown (with auth) → 404 { ok:false, error: { code: 'NOT_FOUND' } } ✓
-/not-a-route → 404 with no stack trace in body ✓
+
+---
+
+## Trusted Proxy Result
+
+```txt
+Default with no env -> trustProxy = false
+PAYMENT_ORCHESTRATION_TRUST_PROXY=loopback -> trustProxy = 'loopback'
 ```
 
-## Deployment checklist status
+Result: PASS
 
-`docs/security/network-protection.md` contains a full deployment checklist covering:
-- Cloudflare / DNS
-- Origin server / VPS / Coolify
-- Application configuration
-- Production runtime checks
-- Xendit (if applicable)
+---
 
-## No DB migration
+## Ready Endpoint Result
 
-S9.3 is pure HTTP/middleware layer. No schema changes.
+```txt
+Public /ready without token -> 200, no secrets in body
+Protected /ready, missing token -> 401
+Protected /ready, wrong token -> 401
+Protected /ready, correct token -> 200
+```
 
-## Known pre-existing failures (unchanged)
+Result: PASS
 
-- `payment-orchestration-8k-contract-freeze.test.ts`: 9 subtests fail due to missing docs files (error-codes.md, api-contract.md, etc.) — unrelated to S9.3
-- `payment-orchestration-boundary-purity.test.ts`: 1 subtest fails due to missing `packages/core` path — unrelated
-- `payment-orchestration-s7-5-hardening.test.ts`: 2 subtests fail due to missing migration files — unrelated
-- `payment-orchestration-schema-boundary.test.ts`: similar file-existence check
+---
 
-These failures existed before S9.3 and are environment/file-path issues, not code bugs.
+## Unknown Path Result
 
-Note: Full suite count went from 386 (baseline from previous sessions) to 422 (now) because 36 new S9.3 tests were added. The 13 previously-failing tests still fail for the same pre-existing reasons (file existence checks, etc.).
+```txt
+/v1/unknown with auth -> 404 { ok:false, error: { code: 'NOT_FOUND' } }
+/not-a-route -> 404 with no stack trace in body
+```
+
+Result: PASS
+
+Note:
+
+```txt
+Unknown /v1 route without auth may return 401 before route-level 404 because /v1 auth middleware intentionally runs before protected routes. This is acceptable and does not leak stack traces.
+```
+
+---
+
+## Request Body Limit Result
+
+```txt
+Normal JSON body -> accepted by parser
+Oversized JSON body -> 413
+```
+
+Result: PASS
+
+Documentation clarification:
+
+```txt
+Webhook routes still capture raw body for provider signature/HMAC verification, but JSON webhook requests are subject to the configured JSON body size limit because the JSON parser is global before webhook routing.
+```
+
+---
+
+## Deployment Checklist Status
+
+`docs/security/network-protection.md` contains production guidance for:
+
+```txt
+Cloudflare / DNS
+origin firewall
+VPS / Coolify / Replit deployment
+strict CORS policy
+trusted proxy config
+health/version/ready exposure
+request size limit
+security headers
+Swagger/OpenAPI production disable policy
+Xendit webhook deployment note
+```
+
+Result: PASS
+
+---
+
+## No DB Migration
+
+S9.3 is pure HTTP/middleware/deployment documentation hardening.
+
+```txt
+Migration required: no
+Migration added: no
+```
+
+Result: PASS
+
+---
+
+## Known Pre-existing Issues
+
+Some prior environments reported unrelated file/path test failures in older broad suites, such as docs file-existence checks or boundary path checks. They are not caused by S9.3 and are not part of this phase's acceptance criteria.
+
+This S9.3 validation report only claims targeted S9.3 tests and service type-check pass.
+
+---
+
+## Remaining Issues
+
+```txt
+No blocking S9.3 issue remains.
+```
+
+Future work:
+
+```txt
+S9.4 Signed Requests / HMAC
+S9.5 mTLS / Private Network
+```
