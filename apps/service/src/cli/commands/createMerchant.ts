@@ -63,12 +63,12 @@ export async function runCreateMerchant(
       merchantId: merchant.id,
       resourceType: 'merchant',
       resourceId: merchant.id,
-      metadata: { merchantId: merchant.id, name: merchant.name, created },
+      metadata: { merchantId: merchant.id, displayName: merchant.displayName, created },
     });
 
     return succeed(op, {
       merchantId: merchant.id,
-      name: merchant.name,
+      displayName: merchant.displayName,
       legalName: merchant.legalName,
       sourceApp: merchant.sourceApp,
       externalRef: merchant.externalRef,
