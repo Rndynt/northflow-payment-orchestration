@@ -2,20 +2,18 @@
  * adminContext — S10: bootstrap context for nf-admin CLI.
  *
  * Loads environment, creates DB connection and repositories.
- * Validates admin bootstrap token for sensitive operations.
  *
  * Bootstrap access model:
- *   PAYMENT_ORCHESTRATION_ADMIN_BOOTSTRAP_TOKEN env var (optional but recommended).
- *   If set, all state-changing commands must provide the matching token via
- *   PAYMENT_ORCHESTRATION_ADMIN_BOOTSTRAP_TOKEN env (same var — CLI and env must agree).
- *   If not set, the CLI trusts that direct server environment access is sufficient.
- *   Help/list/get commands never require the token.
+ *   Local trusted runtime only.
+ *   The CLI is intended to be executed by an operator with direct server,
+ *   deployment, or CI environment access. It is not an HTTP admin API and it
+ *   does not implement dashboard/session authentication.
  *
  * Security invariants:
- *   - Token is NEVER logged.
- *   - Token is NEVER returned in any output.
- *   - Token is NEVER included in audit metadata.
- *   - If configured and wrong/missing for sensitive ops → fail closed.
+ *   - CLI output is explicitly redacted by command/output helpers.
+ *   - Raw credentials/signing material are returned only by create operations.
+ *   - Provider secrets, database URLs, and protected key material are never
+ *     included in audit metadata.
  */
 
 import { loadEnv } from '../config/env.ts';
@@ -79,29 +77,14 @@ export function createAdminContext(): AdminContext {
 }
 
 /**
- * assertAdminToken — validates the admin bootstrap token for sensitive operations.
+ * assertAdminRuntimeAccess — intentionally local-only.
  *
- * If PAYMENT_ORCHESTRATION_ADMIN_BOOTSTRAP_TOKEN is set, this function verifies
- * that the env token matches itself (the operator must have direct env access).
- * If the env var is not set, the function trusts local/direct server access.
- *
- * Sensitive operations = any operation that creates, modifies, or revokes records.
- * Read-only operations (list/get) skip this check.
+ * This is not a token verifier. Sensitive commands are protected by deployment
+ * access: the operator must already be able to run commands inside the service
+ * environment. Dashboard/API authentication belongs to a future dashboard phase.
  */
-export function assertAdminToken(): void {
-  const configured = process.env['PAYMENT_ORCHESTRATION_ADMIN_BOOTSTRAP_TOKEN'];
-  if (!configured || !configured.trim()) {
-    return;
-  }
-  const provided = process.env['PAYMENT_ORCHESTRATION_ADMIN_BOOTSTRAP_TOKEN'];
-  if (!provided || !provided.trim()) {
-    console.error(
-      '[nf-admin] Error: PAYMENT_ORCHESTRATION_ADMIN_BOOTSTRAP_TOKEN is configured ' +
-        'but not available in this process environment. Run the CLI in the same ' +
-        'environment as the service.',
-    );
-    process.exit(1);
-  }
+export function assertAdminRuntimeAccess(): void {
+  return;
 }
 
 /**
