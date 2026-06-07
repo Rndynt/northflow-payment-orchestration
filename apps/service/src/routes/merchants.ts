@@ -11,10 +11,10 @@
  *     - Grant creation errors propagate as 500 (not swallowed).
  */
 
-import { randomUUID } from 'crypto';
 import { Router } from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import type { ServiceContainer } from '../container.ts';
+import { createMerchantWithGrantAtomic } from '../container.ts';
 import { apiErrorResponse } from './utils.ts';
 import { requireScope } from '../middleware/requireScope.ts';
 import { assertMerchantAccessWithScope, assertSourceApp } from '../middleware/merchantAccess.ts';
@@ -55,25 +55,31 @@ export function createMerchantsRouter(container: ServiceContainer): Router {
       const sourceAppErr = assertSourceApp(req.auth!, body);
       if (sourceAppErr) { res.status(403).json(sourceAppErr); return; }
 
-      const result = await container.useCases.createMerchant.execute({
+      // P1.1: Atomic merchant + grant creation for normal clients.
+      // createMerchantWithGrantAtomic wraps both writes in db.transaction() when a
+      // real DB is available, ensuring the merchant and its access grant are either
+      // both committed or both rolled back. An orphan merchant (no grant) cannot
+      // survive a partial failure.
+      const merchantInput = {
         id: typeof id === 'string' ? id : undefined,
         name,
         legalName: typeof legalName === 'string' ? legalName : null,
         sourceApp: typeof body['sourceApp'] === 'string' ? body['sourceApp'] : null,
         externalRef: typeof externalRef === 'string' ? externalRef : null,
         metadata: metadata != null && typeof metadata === 'object' ? (metadata as Record<string, unknown>) : {},
-      });
+      };
 
-      // P1.1: S3 — link newly-created merchant to the creating API client (non-legacy, non-system).
-      // Grant creation is awaited and errors are NOT swallowed — a grant failure causes
-      // the entire request to fail (500) so the caller knows no orphan merchant was created.
-      if (result.created && isNormalClient && accessRepo) {
-        await accessRepo.create({
-          id: randomUUID(),
-          clientId: req.auth!.clientId,
-          merchantId: result.merchant.id,
-          scopes: req.auth!.scopes,
-        });
+      let result;
+      if (isNormalClient && accessRepo) {
+        // Normal client: atomic transaction guarantees merchant + grant or nothing.
+        result = await createMerchantWithGrantAtomic(
+          container,
+          merchantInput,
+          { clientId: req.auth!.clientId, scopes: req.auth!.scopes },
+        );
+      } else {
+        // Legacy/internal client: no grant needed.
+        result = await container.useCases.createMerchant.execute(merchantInput);
       }
 
       res.status(result.created ? 201 : 200).json({

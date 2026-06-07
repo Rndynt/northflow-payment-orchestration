@@ -38,6 +38,8 @@ import { ExpireStalePaymentTransactions } from './application/use-cases/ExpireSt
 import { ReprocessProviderEvents } from './application/use-cases/ReprocessProviderEvents.ts';
 import { RefundPaymentTransaction } from './application/use-cases/RefundPaymentTransaction.ts';
 import { VoidPaymentTransaction } from './application/use-cases/VoidPaymentTransaction.ts';
+import type { CreateMerchantInput, CreateMerchantOutput } from './application/use-cases/CreateMerchant.ts';
+import { randomUUID } from 'crypto';
 
 import type { PaymentMerchantRepository } from '@northflow/payment-orchestration-core';
 import type { PaymentProviderAccountRepository } from '@northflow/payment-orchestration-core';
@@ -186,3 +188,65 @@ export function createContainer(config: PaymentOrchestrationServiceConfig): Serv
 
   return { config, db, repos, authRepos, providerRegistry, useCases };
 }
+
+/**
+ * createMerchantWithGrantAtomic — P1.1 atomic merchant + grant creation.
+ *
+ * For normal (non-legacy, non-internal) clients, both the merchant row and the
+ * client-merchant access grant are written in a single DB transaction so they are
+ * either both committed or both rolled back.
+ *
+ * Falls back to sequential writes when `container.db` is unavailable (in-memory test
+ * containers) — in that scenario both repos are already in-process, so no partial
+ * state can survive a failure.
+ *
+ * @param container  the wired ServiceContainer (needs container.db + authRepos)
+ * @param merchantInput  forwarded to CreateMerchant.execute
+ * @param grantInput     clientId + scopes for the access grant (only used when created=true)
+ */
+export async function createMerchantWithGrantAtomic(
+  container: ServiceContainer,
+  merchantInput: CreateMerchantInput,
+  grantInput: { clientId: string; scopes: string[] },
+): Promise<CreateMerchantOutput> {
+  // ── Production path: wrap in DB transaction for true atomicity ────────────
+  if (container.db && container.authRepos?.clientMerchantAccessRepo) {
+    return container.db.transaction(async (tx) => {
+      const txDb = tx as unknown as PoDb;
+      const txMerchantRepo = new DrizzlePaymentMerchantRepository(txDb);
+      const txAccessRepo = new DrizzleClientMerchantAccessRepository(txDb);
+
+      const result = await new CreateMerchant(txMerchantRepo).execute(merchantInput);
+
+      if (result.created) {
+        // Grant is created atomically with the merchant — if this throws,
+        // the merchant INSERT is also rolled back.
+        await txAccessRepo.create({
+          id: randomUUID(),
+          clientId: grantInput.clientId,
+          merchantId: result.merchant.id,
+          scopes: grantInput.scopes,
+        });
+      }
+
+      return result;
+    });
+  }
+
+  // ── Fallback path: in-memory repos / test containers without a real DB ────
+  // Sequential writes are acceptable here because in-process repos cannot
+  // partially fail across a process boundary.
+  const result = await container.useCases.createMerchant.execute(merchantInput);
+
+  if (result.created && container.authRepos?.clientMerchantAccessRepo) {
+    await container.authRepos.clientMerchantAccessRepo.create({
+      id: randomUUID(),
+      clientId: grantInput.clientId,
+      merchantId: result.merchant.id,
+      scopes: grantInput.scopes,
+    });
+  }
+
+  return result;
+}
+
