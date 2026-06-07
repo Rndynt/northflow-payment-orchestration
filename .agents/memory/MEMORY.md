@@ -12,3 +12,4 @@
 - [S9.4 final patch validation](s9-4-validation.md) — strict 32-byte key enforcement; prod default=required; SDK imports core canonical logic; ENC_SECRET must be exactly 32 bytes; consumer names genericized; 444/444 pass.
 - [S9.4 no-external-refs cleanup](s9-4-validation.md) — createAuraPosPaymentScope→createPaymentScope; 3 integration docs renamed to consumer-a/b/c; zero old project name refs confirmed; 444/444 pass.
 - [S10 admin CLI](s10-operational-bootstrap-admin-runtime-validation.md) — nf-admin CLI; 15 commands; list-clients uses db.select directly (no repo.list()); AdminContext.db is the raw Drizzle db; 485/485 pass.
+- [S10.1 Standalone prefix cleanup](s10-1-standalone-prefix-naming-cleanup-validation.md) — all Standalone* symbols renamed; deprecated aliases kept; shim files for old paths; 485/485 pass.

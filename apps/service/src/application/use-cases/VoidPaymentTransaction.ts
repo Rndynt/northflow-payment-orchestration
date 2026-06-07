@@ -14,8 +14,8 @@ import type {
   PaymentIntentRepository,
   PaymentTransactionRepository,
   PaymentProviderAccountRepository,
-  StandalonePaymentTransactionDTO,
-  StandalonePaymentIntentDTO,
+  PaymentTransactionDTO,
+  PaymentIntentDTO,
 } from '@northflow/payment-orchestration-core';
 import type { ProviderRegistry } from '../../infrastructure/providers/providerRegistry.ts';
 
@@ -34,9 +34,9 @@ export interface VoidPaymentTransactionInput {
 
 export interface VoidPaymentTransactionOutput {
   /** The transaction after being cancelled, or replayed if already cancelled with the same key. */
-  transaction: StandalonePaymentTransactionDTO;
+  transaction: PaymentTransactionDTO;
   /** The parent intent (unchanged — totals not affected by void). */
-  intent: StandalonePaymentIntentDTO | null;
+  intent: PaymentIntentDTO | null;
   /** true if the provider API was called; false for manual/offline replay/cancel. */
   providerCancelled: boolean;
   /** true when idempotencyKey matched the existing cancelled transaction. */
@@ -47,7 +47,7 @@ function isOfflineCancelProvider(providerCode: string): boolean {
   return OFFLINE_CANCEL_PROVIDERS.has(providerCode);
 }
 
-function transitionError(transactionId: string, tx: StandalonePaymentTransactionDTO): Error {
+function transitionError(transactionId: string, tx: PaymentTransactionDTO): Error {
   return Object.assign(
     new Error(
       `Transaction ${transactionId} cannot be voided. ` +
@@ -184,9 +184,9 @@ export class VoidPaymentTransaction {
   }
 
   private async loadIntent(
-    tx: StandalonePaymentTransactionDTO,
+    tx: PaymentTransactionDTO,
     merchantId: string,
-  ): Promise<StandalonePaymentIntentDTO | null> {
+  ): Promise<PaymentIntentDTO | null> {
     try {
       return await this.intentRepo.findById(tx.intentId, merchantId);
     } catch {

@@ -438,8 +438,8 @@ apps/payment-orchestration-service/src/infrastructure/repositories/mappers.ts
 ```ts
 mapMerchantRow(row: MerchantRow): PaymentMerchant
 mapProviderAccountRow(row: ProviderAccountRow): PaymentProviderAccount
-mapIntentRow(row: IntentRow): StandalonePaymentIntentDTO
-mapTransactionRow(row: TransactionRow): StandalonePaymentTransactionDTO
+mapIntentRow(row: IntentRow): PaymentIntentDTO
+mapTransactionRow(row: TransactionRow): PaymentTransactionDTO
 mapProviderEventRow(row: ProviderEventRow): PaymentProviderEventDTO
 mapIdempotencyKeyRow(row: IdempotencyKeyRow): PaymentIdempotencyKeyDTO
 ```
@@ -492,7 +492,7 @@ Phase 8D upgrades the standalone service from a Phase 8A skeleton (all `/v1/...`
 #### Foundation
 - `src/config/env.ts` — added `dbUrl` (resolves `PAYMENT_ORCHESTRATION_DATABASE_URL` → `DATABASE_URL`), phase updated to `'8D'`
 - `src/infrastructure/db.ts` — `createPoDb(dbUrl)`: Drizzle/postgres.js connection, pool max 3, `prepare: false` for NeonDB/PgBouncer compatibility
-- `src/infrastructure/providers/StandaloneFakeGatewayProvider.ts` — 7-scenario FakeGateway (qris, redirect, va, payment_code, immediate_success, immediate_failure, pending_expiry)
+- `src/infrastructure/providers/FakeGatewayProvider.ts` — 7-scenario FakeGateway (qris, redirect, va, payment_code, immediate_success, immediate_failure, pending_expiry)
 - `src/infrastructure/providers/providerRegistry.ts` — registers FakeGateway in non-production; empty in production
 - `src/middleware/auth.ts` — dual-header service token: `x-payment-orchestration-service-token` (primary) + `x-payment-engine-service-token` (compat alias)
 - `src/middleware/errors.ts` — global Express error handler, sanitizes 5xx messages

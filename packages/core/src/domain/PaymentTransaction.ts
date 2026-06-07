@@ -1,14 +1,12 @@
 /**
- * PaymentTransaction — standalone transaction DTO contracts.
+ * PaymentTransaction — payment transaction DTO contracts.
  *
  * Represents an individual payment attempt against a PaymentIntent.
  * Scoped by `merchantId` (not legacy `tenantId`).
- *
- * Phase 8A: contract-only.
  */
 
 /**
- * Status of a standalone payment transaction.
+ * Status of a payment transaction.
  *
  * - `pending`         — submitted but not yet confirmed by provider
  * - `requires_action` — waiting for customer action (QR scan, redirect, VA payment)
@@ -16,7 +14,7 @@
  * - `failed`          — payment rejected by provider or timed out
  * - `cancelled`       — cancelled before settlement (void)
  */
-export type StandaloneTransactionStatus =
+export type PaymentTransactionStatus =
   | 'pending'
   | 'requires_action'
   | 'succeeded'
@@ -28,10 +26,13 @@ export type StandaloneTransactionStatus =
   | 'reversed'
   | 'ignored';
 
+/** @deprecated Use PaymentTransactionStatus instead. */
+export type StandaloneTransactionStatus = PaymentTransactionStatus;
+
 /**
- * StandalonePaymentTransactionDTO — the read model for a payment transaction.
+ * PaymentTransactionDTO — the read model for a payment transaction.
  */
-export interface StandalonePaymentTransactionDTO {
+export interface PaymentTransactionDTO {
   id: string;
   merchantId: string;
   intentId: string;
@@ -39,7 +40,7 @@ export interface StandalonePaymentTransactionDTO {
   provider: string;
   method: string;
   transactionType: string;
-  status: StandaloneTransactionStatus;
+  status: PaymentTransactionStatus;
   direction: 'incoming' | 'outgoing';
   amount: number;
   currency: string;
@@ -56,3 +57,6 @@ export interface StandalonePaymentTransactionDTO {
   createdAt: Date;
   updatedAt: Date;
 }
+
+/** @deprecated Use PaymentTransactionDTO instead. */
+export type StandalonePaymentTransactionDTO = PaymentTransactionDTO;

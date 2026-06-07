@@ -90,7 +90,7 @@ export function createHealthRouter(
       service: 'payment-orchestration-service',
       version: config.version,
       phase: config.phase,
-      description: 'Payment Orchestration Standalone Service — hybrid extraction scaffold',
+      description: 'Payment Orchestration Service — hybrid extraction scaffold',
       status: 'runtime-readiness-foundation',
     });
   });

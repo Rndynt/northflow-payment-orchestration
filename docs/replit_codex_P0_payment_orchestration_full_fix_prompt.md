@@ -405,7 +405,7 @@ Suggested rules:
 - If `amountRefunded > 0 && amountRefunded < amountPaid`: status may remain `paid` or use a new explicit `partially_refunded` status if you add it consistently.
 - If `amountRefunded >= amountPaid && amountPaid > 0`: status = `refunded`.
 
-Because `StandaloneIntentStatus` currently includes `refunded` but not `partially_refunded`, avoid introducing a breaking new status unless you also update all unions, tests, docs, SDK, OpenAPI, and migrations.
+Because `PaymentIntentStatus` currently includes `refunded` but not `partially_refunded`, avoid introducing a breaking new status unless you also update all unions, tests, docs, SDK, OpenAPI, and migrations.
 
 Minimum required behavior:
 

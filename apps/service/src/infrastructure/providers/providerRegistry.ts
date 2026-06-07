@@ -2,20 +2,20 @@
  * providerRegistry — standalone payment provider registry.
  *
  * Phase 8I: registers FakeGateway for safe non-production use and Xendit sandbox only when its runtime policy is explicit.
- * Phase 8F: added StandaloneManualProvider (always registered — handles cash/offline payments in all environments).
+ * Phase 8F: added ManualProvider (always registered — handles cash/offline payments in all environments).
  *
  * Rules:
  * - ManualProvider is always registered in all environments.
  * - FakeGateway is always registered in non-production.
  * - Xendit sandbox is disabled unless explicitly enabled by environment.
- * - Standalone extraction first; source applications integrate only after service/package
+ * - Source applications integrate only after service/package
  *   boundary, provider runtime, operations, and extraction simulation are stable.
  * - Never change embedded provider registry in packages/infrastructure/payments/.
  */
 
-import type { StandalonePaymentProvider } from './StandalonePaymentProvider.ts';
-import { StandaloneFakeGatewayProvider } from './StandaloneFakeGatewayProvider.ts';
-import { StandaloneManualProvider } from './StandaloneManualProvider.ts';
+import type { PaymentProviderAdapter } from './PaymentProviderAdapter.ts';
+import { FakeGatewayProvider } from './FakeGatewayProvider.ts';
+import { ManualProvider } from './ManualProvider.ts';
 import { XenditSandboxProvider } from './XenditSandboxProvider.ts';
 import {
   createUnconfiguredXenditHttpClient,
@@ -23,7 +23,7 @@ import {
   loadXenditRuntimeConfig,
 } from './xenditHttpClient.ts';
 
-export type ProviderRegistry = Map<string, StandalonePaymentProvider>;
+export type ProviderRegistry = Map<string, PaymentProviderAdapter>;
 
 export interface ProviderRuntimeReadiness {
   registered: boolean;
@@ -40,10 +40,10 @@ export function createProviderRegistry(
   nodeEnv: string,
   options: ProviderRegistryRuntimeOptions = {},
 ): ProviderRegistry {
-  const registry = new Map<string, StandalonePaymentProvider>();
+  const registry = new Map<string, PaymentProviderAdapter>();
 
   // ── Manual provider: always registered (cash/offline payments in all envs) ──
-  const manual = new StandaloneManualProvider();
+  const manual = new ManualProvider();
   registry.set(manual.providerCode, manual);
   console.log(
     `[payment-orchestration-service/providers] Registered provider: ${manual.providerCode} (all environments)`,
@@ -51,7 +51,7 @@ export function createProviderRegistry(
 
   // ── FakeGateway: dev/test only ────────────────────────────────────────────
   if (nodeEnv !== 'production') {
-    const fakeGateway = new StandaloneFakeGatewayProvider();
+    const fakeGateway = new FakeGatewayProvider();
     registry.set(fakeGateway.providerCode, fakeGateway);
     console.log(
       `[payment-orchestration-service/providers] Registered provider: ${fakeGateway.providerCode} (dev/test only)`,

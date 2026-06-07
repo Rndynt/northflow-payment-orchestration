@@ -16,8 +16,8 @@ import type {
   PaymentIntentRepository,
   PaymentTransactionRepository,
   PaymentProviderAccountRepository,
-  StandalonePaymentTransactionDTO,
-  StandalonePaymentIntentDTO,
+  PaymentTransactionDTO,
+  PaymentIntentDTO,
 } from '@northflow/payment-orchestration-core';
 import type { ProviderRegistry } from '../../infrastructure/providers/providerRegistry.ts';
 import { computeIntentStatusAfterRefund } from './intentStatusHelper.ts';
@@ -39,9 +39,9 @@ export interface RefundPaymentTransactionInput {
 
 export interface RefundPaymentTransactionOutput {
   /** The outgoing refund transaction, newly created or replayed idempotently. */
-  refundTransaction: StandalonePaymentTransactionDTO;
+  refundTransaction: PaymentTransactionDTO;
   /** The parent intent with updated amountRefunded. */
-  intent: StandalonePaymentIntentDTO;
+  intent: PaymentIntentDTO;
   /** true if the provider API was called; false for manual/offline replay/refund. */
   providerRefunded: boolean;
   /** true when idempotencyKey matched a prior refund for the same source transaction. */

@@ -17,7 +17,7 @@ import type {
   ApplySucceededRefundInput,
   ApplySucceededRefundResult,
 } from '@northflow/payment-orchestration-core';
-import type { StandalonePaymentTransactionDTO } from '@northflow/payment-orchestration-core';
+import type { PaymentTransactionDTO } from '@northflow/payment-orchestration-core';
 import type { PoDb } from '../db.ts';
 import {
   poTransactions as t,
@@ -170,7 +170,7 @@ export class DrizzlePaymentTransactionRepository
   async findById(
     id: string,
     merchantId: string,
-  ): Promise<StandalonePaymentTransactionDTO | null> {
+  ): Promise<PaymentTransactionDTO | null> {
     const rows = await this.db
       .select()
       .from(t)
@@ -184,7 +184,7 @@ export class DrizzlePaymentTransactionRepository
   async findByIntentId(
     intentId: string,
     merchantId: string,
-  ): Promise<StandalonePaymentTransactionDTO[]> {
+  ): Promise<PaymentTransactionDTO[]> {
     const rows = await this.db
       .select()
       .from(t)
@@ -192,7 +192,7 @@ export class DrizzlePaymentTransactionRepository
     return rows.map((r) => mapTransactionRow(r as any));
   }
 
-  async findStalePendingTransactions(input: { now: Date; limit: number }): Promise<StandalonePaymentTransactionDTO[]> {
+  async findStalePendingTransactions(input: { now: Date; limit: number }): Promise<PaymentTransactionDTO[]> {
     const rows = await this.db
       .select()
       .from(t)
@@ -210,7 +210,7 @@ export class DrizzlePaymentTransactionRepository
   async findByProviderReference(
     provider: string,
     providerReference: string,
-  ): Promise<StandalonePaymentTransactionDTO | null> {
+  ): Promise<PaymentTransactionDTO | null> {
     const rows = await this.db
       .select()
       .from(t)
@@ -229,7 +229,7 @@ export class DrizzlePaymentTransactionRepository
   async findByMerchantIdempotencyKey(
     merchantId: string,
     idempotencyKey: string,
-  ): Promise<StandalonePaymentTransactionDTO | null> {
+  ): Promise<PaymentTransactionDTO | null> {
     const rows = await this.db
       .select()
       .from(t)
@@ -242,7 +242,7 @@ export class DrizzlePaymentTransactionRepository
 
   async create(
     input: CreatePaymentTransactionInput,
-  ): Promise<StandalonePaymentTransactionDTO> {
+  ): Promise<PaymentTransactionDTO> {
     const now = new Date();
     const rows = await this.db
       .insert(t)
@@ -279,7 +279,7 @@ export class DrizzlePaymentTransactionRepository
 
   async updateStatus(
     input: UpdateTransactionStatusInput,
-  ): Promise<StandalonePaymentTransactionDTO> {
+  ): Promise<PaymentTransactionDTO> {
     const rows = await this.db
       .update(t)
       .set({

@@ -10,8 +10,8 @@ import type {
   PaymentIntentRepository,
   PaymentProviderAccountRepository,
   PaymentTransactionRepository,
-  StandalonePaymentIntentDTO,
-  StandalonePaymentTransactionDTO,
+  PaymentIntentDTO,
+  PaymentTransactionDTO,
 } from '@northflow/payment-orchestration-core';
 import type { ProviderRegistry } from '../../infrastructure/providers/providerRegistry.ts';
 import { computeIntentStatus } from './intentStatusHelper.ts';
@@ -24,8 +24,8 @@ export interface RefreshProviderStatusInput {
 }
 
 export interface RefreshProviderStatusOutput {
-  transaction: StandalonePaymentTransactionDTO;
-  intent: StandalonePaymentIntentDTO | null;
+  transaction: PaymentTransactionDTO;
+  intent: PaymentIntentDTO | null;
   providerStatus: string;
   changed: boolean;
 }

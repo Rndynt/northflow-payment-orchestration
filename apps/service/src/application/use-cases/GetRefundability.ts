@@ -15,7 +15,7 @@ import type {
   PaymentIntentRepository,
   PaymentTransactionRepository,
 } from '@northflow/payment-orchestration-core';
-import type { StandalonePaymentTransactionDTO } from '@northflow/payment-orchestration-core';
+import type { PaymentTransactionDTO } from '@northflow/payment-orchestration-core';
 
 export interface GetRefundabilityInput {
   merchantId: string;
@@ -64,7 +64,7 @@ export class GetRefundability {
       input.merchantId,
     );
 
-    const sourceTxns: StandalonePaymentTransactionDTO[] = allTransactions.filter(
+    const sourceTxns: PaymentTransactionDTO[] = allTransactions.filter(
       (tx) =>
         tx.direction === 'incoming' &&
         REFUNDABLE_TYPES.has(tx.transactionType) &&

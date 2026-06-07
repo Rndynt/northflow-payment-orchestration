@@ -26,9 +26,9 @@ import type {
 } from '@northflow/payment-orchestration-core';
 import type {
   PaymentProviderAccount,
-  StandalonePaymentIntentDTO,
-  StandalonePaymentTransactionDTO,
-  StandaloneTransactionStatus,
+  PaymentIntentDTO,
+  PaymentTransactionDTO,
+  PaymentTransactionStatus,
 } from '@northflow/payment-orchestration-core';
 import type { ProviderRegistry } from '../../infrastructure/providers/providerRegistry.ts';
 import { assertIntentPayable, assertPaymentAmountAllowed, computeIntentStatus } from './intentStatusHelper.ts';
@@ -75,8 +75,8 @@ export interface CreateGatewayPaymentInput {
 }
 
 export interface CreateGatewayPaymentOutput {
-  transaction: StandalonePaymentTransactionDTO;
-  intent: StandalonePaymentIntentDTO;
+  transaction: PaymentTransactionDTO;
+  intent: PaymentIntentDTO;
   idempotentReplay?: boolean;
 }
 
@@ -134,8 +134,8 @@ export class CreateGatewayPayment {
         if (existingPrecheck.status === 'completed') {
           const snapshot = existingPrecheck.responseSnapshot as Record<string, unknown>;
           return {
-            transaction: snapshot['transaction'] as StandalonePaymentTransactionDTO,
-            intent: snapshot['intent'] as StandalonePaymentIntentDTO,
+            transaction: snapshot['transaction'] as PaymentTransactionDTO,
+            intent: snapshot['intent'] as PaymentIntentDTO,
             idempotentReplay: true,
           };
         }
@@ -304,8 +304,8 @@ export class CreateGatewayPayment {
         if (existingKey.status === 'completed') {
           const snapshot = existingKey.responseSnapshot as Record<string, unknown>;
           return {
-            transaction: snapshot['transaction'] as StandalonePaymentTransactionDTO,
-            intent: snapshot['intent'] as StandalonePaymentIntentDTO,
+            transaction: snapshot['transaction'] as PaymentTransactionDTO,
+            intent: snapshot['intent'] as PaymentIntentDTO,
             idempotentReplay: true,
           };
         }
@@ -352,7 +352,7 @@ export class CreateGatewayPayment {
 
     // ── Create transaction record ─────────────────────────────────────────────
     const txId = `tx_${randomUUID()}`;
-    const txStatus = providerResult.status as StandaloneTransactionStatus;
+    const txStatus = providerResult.status as PaymentTransactionStatus;
 
     const transaction = await this.transactionRepo.create({
       id: txId,

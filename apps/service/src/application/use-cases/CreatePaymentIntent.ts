@@ -12,7 +12,7 @@ import type {
   PaymentIntentRepository,
   PaymentIdempotencyRepository,
 } from '@northflow/payment-orchestration-core';
-import type { StandalonePaymentIntentDTO } from '@northflow/payment-orchestration-core';
+import type { PaymentIntentDTO } from '@northflow/payment-orchestration-core';
 
 
 function stableJson(value: unknown): string {
@@ -59,7 +59,7 @@ export interface CreatePaymentIntentInput {
 }
 
 export interface CreatePaymentIntentOutput {
-  intent: StandalonePaymentIntentDTO;
+  intent: PaymentIntentDTO;
   created: boolean;
 }
 

@@ -1,5 +1,5 @@
 /**
- * Standalone payment-orchestration worker runner.
+ * Payment-orchestration worker runner.
  *
  * Runs without Express and prints JSON summaries. Operations intentionally avoid
  * real provider network calls unless a specific future worker explicitly opts in.

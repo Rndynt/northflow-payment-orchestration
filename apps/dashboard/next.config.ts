@@ -4,7 +4,10 @@ const devDomain = process.env.NEXT_PUBLIC_REPLIT_DEV_DOMAIN;
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  transpilePackages: ["@northflow/payment-orchestration-client-sdk"],
+  transpilePackages: [
+    "@northflow/payment-orchestration-client-sdk",
+    "@northflow/payment-orchestration-core",
+  ],
   allowedDevOrigins: devDomain ? [devDomain, `*.${devDomain}`] : [],
 };
 

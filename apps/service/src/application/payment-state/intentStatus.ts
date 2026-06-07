@@ -1,18 +1,18 @@
-import type { StandaloneIntentStatus, StandalonePaymentIntentDTO } from '@northflow/payment-orchestration-core';
+import type { PaymentIntentStatus, PaymentIntentDTO } from '@northflow/payment-orchestration-core';
 
-export function computeIntentStatus(amountDue: number, amountPaid: number): StandaloneIntentStatus {
+export function computeIntentStatus(amountDue: number, amountPaid: number): PaymentIntentStatus {
   if (amountPaid <= 0) return 'requires_payment';
   if (amountPaid > amountDue) return 'overpaid';
   if (amountPaid >= amountDue) return 'paid';
   return 'partially_paid';
 }
 
-export function computeIntentStatusAfterRefund(intent: StandalonePaymentIntentDTO, amountRefunded: number): StandaloneIntentStatus {
+export function computeIntentStatusAfterRefund(intent: PaymentIntentDTO, amountRefunded: number): PaymentIntentStatus {
   if (amountRefunded > 0 && intent.amountPaid > 0 && amountRefunded >= intent.amountPaid) return 'refunded';
   return intent.status;
 }
 
-export function assertIntentPayable(intent: StandalonePaymentIntentDTO, now: Date = new Date()): void {
+export function assertIntentPayable(intent: PaymentIntentDTO, now: Date = new Date()): void {
   if (intent.expiresAt && intent.expiresAt.getTime() <= now.getTime()) {
     throw Object.assign(new Error('Payment intent has expired.'), { statusCode: 422, code: 'INTENT_EXPIRED' });
   }
@@ -24,7 +24,7 @@ export function assertIntentPayable(intent: StandalonePaymentIntentDTO, now: Dat
   }
 }
 
-export function assertPaymentAmountAllowed(intent: StandalonePaymentIntentDTO, amount: number): void {
+export function assertPaymentAmountAllowed(intent: PaymentIntentDTO, amount: number): void {
   if (amount > intent.amountRemaining) {
     throw Object.assign(
       new Error(`Payment amount (${amount}) exceeds remaining amount (${intent.amountRemaining}). Overpayment is not allowed.`),

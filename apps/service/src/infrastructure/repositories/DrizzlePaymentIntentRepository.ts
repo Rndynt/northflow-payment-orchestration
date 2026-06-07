@@ -13,7 +13,7 @@ import type {
   UpdateIntentStatusInput,
   FindByExternalPayableInput,
 } from '@northflow/payment-orchestration-core';
-import type { StandalonePaymentIntentDTO } from '@northflow/payment-orchestration-core';
+import type { PaymentIntentDTO } from '@northflow/payment-orchestration-core';
 import type { PoDb } from '../db.ts';
 import { poIntents as t } from '../schema.ts';
 import { mapIntentRow } from './mappers.ts';
@@ -24,7 +24,7 @@ export class DrizzlePaymentIntentRepository implements PaymentIntentRepository {
   async findById(
     id: string,
     merchantId: string,
-  ): Promise<StandalonePaymentIntentDTO | null> {
+  ): Promise<PaymentIntentDTO | null> {
     const rows = await this.db
       .select()
       .from(t)
@@ -37,7 +37,7 @@ export class DrizzlePaymentIntentRepository implements PaymentIntentRepository {
 
   async findByExternalPayable(
     input: FindByExternalPayableInput,
-  ): Promise<StandalonePaymentIntentDTO | null> {
+  ): Promise<PaymentIntentDTO | null> {
     const conditions = input.sourceApp
       ? and(
           eq(t.merchantId, input.merchantId),
@@ -63,7 +63,7 @@ export class DrizzlePaymentIntentRepository implements PaymentIntentRepository {
 
   async create(
     input: CreatePaymentIntentDbInput,
-  ): Promise<StandalonePaymentIntentDTO> {
+  ): Promise<PaymentIntentDTO> {
     const now = new Date();
     const amountDue = input.amountDue;
     const rows = await this.db
@@ -98,7 +98,7 @@ export class DrizzlePaymentIntentRepository implements PaymentIntentRepository {
 
   async updateTotals(
     input: UpdateIntentTotalsInput,
-  ): Promise<StandalonePaymentIntentDTO> {
+  ): Promise<PaymentIntentDTO> {
     const rows = await this.db
       .update(t)
       .set({
@@ -114,7 +114,7 @@ export class DrizzlePaymentIntentRepository implements PaymentIntentRepository {
     return mapIntentRow(row as any);
   }
 
-  async findExpiredActive(input: { now: Date; limit: number }): Promise<StandalonePaymentIntentDTO[]> {
+  async findExpiredActive(input: { now: Date; limit: number }): Promise<PaymentIntentDTO[]> {
     const rows = await this.db
       .select()
       .from(t)
@@ -130,7 +130,7 @@ export class DrizzlePaymentIntentRepository implements PaymentIntentRepository {
 
   async updateStatus(
     input: UpdateIntentStatusInput,
-  ): Promise<StandalonePaymentIntentDTO> {
+  ): Promise<PaymentIntentDTO> {
     const rows = await this.db
       .update(t)
       .set({ status: input.status, updatedAt: new Date() })

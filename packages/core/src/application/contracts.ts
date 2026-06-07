@@ -10,7 +10,7 @@
  */
 
 import type { PaymentProviderAction } from '../providers/providerActions';
-import type { StandaloneIntentStatus } from './domain';
+import type { PaymentIntentStatus } from './domain';
 
 // ── Create Gateway Payment ────────────────────────────────────────────────────
 
@@ -45,7 +45,7 @@ export interface GetPaymentIntentStatusInput {
 
 export interface PaymentIntentStatusOutput {
   intentId: string;
-  status: StandaloneIntentStatus;
+  status: PaymentIntentStatus;
   amountDue: number;
   amountPaid: number;
   amountRemaining: number;

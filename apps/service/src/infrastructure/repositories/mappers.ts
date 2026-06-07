@@ -1,5 +1,5 @@
 /**
- * mappers — row → core DTO mapping for standalone payment orchestration.
+ * mappers — row → core DTO mapping for payment orchestration.
  *
  * Pure functions. No DB calls. No side effects.
  * Input types mirror what Drizzle `$inferSelect` produces from the
@@ -15,8 +15,8 @@ import type {
   PaymentProviderAccountEnvironment,
   PaymentProviderAccountStatus,
 } from '@northflow/payment-orchestration-core';
-import type { StandalonePaymentIntentDTO, StandaloneIntentStatus } from '@northflow/payment-orchestration-core';
-import type { StandalonePaymentTransactionDTO, StandaloneTransactionStatus } from '@northflow/payment-orchestration-core';
+import type { PaymentIntentDTO, PaymentIntentStatus } from '@northflow/payment-orchestration-core';
+import type { PaymentTransactionDTO, PaymentTransactionStatus } from '@northflow/payment-orchestration-core';
 import type {
   PaymentProviderEventDTO,
   PaymentProviderEventProcessingStatus,
@@ -171,7 +171,7 @@ export interface ProviderAccountMethodRow {
 /**
  * mapMerchantRow — maps a po_merchants DB row to PaymentMerchant.
  *
- * Uses `id` as the merchantId-equivalent field (standalone merchants use slug/text IDs).
+ * Uses `id` as the merchantId-equivalent field (merchants use slug/text IDs).
  * No `tenantId` exposed.
  */
 export function mapMerchantRow(row: MerchantRow): PaymentMerchant {
@@ -205,12 +205,12 @@ export function mapProviderAccountRow(row: ProviderAccountRow): PaymentProviderA
 }
 
 /**
- * mapIntentRow — maps a po_intents row to StandalonePaymentIntentDTO.
+ * mapIntentRow — maps a po_intents row to PaymentIntentDTO.
  *
  * External references (sourceApp, externalTenantId, etc.) are preserved for callback correlation.
  * No legacy tenantId in the output.
  */
-export function mapIntentRow(row: IntentRow): StandalonePaymentIntentDTO {
+export function mapIntentRow(row: IntentRow): PaymentIntentDTO {
   return {
     id: row.id,
     merchantId: row.merchantId,
@@ -226,7 +226,7 @@ export function mapIntentRow(row: IntentRow): StandalonePaymentIntentDTO {
     amountPaid: row.amountPaid,
     amountRefunded: row.amountRefunded,
     amountRemaining: row.amountRemaining,
-    status: (row.status as StandaloneIntentStatus),
+    status: (row.status as PaymentIntentStatus),
     allowPartial: row.allowPartial,
     expiresAt: row.expiresAt ?? null,
     metadata: (row.metadata as Record<string, unknown>) ?? {},
@@ -237,13 +237,13 @@ export function mapIntentRow(row: IntentRow): StandalonePaymentIntentDTO {
 }
 
 /**
- * mapTransactionRow — maps a po_transactions row to StandalonePaymentTransactionDTO.
+ * mapTransactionRow — maps a po_transactions row to PaymentTransactionDTO.
  *
  * Provider reference and action fields (url, qr) are mapped safely.
  * rawProviderResponse is passed through but callers must not leak it externally.
  * No legacy tenantId in the output.
  */
-export function mapTransactionRow(row: TransactionRow): StandalonePaymentTransactionDTO {
+export function mapTransactionRow(row: TransactionRow): PaymentTransactionDTO {
   return {
     id: row.id,
     merchantId: row.merchantId,
@@ -252,7 +252,7 @@ export function mapTransactionRow(row: TransactionRow): StandalonePaymentTransac
     provider: row.provider,
     method: row.method,
     transactionType: row.transactionType,
-    status: (row.status as StandaloneTransactionStatus),
+    status: (row.status as PaymentTransactionStatus),
     direction: (row.direction as 'incoming' | 'outgoing'),
     amount: row.amount,
     currency: row.currency,

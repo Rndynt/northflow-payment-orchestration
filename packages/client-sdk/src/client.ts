@@ -26,7 +26,6 @@
  *   - Auth priority: apiKey > serviceToken (legacy).
  */
 
-import { randomBytes } from 'crypto';
 import {
   hashBody,
   buildCanonicalString,
@@ -87,16 +86,26 @@ interface SigningHeaders {
   'x-nf-signature-version': string;
 }
 
-function buildSigningHeaders(
+function generateNonce(): string {
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+async function buildSigningHeaders(
   signing: PaymentOrchestrationSigningConfig,
   method: string,
   path: string,
   queryStr: string,
   bodyBytes: Uint8Array | null,
-): SigningHeaders {
+): Promise<SigningHeaders> {
   const timestampMs = Date.now();
-  const nonce = randomBytes(16).toString('base64url');
-  const bodyHash = hashBody(bodyBytes);
+  const nonce = generateNonce();
+  const bodyHashResult = hashBody(bodyBytes);
+  const bodyHash = bodyHashResult instanceof Promise ? await bodyHashResult : bodyHashResult;
   const canonicalStr = buildCanonicalString({
     timestampMs,
     nonce,
@@ -105,7 +114,7 @@ function buildSigningHeaders(
     query: queryStr,
     bodyHash,
   });
-  const signature = computeSignature(signing.secret, canonicalStr);
+  const signature = await computeSignature(signing.secret, canonicalStr);
 
   return {
     'x-nf-client-id': signing.clientId,
@@ -171,7 +180,7 @@ export class PaymentOrchestrationClient {
 
     // S9.4: Attach HMAC signing headers when signing is configured.
     if (this.signing) {
-      const sigHeaders = buildSigningHeaders(
+      const sigHeaders = await buildSigningHeaders(
         this.signing,
         method,
         purePathStr,

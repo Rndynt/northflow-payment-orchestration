@@ -11,15 +11,15 @@ import type {
   PaymentProviderAccount,
 } from '@northflow/payment-orchestration-core';
 import type {
-  StandaloneCreatePaymentInput,
-  StandaloneParsedProviderWebhook,
-  StandalonePaymentProvider,
-  StandaloneProviderResult,
-  StandaloneProviderStatus,
-  StandaloneProviderStatusInput,
-  StandaloneProviderStatusResult,
-  StandaloneProviderWebhookInput,
-} from './StandalonePaymentProvider.ts';
+  ProviderCreatePaymentInput,
+  ParsedProviderWebhook,
+  PaymentProviderAdapter,
+  ProviderPaymentResult,
+  ProviderPaymentStatus,
+  ProviderStatusInput,
+  ProviderStatusResult,
+  ProviderWebhookInput,
+} from './PaymentProviderAdapter.ts';
 
 export interface XenditHttpRequest {
   method: 'GET' | 'POST';
@@ -76,7 +76,7 @@ function readString(input: Record<string, unknown>, ...keys: string[]): string |
   return null;
 }
 
-function mapXenditStatus(rawStatus: unknown): StandaloneProviderStatus | 'ignored' {
+function mapXenditStatus(rawStatus: unknown): ProviderPaymentStatus | 'ignored' {
   const status = typeof rawStatus === 'string' ? rawStatus.toUpperCase() : '';
   switch (status) {
     case 'PAID':
@@ -112,7 +112,7 @@ function stableBody(rawBody: Buffer | Record<string, unknown>): Record<string, u
   }
 }
 
-export class XenditSandboxProvider implements StandalonePaymentProvider {
+export class XenditSandboxProvider implements PaymentProviderAdapter {
   public readonly providerCode = 'xendit_sandbox';
   public readonly capabilities = {
     supportsRefund: false,
@@ -142,7 +142,7 @@ export class XenditSandboxProvider implements StandalonePaymentProvider {
     this.nodeEnv = options.nodeEnv ?? process.env.NODE_ENV ?? 'development';
   }
 
-  async createPayment(input: StandaloneCreatePaymentInput): Promise<StandaloneProviderResult> {
+  async createPayment(input: ProviderCreatePaymentInput): Promise<ProviderPaymentResult> {
     const account = mustProviderAccount(input.providerAccount);
     const apiKey = account.credentialsRef ? await this.resolveCredential(account.credentialsRef) : null;
     if (!apiKey) {
@@ -213,7 +213,7 @@ export class XenditSandboxProvider implements StandalonePaymentProvider {
     };
   }
 
-  parseWebhook(input: StandaloneProviderWebhookInput): StandaloneParsedProviderWebhook {
+  parseWebhook(input: ProviderWebhookInput): ParsedProviderWebhook {
     const callbackToken = getHeader(input.headers, CALLBACK_TOKEN_HEADER);
     const expectedToken = process.env['PAYMENT_ORCHESTRATION_XENDIT_CALLBACK_TOKEN']?.trim() ?? '';
     const allowUnsignedDev = this.nodeEnv !== 'production' && process.env['PAYMENT_ORCHESTRATION_XENDIT_ALLOW_UNSIGNED_DEV_WEBHOOKS'] === 'true';
@@ -252,7 +252,7 @@ export class XenditSandboxProvider implements StandalonePaymentProvider {
     };
   }
 
-  async getPaymentStatus(input: StandaloneProviderStatusInput): Promise<StandaloneProviderStatusResult> {
+  async getPaymentStatus(input: ProviderStatusInput): Promise<ProviderStatusResult> {
     const account = mustProviderAccount(input.providerAccount);
     const apiKey = account.credentialsRef ? await this.resolveCredential(account.credentialsRef) : null;
     if (!apiKey) {

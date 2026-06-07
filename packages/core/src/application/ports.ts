@@ -11,10 +11,10 @@
 
 import type { PaymentMerchant } from '../domain/PaymentMerchant';
 import type {
-  StandalonePaymentIntentDTO,
-  CreateStandalonePaymentIntentInput,
+  PaymentIntentDTO,
+  CreatePaymentIntentRecordInput,
 } from '../domain/PaymentIntent';
-import type { StandalonePaymentTransactionDTO } from '../domain/PaymentTransaction';
+import type { PaymentTransactionDTO } from '../domain/PaymentTransaction';
 import type { PaymentProviderAccount } from '../domain/PaymentProviderAccount';
 
 // ── Merchant ──────────────────────────────────────────────────────────────────
@@ -25,27 +25,33 @@ export interface IPaymentMerchantRepository {
 
 // ── Intent ────────────────────────────────────────────────────────────────────
 
-export interface IStandalonePaymentIntentRepository {
-  create(input: CreateStandalonePaymentIntentInput): Promise<StandalonePaymentIntentDTO>;
-  findById(intentId: string, merchantId: string): Promise<StandalonePaymentIntentDTO | null>;
+export interface PaymentIntentRepositoryPort {
+  create(input: CreatePaymentIntentRecordInput): Promise<PaymentIntentDTO>;
+  findById(intentId: string, merchantId: string): Promise<PaymentIntentDTO | null>;
   findByIdempotencyKey(
     merchantId: string,
     key: string,
-  ): Promise<StandalonePaymentIntentDTO | null>;
+  ): Promise<PaymentIntentDTO | null>;
 }
+
+/** @deprecated Use PaymentIntentRepositoryPort instead. */
+export type IStandalonePaymentIntentRepository = PaymentIntentRepositoryPort;
 
 // ── Transaction ───────────────────────────────────────────────────────────────
 
-export interface IStandalonePaymentTransactionRepository {
+export interface PaymentTransactionRepositoryPort {
   findByIntentId(
     intentId: string,
     merchantId: string,
-  ): Promise<StandalonePaymentTransactionDTO[]>;
+  ): Promise<PaymentTransactionDTO[]>;
   findByIdempotencyKey(
     merchantId: string,
     key: string,
-  ): Promise<StandalonePaymentTransactionDTO | null>;
+  ): Promise<PaymentTransactionDTO | null>;
 }
+
+/** @deprecated Use PaymentTransactionRepositoryPort instead. */
+export type IStandalonePaymentTransactionRepository = PaymentTransactionRepositoryPort;
 
 // ── Provider Account ──────────────────────────────────────────────────────────
 

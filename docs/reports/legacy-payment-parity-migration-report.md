@@ -7,7 +7,7 @@ Date: 2026-06-06
 - `apps/service/src/application/use-cases/RefundPaymentTransaction.ts`
 - `apps/service/src/application/use-cases/VoidPaymentTransaction.ts`
 - `apps/service/src/routes/transactions.ts`
-- `apps/service/src/infrastructure/providers/StandalonePaymentProvider.ts`
+- `apps/service/src/infrastructure/providers/PaymentProviderAdapter.ts`
 - `apps/service/src/infrastructure/repositories/DrizzlePaymentTransactionRepository.ts`
 - `packages/core/src/application/repositories.ts`
 - `packages/client-sdk/src/client.ts`

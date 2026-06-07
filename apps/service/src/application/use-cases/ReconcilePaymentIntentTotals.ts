@@ -23,7 +23,7 @@ import type {
   PaymentIntentRepository,
   PaymentTransactionRepository,
 } from '@northflow/payment-orchestration-core';
-import type { StandalonePaymentIntentDTO } from '@northflow/payment-orchestration-core';
+import type { PaymentIntentDTO } from '@northflow/payment-orchestration-core';
 import { computeIntentStatus } from './intentStatusHelper.ts';
 
 export interface ReconcilePaymentIntentTotalsInput {
@@ -40,7 +40,7 @@ export interface ReconcileIntentSnapshot {
 
 export interface ReconcilePaymentIntentTotalsOutput {
   /** The intent after reconciliation (may be unchanged if changed=false). */
-  intent: StandalonePaymentIntentDTO;
+  intent: PaymentIntentDTO;
   /** Totals recorded in DB before reconciliation. */
   before: ReconcileIntentSnapshot;
   /** Recomputed totals from actual transaction state. */

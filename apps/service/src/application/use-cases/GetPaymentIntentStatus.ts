@@ -10,8 +10,8 @@ import type {
   PaymentTransactionRepository,
 } from '@northflow/payment-orchestration-core';
 import type {
-  StandalonePaymentIntentDTO,
-  StandalonePaymentTransactionDTO,
+  PaymentIntentDTO,
+  PaymentTransactionDTO,
 } from '@northflow/payment-orchestration-core';
 
 export interface GetPaymentIntentStatusInput {
@@ -20,8 +20,8 @@ export interface GetPaymentIntentStatusInput {
 }
 
 export interface PaymentIntentStatusOutput {
-  intent: StandalonePaymentIntentDTO;
-  latestTransaction: StandalonePaymentTransactionDTO | null;
+  intent: PaymentIntentDTO;
+  latestTransaction: PaymentTransactionDTO | null;
   isTerminal: boolean;
   requiresAction: boolean;
   canRetryPayment: boolean;

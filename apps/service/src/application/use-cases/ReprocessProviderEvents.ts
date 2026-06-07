@@ -10,10 +10,10 @@ import type {
   PaymentIntentRepository,
   PaymentProviderEventRepository,
   PaymentTransactionRepository,
-  StandalonePaymentIntentDTO,
-  StandalonePaymentTransactionDTO,
+  PaymentIntentDTO,
+  PaymentTransactionDTO,
 } from '@northflow/payment-orchestration-core';
-import type { StandaloneParsedProviderWebhook } from '../../infrastructure/providers/StandalonePaymentProvider.ts';
+import type { ParsedProviderWebhook } from '../../infrastructure/providers/PaymentProviderAdapter.ts';
 import { computeIntentStatus } from './intentStatusHelper.ts';
 
 const SUPPORTED_REPROCESS_PROVIDERS = new Set(['fake_gateway', 'xendit_sandbox']);
@@ -155,10 +155,10 @@ export class ReprocessProviderEvents {
   private coerceParsedPayload(
     fallbackProviderReference: string | null,
     payload: Record<string, unknown>,
-  ): StandaloneParsedProviderWebhook {
+  ): ParsedProviderWebhook {
     const providerEventId = String(payload['providerEventId'] ?? payload['event_id'] ?? payload['id'] ?? '');
     const eventType = String(payload['eventType'] ?? payload['event_type'] ?? payload['type'] ?? 'payment.updated');
-    const status = String(payload['status'] ?? 'ignored') as StandaloneParsedProviderWebhook['status'];
+    const status = String(payload['status'] ?? 'ignored') as ParsedProviderWebhook['status'];
     const providerReference = payload['providerReference'] ?? payload['provider_reference'] ?? payload['provider_ref'] ?? fallbackProviderReference;
     return {
       providerEventId,
@@ -170,8 +170,8 @@ export class ReprocessProviderEvents {
   }
 
   private async applySucceeded(
-    tx: StandalonePaymentTransactionDTO,
-    intent: StandalonePaymentIntentDTO | null,
+    tx: PaymentTransactionDTO,
+    intent: PaymentIntentDTO | null,
   ): Promise<void> {
     if (tx.status === 'succeeded') return;
     if (TERMINAL_STATUSES.has(tx.status)) return;

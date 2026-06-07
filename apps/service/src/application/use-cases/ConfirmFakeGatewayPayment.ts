@@ -22,8 +22,8 @@ import type {
   PaymentIntentRepository,
 } from '@northflow/payment-orchestration-core';
 import type {
-  StandalonePaymentIntentDTO,
-  StandalonePaymentTransactionDTO,
+  PaymentIntentDTO,
+  PaymentTransactionDTO,
 } from '@northflow/payment-orchestration-core';
 import { computeIntentStatus } from './intentStatusHelper.ts';
 
@@ -33,8 +33,8 @@ export interface ConfirmFakeGatewayPaymentInput {
 }
 
 export interface ConfirmFakeGatewayPaymentOutput {
-  transaction: StandalonePaymentTransactionDTO;
-  intent: StandalonePaymentIntentDTO;
+  transaction: PaymentTransactionDTO;
+  intent: PaymentIntentDTO;
   alreadyConfirmed: boolean;
 }
 

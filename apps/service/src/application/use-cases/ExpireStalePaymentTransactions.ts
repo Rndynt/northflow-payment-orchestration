@@ -9,8 +9,8 @@
 import type {
   PaymentIntentRepository,
   PaymentTransactionRepository,
-  StandalonePaymentIntentDTO,
-  StandalonePaymentTransactionDTO,
+  PaymentIntentDTO,
+  PaymentTransactionDTO,
 } from '@northflow/payment-orchestration-core';
 
 const TERMINAL_TRANSACTION_STATUSES = new Set([
@@ -37,7 +37,7 @@ export interface ExpiredIntentSummary {
   merchantId: string;
   expiredTransactionIds: string[];
   skippedTransactionIds: string[];
-  intentStatus: StandalonePaymentIntentDTO['status'];
+  intentStatus: PaymentIntentDTO['status'];
 }
 
 export interface ExpireStalePaymentTransactionsResult {
@@ -90,7 +90,7 @@ export class ExpireStalePaymentTransactions {
       return summary;
     };
 
-    const expireTransaction = async (transaction: StandalonePaymentTransactionDTO): Promise<void> => {
+    const expireTransaction = async (transaction: PaymentTransactionDTO): Promise<void> => {
       const summary = await ensureSummary(transaction.intentId, transaction.merchantId);
       if (TERMINAL_TRANSACTION_STATUSES.has(transaction.status) || !EXPIRABLE_TRANSACTION_STATUSES.has(transaction.status)) {
         skippedTransactions += 1;

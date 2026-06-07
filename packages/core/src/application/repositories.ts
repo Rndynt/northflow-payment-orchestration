@@ -13,12 +13,12 @@
 import type { PaymentMerchant } from '../domain/PaymentMerchant';
 import type { PaymentProviderAccount } from '../domain/PaymentProviderAccount';
 import type {
-  StandalonePaymentIntentDTO,
-  StandaloneIntentStatus,
+  PaymentIntentDTO,
+  PaymentIntentStatus,
 } from '../domain/PaymentIntent';
 import type {
-  StandalonePaymentTransactionDTO,
-  StandaloneTransactionStatus,
+  PaymentTransactionDTO,
+  PaymentTransactionStatus,
 } from '../domain/PaymentTransaction';
 import type {
   PaymentProviderEventDTO,
@@ -118,7 +118,7 @@ export interface UpdateIntentTotalsInput {
 export interface UpdateIntentStatusInput {
   id: string;
   merchantId: string;
-  status: StandaloneIntentStatus;
+  status: PaymentIntentStatus;
 }
 
 export interface FindByExternalPayableInput {
@@ -141,8 +141,8 @@ export interface ApplySucceededPaymentInput {
 }
 
 export interface ApplySucceededPaymentResult {
-  transaction: StandalonePaymentTransactionDTO;
-  intent: StandalonePaymentIntentDTO;
+  transaction: PaymentTransactionDTO;
+  intent: PaymentIntentDTO;
   changed: boolean;
   alreadySucceeded: boolean;
 }
@@ -157,19 +157,19 @@ export interface ApplySucceededRefundInput {
 }
 
 export interface ApplySucceededRefundResult {
-  refundTransaction: StandalonePaymentTransactionDTO;
-  intent: StandalonePaymentIntentDTO;
+  refundTransaction: PaymentTransactionDTO;
+  intent: PaymentIntentDTO;
 }
 
 export interface PaymentIntentRepository {
-  findById(id: string, merchantId: string): Promise<StandalonePaymentIntentDTO | null>;
+  findById(id: string, merchantId: string): Promise<PaymentIntentDTO | null>;
   findByExternalPayable(
     input: FindByExternalPayableInput,
-  ): Promise<StandalonePaymentIntentDTO | null>;
-  create(input: CreatePaymentIntentDbInput): Promise<StandalonePaymentIntentDTO>;
-  updateTotals(input: UpdateIntentTotalsInput): Promise<StandalonePaymentIntentDTO>;
-  updateStatus(input: UpdateIntentStatusInput): Promise<StandalonePaymentIntentDTO>;
-  findExpiredActive?(input: FindExpiredActiveIntentsInput): Promise<StandalonePaymentIntentDTO[]>;
+  ): Promise<PaymentIntentDTO | null>;
+  create(input: CreatePaymentIntentDbInput): Promise<PaymentIntentDTO>;
+  updateTotals(input: UpdateIntentTotalsInput): Promise<PaymentIntentDTO>;
+  updateStatus(input: UpdateIntentStatusInput): Promise<PaymentIntentDTO>;
+  findExpiredActive?(input: FindExpiredActiveIntentsInput): Promise<PaymentIntentDTO[]>;
 }
 
 // ── Payment Transaction ───────────────────────────────────────────────────────
@@ -183,7 +183,7 @@ export interface CreatePaymentTransactionInput {
   method: string;
   transactionType: string;
   direction: 'incoming' | 'outgoing';
-  status: StandaloneTransactionStatus;
+  status: PaymentTransactionStatus;
   amount: number;
   currency?: string;
   parentTransactionId?: string | null;
@@ -201,7 +201,7 @@ export interface CreatePaymentTransactionInput {
 export interface UpdateTransactionStatusInput {
   id: string;
   merchantId: string;
-  status: StandaloneTransactionStatus;
+  status: PaymentTransactionStatus;
   failureReason?: string | null;
   providerReference?: string | null;
   providerEventId?: string | null;
@@ -221,7 +221,7 @@ export interface MarkSucceededIfConfirmableResult {
    * not found OR if the UPDATE matched no rows (status not confirmable).
    * Callers must reload via findById when changed === false.
    */
-  transaction: StandalonePaymentTransactionDTO | null;
+  transaction: PaymentTransactionDTO | null;
   /**
    * true  = the row was atomically transitioned to 'succeeded'.
    * false = no update happened (row not found, or status was not confirmable).
@@ -249,23 +249,23 @@ export interface PaymentTransactionRepository {
   applySucceededRefund?(
     input: ApplySucceededRefundInput,
   ): Promise<ApplySucceededRefundResult>;
-  findById(id: string, merchantId: string): Promise<StandalonePaymentTransactionDTO | null>;
+  findById(id: string, merchantId: string): Promise<PaymentTransactionDTO | null>;
   findByIntentId(
     intentId: string,
     merchantId: string,
-  ): Promise<StandalonePaymentTransactionDTO[]>;
+  ): Promise<PaymentTransactionDTO[]>;
   findByProviderReference(
     provider: string,
     providerReference: string,
-  ): Promise<StandalonePaymentTransactionDTO | null>;
+  ): Promise<PaymentTransactionDTO | null>;
   findByMerchantIdempotencyKey(
     merchantId: string,
     idempotencyKey: string,
-  ): Promise<StandalonePaymentTransactionDTO | null>;
-  create(input: CreatePaymentTransactionInput): Promise<StandalonePaymentTransactionDTO>;
+  ): Promise<PaymentTransactionDTO | null>;
+  create(input: CreatePaymentTransactionInput): Promise<PaymentTransactionDTO>;
   updateStatus(
     input: UpdateTransactionStatusInput,
-  ): Promise<StandalonePaymentTransactionDTO>;
+  ): Promise<PaymentTransactionDTO>;
   sumSucceededRefundsByParent(parentTransactionId: string): Promise<number>;
   /**
    * Atomically set status = 'succeeded' only if current status is
@@ -284,7 +284,7 @@ export interface PaymentTransactionRepository {
   ): Promise<MarkSucceededIfConfirmableResult>;
   findStalePendingTransactions?(
     input: FindStalePendingTransactionsInput,
-  ): Promise<StandalonePaymentTransactionDTO[]>;
+  ): Promise<PaymentTransactionDTO[]>;
 }
 
 // ── Provider Event ────────────────────────────────────────────────────────────

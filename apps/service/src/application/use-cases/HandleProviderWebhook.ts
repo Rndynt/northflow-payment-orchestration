@@ -35,8 +35,8 @@ import type {
   PaymentProviderEventRepository,
 } from '@northflow/payment-orchestration-core';
 import type {
-  StandalonePaymentTransactionDTO,
-  StandalonePaymentIntentDTO,
+  PaymentTransactionDTO,
+  PaymentIntentDTO,
   PaymentProviderEventDTO,
 } from '@northflow/payment-orchestration-core';
 import type { FakeGatewayWebhookHandler } from '../../infrastructure/providers/FakeGatewayWebhookHandler.ts';
@@ -58,8 +58,8 @@ export interface HandleProviderWebhookOutput {
   provider: string;
   providerReference: string | null;
   processingStatus: 'processed' | 'failed' | 'ignored';
-  transaction: StandalonePaymentTransactionDTO | null;
-  intent: StandalonePaymentIntentDTO | null;
+  transaction: PaymentTransactionDTO | null;
+  intent: PaymentIntentDTO | null;
   idempotentReplay: boolean;
 }
 
@@ -162,8 +162,8 @@ export class HandleProviderWebhook {
     }
 
     // ── Resolve transaction by provider reference ────────────────────────────
-    let tx: StandalonePaymentTransactionDTO | null = null;
-    let intent: StandalonePaymentIntentDTO | null = null;
+    let tx: PaymentTransactionDTO | null = null;
+    let intent: PaymentIntentDTO | null = null;
 
     if (parsed.providerReference) {
       tx = await this.transactionRepo.findByProviderReference(provider, parsed.providerReference);
