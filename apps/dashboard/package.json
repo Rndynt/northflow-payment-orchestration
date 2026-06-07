@@ -10,13 +10,10 @@
   },
   "dependencies": {
     "@northflow/payment-orchestration-client-sdk": "workspace:*",
-    "buffer": "^6.0.3",
     "clsx": "^2.1.1",
-    "crypto-browserify": "^3.12.1",
     "next": "^15.3.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "stream-browserify": "^3.0.0",
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
