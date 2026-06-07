@@ -4,3 +4,4 @@
 - [Pre-existing test failures](pre-existing-test-failures.md) — AC10 + S16 fixed (allowPartial); dashboard type-check has pre-existing TS2430 + TS5097 errors unrelated to service work.
 - [S6-S7 client integration validation](s6-s7-client-integration-validation.md) — S6 SDK + docs complete; S7 smoke: 35/35 pass; full suite 284/284; Void/RefundPaymentTransaction ctors take (txRepo, intentRepo, paRepo, providerRegistry) only.
 - [S7.5 payment method options](s7-5-payment-method-options.md) — po_provider_account_methods table, sync/upsert/list/options use cases, method validation in CreateGatewayPayment; tests must use node:test not vitest; DB tests need environment field in PA seed.
+- [S7.5 hardening validation](s7-5-hardening-validation.md) — all 8 tasks done; requireAnyScope bug fixed (auth.scopes not auth.scope); 324/324 pass; migration renamed to 0007_po_provider_account_methods.sql.

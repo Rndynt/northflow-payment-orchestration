@@ -20,6 +20,12 @@
  *
  * S1-S5 auth guards are applied at the app.ts /v1 level.
  * Per-merchant access checked via assertMerchantAccessWithScope.
+ *
+ * Security (P0.3 fail-closed):
+ *   assertMerchantAccessWithAnyScope is called unconditionally on all routes.
+ *   assertMerchantAccessWithScope (called inside) rejects normal API clients with
+ *   503 SERVICE_MISCONFIGURED when accessRepo is missing — fail closed, not fail open.
+ *   Only legacy (clientId='legacy') and internal (sourceApp='internal') clients bypass.
  */
 
 import { Router } from 'express';
@@ -40,6 +46,10 @@ import { GetPaymentMethodOptions } from '../application/use-cases/GetPaymentMeth
  * Tries each scope in the list; returns null if ANY one passes.
  * Used so new payment_method:* scopes and legacy provider_account:* scopes
  * are both accepted in merchant access grants without needing re-credentialing.
+ *
+ * Fail-closed: delegates to assertMerchantAccessWithScope which returns
+ * 503 SERVICE_MISCONFIGURED for normal API clients when accessRepo is missing.
+ * This helper must be called unconditionally (no `if (accessRepo)` guard).
  */
 async function assertMerchantAccessWithAnyScope(
   auth: RequestAuthContext,
@@ -130,7 +140,7 @@ export function createProviderAccountMethodsSubRouter(container: ServiceContaine
    * GET /v1/merchants/:merchantId/provider-accounts/:providerAccountId/methods
    *
    * requireAnyScope: payment_method:read OR provider_account:read
-   * assertMerchantAccessWithScope: grant must include either scope
+   * assertMerchantAccessWithAnyScope: fail-closed — called unconditionally.
    */
   router.get(
     '/methods',
@@ -138,15 +148,13 @@ export function createProviderAccountMethodsSubRouter(container: ServiceContaine
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const { merchantId, providerAccountId } = req.params as { merchantId: string; providerAccountId: string };
-        if (accessRepo) {
-          const denied = await assertMerchantAccessWithAnyScope(
-            req.auth!,
-            merchantId,
-            ['payment_method:read', 'provider_account:read'],
-            accessRepo,
-          );
-          if (denied) { res.status(denied.status).json(denied.body); return; }
-        }
+        const denied = await assertMerchantAccessWithAnyScope(
+          req.auth!,
+          merchantId,
+          ['payment_method:read', 'provider_account:read'],
+          accessRepo,
+        );
+        if (denied) { res.status(denied.status).json(denied.body); return; }
         const methods = await listUseCase.listByProviderAccount({ merchantId, providerAccountId });
         res.json({ ok: true, data: methods.map(serializeMethod) });
       } catch (err) {
@@ -159,7 +167,7 @@ export function createProviderAccountMethodsSubRouter(container: ServiceContaine
    * PUT /v1/merchants/:merchantId/provider-accounts/:providerAccountId/methods/:method
    *
    * requireAnyScope: payment_method:write OR provider_account:create
-   * assertMerchantAccessWithScope: grant must include either scope
+   * assertMerchantAccessWithAnyScope: fail-closed — called unconditionally.
    */
   router.put(
     '/methods/:method',
@@ -167,15 +175,13 @@ export function createProviderAccountMethodsSubRouter(container: ServiceContaine
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const { merchantId, providerAccountId, method } = req.params as { merchantId: string; providerAccountId: string; method: string };
-        if (accessRepo) {
-          const denied = await assertMerchantAccessWithAnyScope(
-            req.auth!,
-            merchantId,
-            ['payment_method:write', 'provider_account:create'],
-            accessRepo,
-          );
-          if (denied) { res.status(denied.status).json(denied.body); return; }
-        }
+        const denied = await assertMerchantAccessWithAnyScope(
+          req.auth!,
+          merchantId,
+          ['payment_method:write', 'provider_account:create'],
+          accessRepo,
+        );
+        if (denied) { res.status(denied.status).json(denied.body); return; }
         const result = await upsertUseCase.execute({
           merchantId,
           providerAccountId,
@@ -193,7 +199,7 @@ export function createProviderAccountMethodsSubRouter(container: ServiceContaine
    * POST /v1/merchants/:merchantId/provider-accounts/:providerAccountId/methods/sync
    *
    * requireAnyScope: payment_method:sync OR provider_account:create
-   * assertMerchantAccessWithScope: grant must include either scope
+   * assertMerchantAccessWithAnyScope: fail-closed — called unconditionally.
    */
   router.post(
     '/methods/sync',
@@ -201,15 +207,13 @@ export function createProviderAccountMethodsSubRouter(container: ServiceContaine
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const { merchantId, providerAccountId } = req.params as { merchantId: string; providerAccountId: string };
-        if (accessRepo) {
-          const denied = await assertMerchantAccessWithAnyScope(
-            req.auth!,
-            merchantId,
-            ['payment_method:sync', 'provider_account:create'],
-            accessRepo,
-          );
-          if (denied) { res.status(denied.status).json(denied.body); return; }
-        }
+        const denied = await assertMerchantAccessWithAnyScope(
+          req.auth!,
+          merchantId,
+          ['payment_method:sync', 'provider_account:create'],
+          accessRepo,
+        );
+        if (denied) { res.status(denied.status).json(denied.body); return; }
         const result = await syncUseCase.execute({ merchantId, providerAccountId });
         res.json({ ok: true, data: { methods: result.methods.map(serializeMethod), syncedCount: result.syncedCount, skippedCount: result.skippedCount, message: result.message } });
       } catch (err) {
@@ -241,6 +245,8 @@ export function createMerchantPaymentMethodsRouter(container: ServiceContainer):
 
   /**
    * GET /v1/merchants/:merchantId/payment-methods
+   *
+   * assertMerchantAccessWithAnyScope: fail-closed — called unconditionally.
    */
   router.get(
     '/',
@@ -248,15 +254,13 @@ export function createMerchantPaymentMethodsRouter(container: ServiceContainer):
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const { merchantId } = req.params as { merchantId: string };
-        if (accessRepo) {
-          const denied = await assertMerchantAccessWithAnyScope(
-            req.auth!,
-            merchantId,
-            ['payment_method:read', 'provider_account:read', 'intent:read'],
-            accessRepo,
-          );
-          if (denied) { res.status(denied.status).json(denied.body); return; }
-        }
+        const denied = await assertMerchantAccessWithAnyScope(
+          req.auth!,
+          merchantId,
+          ['payment_method:read', 'provider_account:read', 'intent:read'],
+          accessRepo,
+        );
+        if (denied) { res.status(denied.status).json(denied.body); return; }
         const methods = await listUseCase.listByMerchant({ merchantId });
         res.json({ ok: true, data: methods.map(serializeMethod) });
       } catch (err) {
@@ -288,6 +292,8 @@ export function createPaymentOptionsRouter(container: ServiceContainer): Router 
 
   /**
    * GET /v1/payment-intents/:intentId/payment-options
+   *
+   * assertMerchantAccessWithAnyScope: fail-closed — called unconditionally.
    */
   router.get(
     '/',
@@ -303,15 +309,13 @@ export function createPaymentOptionsRouter(container: ServiceContainer): Router 
           res.status(400).json({ ok: false, error: { code: 'VALIDATION_ERROR', message: 'merchantId is required (query param or x-payment-merchant-id header)', details: null } });
           return;
         }
-        if (accessRepo) {
-          const denied = await assertMerchantAccessWithAnyScope(
-            req.auth!,
-            merchantId,
-            ['payment_method:read', 'intent:read'],
-            accessRepo,
-          );
-          if (denied) { res.status(denied.status).json(denied.body); return; }
-        }
+        const denied = await assertMerchantAccessWithAnyScope(
+          req.auth!,
+          merchantId,
+          ['payment_method:read', 'intent:read'],
+          accessRepo,
+        );
+        if (denied) { res.status(denied.status).json(denied.body); return; }
         const result = await useCase.execute({ intentId, merchantId });
         res.json({ ok: true, data: result });
       } catch (err) {

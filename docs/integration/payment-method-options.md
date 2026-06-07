@@ -207,17 +207,28 @@ const allMethods = await client.listMerchantPaymentMethods();
 
 ## Gateway Payment Validation
 
-When `providerAccountId` is provided to `createGatewayPayment` and the provider account has at least one method registered in the DB, the service validates:
+Methods originate from provider capabilities declared by each adapter (`getPaymentMethodCapabilities`).
+`po_provider_account_methods` stores the enabled/allowed methods per merchant-provider-account combination.
 
-| Condition | Error code |
-|-----------|-----------|
-| Method not in DB | `PAYMENT_METHOD_NOT_AVAILABLE` |
-| Method status ≠ active | `PAYMENT_METHOD_DISABLED` |
-| Currency mismatch | `PAYMENT_METHOD_CURRENCY_UNSUPPORTED` |
-| Amount < minAmount | `PAYMENT_METHOD_AMOUNT_OUT_OF_RANGE` |
-| Amount > maxAmount | `PAYMENT_METHOD_AMOUNT_OUT_OF_RANGE` |
+When `providerAccountId` is provided to `createGatewayPayment`, the service validates the method against
+the configured methods in `po_provider_account_methods`. This is **fail-closed**:
 
-If the provider account has NO methods registered yet, validation is skipped (backward-compatible).
+| Condition | Error code | HTTP status |
+|-----------|-----------|-------------|
+| No methods configured for provider account | `PAYMENT_METHODS_NOT_CONFIGURED` | 422 |
+| Method not in configured list | `PAYMENT_METHOD_NOT_AVAILABLE` | 422 |
+| Method status ≠ active (disabled or unsupported) | `PAYMENT_METHOD_DISABLED` | 422 |
+| Currency mismatch | `PAYMENT_METHOD_CURRENCY_UNSUPPORTED` | 422 |
+| Amount < minAmount | `PAYMENT_METHOD_AMOUNT_OUT_OF_RANGE` | 422 |
+| Amount > maxAmount | `PAYMENT_METHOD_AMOUNT_OUT_OF_RANGE` | 422 |
+
+> **Important**: If the provider account has no methods configured, the request is **rejected** with
+> `PAYMENT_METHODS_NOT_CONFIGURED`. Consumer apps must sync or configure methods before accepting
+> payments. Validation is only skipped when the `methodRepo` is not wired (legacy/test containers).
+
+**Consumer apps must not hard-code provider method availability.** Always use the payment options
+endpoint to discover available channels for a specific intent before calling `createGatewayPayment`.
+The payment options endpoint is the only supported way to know what to display to the end user.
 
 ## Scopes Reference
 

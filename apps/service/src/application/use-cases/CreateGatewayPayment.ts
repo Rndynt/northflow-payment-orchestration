@@ -207,52 +207,59 @@ export class CreateGatewayPayment {
     }
 
     // ── S7.5: Payment method validation ──────────────────────────────────────
-    // Only validate when methodRepo is injected AND a providerAccountId was resolved.
-    // If no methods are registered for the provider account yet, validation is skipped
-    // to preserve backward compatibility with existing integrations.
+    // Validate when methodRepo is injected AND a providerAccountId was resolved.
+    // Fail closed: zero configured methods → rejected (PAYMENT_METHODS_NOT_CONFIGURED).
+    // Backward compat: skip only when methodRepo is truly absent (legacy/test containers without repo wired).
     if (this.methodRepo && input.providerAccountId) {
       const registeredMethods = await this.methodRepo.listByProviderAccount(input.providerAccountId);
-      if (registeredMethods.length > 0) {
-        const methodEntry = registeredMethods.find((m) => m.method === input.method);
-        if (!methodEntry) {
-          throw Object.assign(
-            new Error(`Payment method '${input.method}' is not available for this provider account.`),
-            { statusCode: 422, code: 'PAYMENT_METHOD_NOT_AVAILABLE' },
-          );
-        }
-        if (methodEntry.status !== 'active') {
-          throw Object.assign(
-            new Error(`Payment method '${input.method}' is currently ${methodEntry.status}.`),
-            { statusCode: 422, code: 'PAYMENT_METHOD_DISABLED' },
-          );
-        }
-        // Currency match (guard only when intent currency is determined — checked later, but
-        // we can do a pre-check against the method's configured currency)
-        // Note: full intent currency check happens implicitly via the provider; this is an early guard.
-        if (intent.currency && methodEntry.currency !== intent.currency) {
-          throw Object.assign(
-            new Error(
-              `Payment method '${input.method}' supports currency '${methodEntry.currency}', but intent currency is '${intent.currency}'.`,
-            ),
-            { statusCode: 422, code: 'PAYMENT_METHOD_CURRENCY_UNSUPPORTED' },
-          );
-        }
-        if (methodEntry.minAmount !== null && input.amount < methodEntry.minAmount) {
-          throw Object.assign(
-            new Error(
-              `Amount ${input.amount} is below the minimum for method '${input.method}' (min: ${methodEntry.minAmount}).`,
-            ),
-            { statusCode: 422, code: 'PAYMENT_METHOD_AMOUNT_OUT_OF_RANGE' },
-          );
-        }
-        if (methodEntry.maxAmount !== null && input.amount > methodEntry.maxAmount) {
-          throw Object.assign(
-            new Error(
-              `Amount ${input.amount} exceeds the maximum for method '${input.method}' (max: ${methodEntry.maxAmount}).`,
-            ),
-            { statusCode: 422, code: 'PAYMENT_METHOD_AMOUNT_OUT_OF_RANGE' },
-          );
-        }
+
+      // Fail closed: if the provider account has no configured methods, reject the request.
+      if (registeredMethods.length === 0) {
+        throw Object.assign(
+          new Error(
+            `No payment methods are configured for provider account '${input.providerAccountId}'. ` +
+            `Sync provider capabilities or configure methods before accepting payments.`,
+          ),
+          { statusCode: 422, code: 'PAYMENT_METHODS_NOT_CONFIGURED' },
+        );
+      }
+
+      const methodEntry = registeredMethods.find((m) => m.method === input.method);
+      if (!methodEntry) {
+        throw Object.assign(
+          new Error(`Payment method '${input.method}' is not available for this provider account.`),
+          { statusCode: 422, code: 'PAYMENT_METHOD_NOT_AVAILABLE' },
+        );
+      }
+      if (methodEntry.status !== 'active') {
+        throw Object.assign(
+          new Error(`Payment method '${input.method}' is currently ${methodEntry.status}.`),
+          { statusCode: 422, code: 'PAYMENT_METHOD_DISABLED' },
+        );
+      }
+      if (intent.currency && methodEntry.currency !== intent.currency) {
+        throw Object.assign(
+          new Error(
+            `Payment method '${input.method}' supports currency '${methodEntry.currency}', but intent currency is '${intent.currency}'.`,
+          ),
+          { statusCode: 422, code: 'PAYMENT_METHOD_CURRENCY_UNSUPPORTED' },
+        );
+      }
+      if (methodEntry.minAmount !== null && input.amount < methodEntry.minAmount) {
+        throw Object.assign(
+          new Error(
+            `Amount ${input.amount} is below the minimum for method '${input.method}' (min: ${methodEntry.minAmount}).`,
+          ),
+          { statusCode: 422, code: 'PAYMENT_METHOD_AMOUNT_OUT_OF_RANGE' },
+        );
+      }
+      if (methodEntry.maxAmount !== null && input.amount > methodEntry.maxAmount) {
+        throw Object.assign(
+          new Error(
+            `Amount ${input.amount} exceeds the maximum for method '${input.method}' (max: ${methodEntry.maxAmount}).`,
+          ),
+          { statusCode: 422, code: 'PAYMENT_METHOD_AMOUNT_OUT_OF_RANGE' },
+        );
       }
     }
 
