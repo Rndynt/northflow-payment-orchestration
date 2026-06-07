@@ -107,7 +107,7 @@ The standalone engine uses `merchantId` as the primary payment owner. A merchant
 maps to a commercial entity — decoupled from any source application's auth model.
 
 ### Migration Bridge
-`createLegacyTenantPaymentScope()` in `payment-orchestration-core` provides
+`createConsumerPaymentScope()` in `payment-orchestration-core` provides
 a temporary compatibility adapter that maps legacy `tenantId` → standalone
 `merchantId`. This bridge is used during Phases 8B–8E and removed in Phase 8F.
 
