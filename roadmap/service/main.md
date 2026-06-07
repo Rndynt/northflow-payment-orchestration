@@ -6,7 +6,7 @@ This file is **not** a Replit/Codex prompt. Execution prompts must be stored sep
 
 ## Current Focus
 
-The current roadmap focuses on:
+The current service roadmap focuses on:
 
 - Service API security.
 - Client integration isolation.
@@ -14,6 +14,8 @@ The current roadmap focuses on:
 - Merchant ownership enforcement.
 - Scope-based authorization.
 - SDK and direct REST API parity.
+- Payment method discovery/options.
+- Service audit logging.
 
 Out of scope for the current service-security work:
 
@@ -32,8 +34,6 @@ Target consumers:
 - Transity — multi-tenant transport/booking system, SDK integration.
 - Kioskoin — payment/OTC application, direct REST API integration.
 
-Runtime model:
-
 ```txt
 AuraPoS backend  ───────┐
 Transity backend ───────┼──> Northflow Payment Orchestration
@@ -50,8 +50,17 @@ Northflow separates caller identity from payment ownership.
 API Client        = consumer backend application using Northflow
 Merchant          = business/tenant/payment owner in Northflow
 ProviderAccount   = payment provider account for a merchant
+PaymentMethod     = provider method enabled for a merchant provider account
 PaymentIntent     = payable object/invoice/order/booking amount to collect
 Transaction       = payment/refund/void attempt or resulting operation
+AuditLog          = immutable service activity trail
+```
+
+Rule:
+
+```txt
+1 consumer application environment = 1 API client credential
+1 tenant/business/payment owner    = 1 merchant in Northflow
 ```
 
 Examples:
@@ -67,25 +76,9 @@ API Client: client_kioskoin_prod
 Merchant:   mer_kioskoin
 ```
 
-Rule:
+## Security Direction
 
-```txt
-1 consumer application environment = 1 API client credential
-1 tenant/business/payment owner    = 1 merchant in Northflow
-```
-
-## Current Security Problem
-
-The current baseline uses a single global service token header for protected API routes. This is acceptable for early development but not for production multi-app usage.
-
-Problem:
-
-```txt
-If AuraPoS, Transity, and Kioskoin share the same service token,
-that token can access every merchant unless the service adds client-level isolation.
-```
-
-Required direction:
+The service moves from a single global service token to isolated API client credentials.
 
 ```txt
 FROM:
@@ -98,7 +91,38 @@ TO:
   action scopes
   sourceApp enforcement
   SDK/direct REST compatibility
+  payment method options controlled by Northflow
+  immutable audit logs
 ```
+
+## Official Authorization Scopes
+
+```txt
+merchant:create
+merchant:read
+provider_account:create
+provider_account:read
+intent:create
+intent:read
+payment:create
+payment:read
+payment:refund
+payment:void
+payment:reconcile
+provider_event:reprocess
+payment_method:read
+payment_method:write
+payment_method:sync
+audit_log:read
+```
+
+## Legacy Token Policy
+
+```txt
+PAYMENT_ORCHESTRATION_LEGACY_SERVICE_TOKEN_ENABLED=false
+```
+
+Production default must be `false`. The global service token is legacy/dev-only compatibility, not the recommended integration method.
 
 ## Roadmap File Naming Convention
 
@@ -148,30 +172,7 @@ kioskoin
 internal
 ```
 
-Define initial authorization scopes:
-
-```txt
-merchant:create
-merchant:read
-provider_account:create
-provider_account:read
-intent:create
-intent:read
-payment:create
-payment:read
-payment:refund
-payment:void
-payment:reconcile
-provider_event:reprocess
-```
-
-Define legacy token policy:
-
-```txt
-PAYMENT_ORCHESTRATION_LEGACY_SERVICE_TOKEN_ENABLED=false
-```
-
-Production default must be `false`.
+Define the official scope model and legacy token policy.
 
 ## Acceptance Criteria
 
@@ -264,8 +265,6 @@ Replace single global service-token authentication with per-client API key authe
 
 The service must accept a per-client API key through a standard auth header or a dedicated Northflow API key header.
 
-The service must resolve:
-
 ```txt
 apiKey -> keyId -> clientId -> sourceApp -> scopes -> merchant access
 ```
@@ -277,8 +276,7 @@ req.auth = {
   clientId: "client_aurapos_prod",
   sourceApp: "aurapos",
   environment: "production",
-  scopes: [...],
-  allowedMerchantIds: [...]
+  scopes: [...]
 }
 ```
 
@@ -326,29 +324,11 @@ If not allowed, return:
 403 MERCHANT_ACCESS_DENIED
 ```
 
-## Protected Route Families
-
-```txt
-POST /v1/merchants
-GET  /v1/merchants/:id
-
-POST /v1/merchants/:merchantId/provider-accounts
-GET  /v1/merchants/:merchantId/provider-accounts/:id
-
-POST /v1/payment-intents
-GET  /v1/payment-intents/:id/status
-GET  /v1/payment-intents/:id/refundability
-POST /v1/payment-intents/:id/gateway-payments
-POST /v1/payment-intents/:id/reconcile
-
-POST /v1/payment-transactions/:transactionId/refund
-POST /v1/payment-transactions/:transactionId/void
-```
-
 Special create-merchant rule:
 
 - Creating a merchant requires `merchant:create`.
 - The resulting merchant must be linked to the creating API client unless explicitly created by an internal/system client.
+- Normal clients must not create orphan merchants without access grants.
 
 ## Acceptance Criteria
 
@@ -531,6 +511,8 @@ Expired key calls API -> 401
 
 Allow API clients to discover which payment methods are available for a given merchant/provider account, and validate that a payment method is enabled before creating a gateway payment.
 
+Payment methods originate from provider capabilities. Northflow stores the enabled/allowed methods for each merchant provider account and consumer apps must request payment options instead of hard-coding provider method availability.
+
 ## Required Data Model
 
 ```txt
@@ -584,19 +566,32 @@ payment_method:sync   — trigger provider-side sync of payment methods
 
 ## Gateway Payment Validation
 
-When creating a gateway payment, if payment methods are configured for the provider account, the requested `method` must be active. If no methods are configured, the gateway payment proceeds (backward compatible). If methods are configured but the method is not active, return:
+When creating a gateway payment with `providerAccountId`, the requested `method` must exist in `po_provider_account_methods`, must be active, must support the intent currency, and must satisfy configured min/max amount.
+
+If no methods are configured for the provider account, the service must fail closed:
 
 ```txt
-422 PAYMENT_METHOD_NOT_CONFIGURED
+422 PAYMENT_METHODS_NOT_CONFIGURED
 ```
+
+Other validation failures:
+
+```txt
+422 PAYMENT_METHOD_NOT_AVAILABLE
+422 PAYMENT_METHOD_DISABLED
+422 PAYMENT_METHOD_CURRENCY_UNSUPPORTED
+422 PAYMENT_METHOD_AMOUNT_OUT_OF_RANGE
+```
+
+Backward-compatible validation skip is allowed only when `methodRepo` is truly not wired in legacy/test containers. Production/service containers must wire `methodRepo` and fail closed.
 
 ## Acceptance Criteria
 
-- `po_provider_account_methods` table exists with migration 0007.
+- `po_provider_account_methods` table exists with migration `0007_po_provider_account_methods.sql`.
 - List, upsert, sync, and options endpoints work.
-- Gateway payment creation validates method against configured methods (fail-closed when configured).
+- Gateway payment creation validates method against configured methods and fails closed when methods are not configured.
 - Tests cover list, upsert, sync, options, and gateway payment validation.
-- 324/324 tests pass.
+- Consumer integration docs include the `create intent -> get payment options -> create gateway payment` flow.
 
 ---
 
@@ -693,16 +688,17 @@ audit_log:read — list audit log entries (internal/system clients only or merch
 - Never store raw provider responses.
 - Metadata field must be small and safe.
 - Audit writes are best-effort: write errors must not propagate to payment operation callers.
+- Audit logs are immutable; no business update/delete path should exist.
 
 ## Acceptance Criteria
 
-- `po_audit_logs` table exists with migration 0008.
-- Every protected route produces an audit log entry on success.
-- Authorization denial attempts produce audit log entries.
-- Unexpected errors produce audit log entries.
-- Audit writes are best-effort (non-fatal errors).
-- GET /v1/audit-logs endpoint exists with scope guard.
-- Tests cover audit creation for all major routes.
+- `po_audit_logs` table exists with migration `0008_po_audit_logs.sql`.
+- Protected route success paths produce audit log entries.
+- Authorization denial attempts produce audit log entries where route context is available.
+- Unexpected errors produce audit log entries where practical.
+- Audit writes are best-effort and non-fatal.
+- `GET /v1/audit-logs` endpoint exists with scope guard.
+- Tests cover audit creation for major routes.
 - Audit logs never contain secrets.
 
 ---
@@ -737,7 +733,7 @@ merchant access is allowed
 Future nonce table:
 
 ```txt
-payment_orchestration_request_nonces
+po_request_nonces
 - id
 - client_id
 - key_id
