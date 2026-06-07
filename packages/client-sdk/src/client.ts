@@ -26,9 +26,11 @@
  *   - Auth priority: apiKey > serviceToken (legacy).
  */
 
+import { createHmac, createHash, randomBytes } from 'crypto';
 import { PaymentOrchestrationClientError, PaymentOrchestrationNetworkError } from './errors.ts';
 import type {
   PaymentOrchestrationClientConfig,
+  PaymentOrchestrationSigningConfig,
   CreatePaymentIntentRequest,
   PaymentIntentResponse,
   CreateGatewayPaymentRequest,
@@ -56,16 +58,97 @@ import type {
   SyncProviderAccountMethodsResponse,
   ListProviderAccountMethodsResponse,
   PaymentIntentPaymentOptionsResponse,
+  CreateSigningKeyRequest,
+  CreateSigningKeyResponse,
+  ListSigningKeysResponse,
+  RotateSigningKeyRequest,
+  RotateSigningKeyResponse,
+  ClientSigningKeyResponse,
 } from './types.ts';
+
+// ── S9.4: HMAC signing helpers ────────────────────────────────────────────────
+
+const CANONICAL_ALGORITHM = 'NF-HMAC-SHA256-V1';
+const SIGNATURE_VERSION = 'v1';
+
+function hashBodyBytes(bodyBytes: Uint8Array | null): string {
+  const hash = createHash('sha256');
+  if (bodyBytes && bodyBytes.length > 0) {
+    hash.update(bodyBytes);
+  }
+  return hash.digest('hex');
+}
+
+function buildCanonicalQuery(queryStr: string): string {
+  const raw = queryStr.startsWith('?') ? queryStr.slice(1) : queryStr;
+  if (!raw) return '';
+  const pairs = raw.split('&').map((part): [string, string] => {
+    const eq = part.indexOf('=');
+    if (eq === -1) return [decodeURIComponent(part), ''];
+    return [decodeURIComponent(part.slice(0, eq)), decodeURIComponent(part.slice(eq + 1))];
+  });
+  pairs.sort((a, b) => {
+    const k = a[0].localeCompare(b[0]);
+    return k !== 0 ? k : a[1].localeCompare(b[1]);
+  });
+  return pairs.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
+}
+
+interface SigningHeaders {
+  'x-nf-client-id': string;
+  'x-nf-key-id': string;
+  'x-nf-timestamp': string;
+  'x-nf-nonce': string;
+  'x-nf-signature': string;
+  'x-nf-signature-version': string;
+}
+
+function buildSigningHeaders(
+  signing: PaymentOrchestrationSigningConfig,
+  method: string,
+  path: string,
+  queryStr: string,
+  bodyBytes: Uint8Array | null,
+): SigningHeaders {
+  const timestampMs = Date.now();
+  const nonce = randomBytes(16).toString('base64url');
+  const bodyHash = hashBodyBytes(bodyBytes);
+  const canonicalQuery = buildCanonicalQuery(queryStr);
+
+  const canonicalStr = [
+    CANONICAL_ALGORITHM,
+    String(timestampMs),
+    nonce,
+    method.toUpperCase(),
+    path,
+    canonicalQuery,
+    bodyHash,
+  ].join('\n');
+
+  const signature = createHmac('sha256', signing.secret)
+    .update(canonicalStr)
+    .digest('hex');
+
+  return {
+    'x-nf-client-id': signing.clientId,
+    'x-nf-key-id': signing.keyId,
+    'x-nf-timestamp': String(timestampMs),
+    'x-nf-nonce': nonce,
+    'x-nf-signature': signature,
+    'x-nf-signature-version': SIGNATURE_VERSION,
+  };
+}
 
 export class PaymentOrchestrationClient {
   private readonly baseUrl: string;
   private readonly defaultHeaders: Record<string, string>;
   private readonly configMerchantId: string | undefined;
+  private readonly signing: PaymentOrchestrationSigningConfig | null;
 
   constructor(config: PaymentOrchestrationClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, '');
     this.configMerchantId = config.merchantId;
+    this.signing = (config.signing && config.signing.enabled !== false) ? config.signing : null;
     this.defaultHeaders = {
       'Content-Type': 'application/json',
     };
@@ -93,15 +176,39 @@ export class PaymentOrchestrationClient {
     body?: unknown,
     extraHeaders?: Record<string, string>,
   ): Promise<T> {
-    const url = `${this.baseUrl}${path}`;
+    const pathWithQuery = path;
+    const questionMark = path.indexOf('?');
+    const purePathStr = questionMark >= 0 ? path.slice(0, questionMark) : path;
+    const queryStr = questionMark >= 0 ? path.slice(questionMark) : '';
+
+    const url = `${this.baseUrl}${pathWithQuery}`;
     const headers: Record<string, string> = { ...this.defaultHeaders, ...extraHeaders };
+
+    let bodyBytes: Uint8Array | null = null;
+    let bodyString: string | undefined;
+    if (body !== undefined) {
+      bodyString = JSON.stringify(body);
+      bodyBytes = new TextEncoder().encode(bodyString);
+    }
+
+    // S9.4: Attach HMAC signing headers when signing is configured.
+    if (this.signing) {
+      const sigHeaders = buildSigningHeaders(
+        this.signing,
+        method,
+        purePathStr,
+        queryStr,
+        bodyBytes,
+      );
+      Object.assign(headers, sigHeaders);
+    }
 
     let response: Response;
     try {
       response = await fetch(url, {
         method,
         headers,
-        body: body !== undefined ? JSON.stringify(body) : undefined,
+        body: bodyString,
       });
     } catch (err: unknown) {
       throw new PaymentOrchestrationNetworkError(
@@ -491,6 +598,81 @@ export class PaymentOrchestrationClient {
     return this.request<PaymentIntentPaymentOptionsResponse['data']>(
       'GET',
       `/v1/payment-intents/${encodeURIComponent(intentId)}/payment-options${mid ? `?merchantId=${encodeURIComponent(mid)}` : ''}`,
+    );
+  }
+
+  // ── S9.4: Signing Key Lifecycle ───────────────────────────────────────────────
+
+  /**
+   * createSigningKey — create a new HMAC signing key for an API client.
+   *
+   * POST /v1/api-clients/:clientId/signing-keys
+   *
+   * Required scope: api_client:signing_key:create
+   *
+   * Returns rawSigningSecret ONCE — store securely, never log.
+   */
+  async createSigningKey(
+    clientId: string,
+    input?: CreateSigningKeyRequest,
+  ): Promise<CreateSigningKeyResponse> {
+    return this.request<CreateSigningKeyResponse>(
+      'POST',
+      `/v1/api-clients/${encodeURIComponent(clientId)}/signing-keys`,
+      input ?? {},
+    );
+  }
+
+  /**
+   * listSigningKeys — list all signing keys for an API client (safe view, no secrets).
+   *
+   * GET /v1/api-clients/:clientId/signing-keys
+   *
+   * Required scope: api_client:signing_key:read
+   */
+  async listSigningKeys(clientId: string): Promise<ClientSigningKeyResponse[]> {
+    return this.request<ClientSigningKeyResponse[]>(
+      'GET',
+      `/v1/api-clients/${encodeURIComponent(clientId)}/signing-keys`,
+    );
+  }
+
+  /**
+   * rotateSigningKey — create a new signing key and optionally revoke the old one.
+   *
+   * POST /v1/api-clients/:clientId/signing-keys/rotate
+   *
+   * Required scope: api_client:signing_key:rotate
+   *
+   * Returns rawSigningSecret for the new key ONCE — store securely, never log.
+   */
+  async rotateSigningKey(
+    clientId: string,
+    input?: RotateSigningKeyRequest,
+  ): Promise<RotateSigningKeyResponse> {
+    return this.request<RotateSigningKeyResponse>(
+      'POST',
+      `/v1/api-clients/${encodeURIComponent(clientId)}/signing-keys/rotate`,
+      input ?? {},
+    );
+  }
+
+  /**
+   * revokeSigningKey — revoke a signing key immediately.
+   *
+   * POST /v1/api-clients/:clientId/signing-keys/:signingKeyId/revoke
+   *
+   * Required scope: api_client:signing_key:revoke
+   *
+   * Revoked keys are rejected on all subsequent requests immediately.
+   */
+  async revokeSigningKey(
+    clientId: string,
+    signingKeyId: string,
+  ): Promise<ClientSigningKeyResponse> {
+    return this.request<ClientSigningKeyResponse>(
+      'POST',
+      `/v1/api-clients/${encodeURIComponent(clientId)}/signing-keys/${encodeURIComponent(signingKeyId)}/revoke`,
     );
   }
 }

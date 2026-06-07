@@ -162,3 +162,29 @@ export type {
   ClientMerchantAccessRepository,
   CreateClientMerchantAccessInput,
 } from './application/repositories';
+
+// ── S9.4: Client Signing Keys ─────────────────────────────────────────────────
+
+export type {
+  ClientSigningKeyDTO,
+  ClientSigningKeyStatus,
+  RequestNonceDTO,
+} from './domain/ClientSigningKey';
+
+export type {
+  ClientSigningKeyRepository,
+  CreateClientSigningKeyInput,
+  RequestNonceRepository,
+  ConsumeNonceInput,
+} from './application/repositories';
+
+export {
+  buildCanonicalString,
+  canonicalQuery,
+  computeSignature,
+  signRequest,
+  hashBody,
+  SIGNATURE_VERSION,
+  CANONICAL_ALGORITHM,
+  EMPTY_BODY_HASH,
+} from './security/canonicalRequest';

@@ -27,6 +27,8 @@ import { DrizzleClientCredentialRepository } from './infrastructure/repositories
 import { DrizzleClientMerchantAccessRepository } from './infrastructure/repositories/DrizzleClientMerchantAccessRepository.ts';
 import { DrizzleProviderAccountMethodRepository } from './infrastructure/repositories/DrizzleProviderAccountMethodRepository.ts';
 import { DrizzleAuditLogRepository } from './infrastructure/repositories/DrizzleAuditLogRepository.ts';
+import { DrizzleClientSigningKeyRepository } from './infrastructure/repositories/DrizzleClientSigningKeyRepository.ts';
+import { DrizzleRequestNonceRepository } from './infrastructure/repositories/DrizzleRequestNonceRepository.ts';
 import { FakeGatewayWebhookHandler } from './infrastructure/providers/FakeGatewayWebhookHandler.ts';
 import { CreateMerchant } from './application/use-cases/CreateMerchant.ts';
 import { CreateProviderAccount } from './application/use-cases/CreateProviderAccount.ts';
@@ -114,6 +116,10 @@ export interface ServiceContainer {
   auditRepo?: AuditLogRepository;
   /** S9.2: Rate limiter store. Optional for backward compat with in-memory test containers. */
   rateLimiter?: RateLimiterStore;
+  /** S9.4: Signing key repo. Optional for backward compat with in-memory test containers. */
+  signingKeyRepo?: DrizzleClientSigningKeyRepository;
+  /** S9.4: Request nonce repo. Optional for backward compat with in-memory test containers. */
+  nonceRepo?: DrizzleRequestNonceRepository;
 }
 
 export function createContainer(config: PaymentOrchestrationServiceConfig): ServiceContainer {
@@ -154,6 +160,10 @@ export function createContainer(config: PaymentOrchestrationServiceConfig): Serv
 
   // ── S9.2: Rate limiter ────────────────────────────────────────────────────
   const rateLimiter = new InMemoryRateLimiterStore();
+
+  // ── S9.4: Signing key and nonce repos ─────────────────────────────────────
+  const signingKeyRepo = new DrizzleClientSigningKeyRepository(db);
+  const nonceRepo = new DrizzleRequestNonceRepository(db);
 
   // ── Phase 8E: FakeGateway webhook handler ────────────────────────────────
   const fakeGatewayWebhookHandler = new FakeGatewayWebhookHandler({
@@ -223,7 +233,7 @@ export function createContainer(config: PaymentOrchestrationServiceConfig): Serv
     rotateCredential: new RotateCredential(apiClientRepo, clientCredentialRepo),
   };
 
-  return { config, db, repos, authRepos, providerRegistry, useCases, providerAccountMethodRepo, auditRepo, rateLimiter };
+  return { config, db, repos, authRepos, providerRegistry, useCases, providerAccountMethodRepo, auditRepo, rateLimiter, signingKeyRepo, nonceRepo };
 }
 
 /**

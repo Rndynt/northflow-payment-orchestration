@@ -64,6 +64,13 @@
       "when": 1780830200000,
       "tag": "0008_po_audit_logs",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1780900000000,
+      "tag": "0009_po_client_signing_keys_and_request_nonces",
+      "breakpoints": true
     }
   ]
 }

@@ -447,6 +447,43 @@ export interface AuditLogRepository {
   list(input: ListAuditLogsInput): Promise<{ entries: AuditLog[]; total: number }>;
 }
 
+// ── S9.4: Client Signing Keys ─────────────────────────────────────────────────
+
+import type { ClientSigningKeyDTO, ClientSigningKeyStatus, RequestNonceDTO } from '../domain/ClientSigningKey';
+
+export interface CreateClientSigningKeyInput {
+  id: string;
+  clientId: string;
+  keyPrefix: string;
+  secretCiphertext: string;
+  secretKeyVersion?: string | null;
+  expiresAt?: Date | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ClientSigningKeyRepository {
+  create(input: CreateClientSigningKeyInput): Promise<ClientSigningKeyDTO>;
+  findById(id: string): Promise<ClientSigningKeyDTO | null>;
+  findByPrefix(prefix: string): Promise<ClientSigningKeyDTO[]>;
+  listByClientId(clientId: string): Promise<ClientSigningKeyDTO[]>;
+  revoke(id: string, at: Date): Promise<void>;
+  touchLastUsed(id: string, at: Date): Promise<void>;
+}
+
+export interface ConsumeNonceInput {
+  id: string;
+  clientId: string;
+  signingKeyId: string;
+  nonce: string;
+  timestamp: Date;
+  expiresAt: Date;
+}
+
+export interface RequestNonceRepository {
+  consume(input: ConsumeNonceInput): Promise<{ consumed: boolean }>;
+  cleanupExpired(now: Date): Promise<number>;
+}
+
 // ── Idempotency ───────────────────────────────────────────────────────────────
 
 export interface ReserveIdempotencyKeyResult {

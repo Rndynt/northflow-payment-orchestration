@@ -253,6 +253,44 @@ export const poAuditLogs = pgTable('po_audit_logs', {
   createdAtIdx: index('po_audit_logs_created_at_idx').on(table.createdAt),
 }));
 
+export const poClientSigningKeys = pgTable('po_client_signing_keys', {
+  id: text('id').primaryKey(),
+  clientId: text('client_id').notNull().references(() => poApiClients.id, { onDelete: 'cascade' }),
+  keyPrefix: text('key_prefix').notNull(),
+  secretCiphertext: text('secret_ciphertext').notNull(),
+  secretNonce: text('secret_nonce'),
+  secretKeyVersion: text('secret_key_version'),
+  status: text('status').notNull().default('active'),
+  expiresAt: timestamp('expires_at'),
+  lastUsedAt: timestamp('last_used_at'),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  revokedAt: timestamp('revoked_at'),
+  metadata: jsonb('metadata').notNull().default({}),
+}, (table) => ({
+  keyPrefixUnique: uniqueIndex('po_client_signing_keys_prefix_unique').on(table.keyPrefix),
+  clientIdx: index('po_client_signing_keys_client_idx').on(table.clientId),
+  statusIdx: index('po_client_signing_keys_status_idx').on(table.status),
+  expiresAtIdx: index('po_client_signing_keys_expires_at_idx').on(table.expiresAt),
+  lastUsedAtIdx: index('po_client_signing_keys_last_used_at_idx').on(table.lastUsedAt),
+}));
+
+export const poRequestNonces = pgTable('po_request_nonces', {
+  id: text('id').primaryKey(),
+  clientId: text('client_id').notNull().references(() => poApiClients.id, { onDelete: 'cascade' }),
+  signingKeyId: text('signing_key_id').notNull().references(() => poClientSigningKeys.id, { onDelete: 'cascade' }),
+  nonce: text('nonce').notNull(),
+  timestamp: timestamp('timestamp').notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  metadata: jsonb('metadata').notNull().default({}),
+}, (table) => ({
+  keyNonceUnique: uniqueIndex('po_request_nonces_key_nonce_unique').on(table.signingKeyId, table.nonce),
+  clientIdx: index('po_request_nonces_client_idx').on(table.clientId),
+  signingKeyIdx: index('po_request_nonces_signing_key_idx').on(table.signingKeyId),
+  expiresAtIdx: index('po_request_nonces_expires_at_idx').on(table.expiresAt),
+  createdAtIdx: index('po_request_nonces_created_at_idx').on(table.createdAt),
+}));
+
 export const poClientMerchantAccess = pgTable('po_client_merchant_access', {
   id: text('id').primaryKey(),
   clientId: text('client_id').notNull().references(() => poApiClients.id, { onDelete: 'cascade' }),

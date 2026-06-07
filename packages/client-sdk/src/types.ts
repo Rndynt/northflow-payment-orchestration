@@ -15,6 +15,21 @@
 
 // ── Client Configuration ──────────────────────────────────────────────────────
 
+/**
+ * S9.4: Signing configuration for HMAC signed requests.
+ * When enabled, the SDK signs every protected request automatically.
+ */
+export interface PaymentOrchestrationSigningConfig {
+  /** API client ID (same as used for bearer auth). */
+  clientId: string;
+  /** Key ID or key prefix as returned from the signing key creation response. */
+  keyId: string;
+  /** Raw signing secret as returned ONCE from create/rotate. Never log or store persistently. */
+  secret: string;
+  /** If false, signing is disabled even when this config is present. Default: true. */
+  enabled?: boolean;
+}
+
 export interface PaymentOrchestrationClientConfig {
   baseUrl: string;
   /**
@@ -32,6 +47,49 @@ export interface PaymentOrchestrationClientConfig {
   /** Default merchantId injected into request bodies and headers when not explicitly provided. */
   merchantId?: string;
   sourceApp?: string;
+  /**
+   * S9.4: Optional HMAC signing configuration.
+   * When provided and enabled, every protected request is signed automatically.
+   * Signing and bearer auth are independent — you can use both simultaneously or
+   * use signing alone (when the service is in required mode).
+   */
+  signing?: PaymentOrchestrationSigningConfig;
+}
+
+// ── S9.4: Signing Key Lifecycle ───────────────────────────────────────────────
+
+export interface ClientSigningKeyResponse {
+  id: string;
+  clientId: string;
+  keyPrefix: string;
+  status: 'active' | 'revoked' | 'expired';
+  expiresAt: string | null;
+  lastUsedAt: string | null;
+  createdAt: string;
+  revokedAt: string | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface CreateSigningKeyRequest {
+  expiresAt?: string | null;
+}
+
+export interface CreateSigningKeyResponse extends ClientSigningKeyResponse {
+  rawSigningSecret: string;
+}
+
+export interface ListSigningKeysResponse {
+  keys: ClientSigningKeyResponse[];
+}
+
+export interface RotateSigningKeyRequest {
+  revokeOldKeyId?: string | null;
+  expiresAt?: string | null;
+}
+
+export interface RotateSigningKeyResponse {
+  newSigningKey: ClientSigningKeyResponse & { rawSigningSecret: string };
+  revokedSigningKey: ClientSigningKeyResponse | null;
 }
 
 /** @deprecated Use PaymentOrchestrationClientConfig instead. */

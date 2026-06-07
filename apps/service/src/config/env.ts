@@ -46,6 +46,10 @@ export interface PaymentOrchestrationServiceConfig {
   trustProxy?: boolean | string;
   jsonBodyLimit?: string;
   readyToken?: string; // NEVER logged, NEVER returned in any response
+  // S9.4: Signed request policy
+  signedRequestsMode: 'disabled' | 'optional' | 'required';
+  signedRequestMaxSkewSeconds: number;
+  signedRequestNonceTtlSeconds: number;
 }
 
 export function loadEnv(): PaymentOrchestrationServiceConfig {
@@ -113,6 +117,30 @@ export function loadEnv(): PaymentOrchestrationServiceConfig {
   // This value is NEVER logged and NEVER returned in any API response.
   const readyToken = (process.env['PAYMENT_ORCHESTRATION_READY_TOKEN'] ?? '').trim();
 
+  // S9.4: Signed requests mode.
+  // disabled = ignore HMAC headers, bearer-only auth.
+  // optional = accept either valid bearer OR valid signed request auth.
+  // required = protected /v1 routes require signed request auth.
+  // Default: optional (migration-safe for all existing API clients).
+  const signedRequestsMode = (
+    process.env['PAYMENT_ORCHESTRATION_SIGNED_REQUESTS_MODE'] ?? 'optional'
+  ).trim() as 'disabled' | 'optional' | 'required';
+
+  // S9.4: Maximum allowed timestamp skew for signed requests (seconds).
+  const signedRequestMaxSkewSeconds = parseInt(
+    process.env['PAYMENT_ORCHESTRATION_SIGNED_REQUEST_MAX_SKEW_SECONDS'] ?? '300',
+    10,
+  );
+
+  // S9.4: Nonce TTL (seconds). Must be >= maxSkewSeconds.
+  const signedRequestNonceTtlSeconds = Math.max(
+    parseInt(
+      process.env['PAYMENT_ORCHESTRATION_SIGNED_REQUEST_NONCE_TTL_SECONDS'] ?? '600',
+      10,
+    ),
+    signedRequestMaxSkewSeconds,
+  );
+
   return {
     port,
     nodeEnv,
@@ -133,5 +161,8 @@ export function loadEnv(): PaymentOrchestrationServiceConfig {
     trustProxy,
     jsonBodyLimit,
     readyToken,
+    signedRequestsMode,
+    signedRequestMaxSkewSeconds,
+    signedRequestNonceTtlSeconds,
   };
 }

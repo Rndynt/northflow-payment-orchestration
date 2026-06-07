@@ -107,6 +107,10 @@ function resolveClientIp(req: Request): string {
   return req.socket?.remoteAddress ?? 'unknown';
 }
 
+import type { DrizzleClientSigningKeyRepository } from '../infrastructure/repositories/DrizzleClientSigningKeyRepository.ts';
+import type { DrizzleRequestNonceRepository } from '../infrastructure/repositories/DrizzleRequestNonceRepository.ts';
+import { hasSignedRequestHeaders, verifySignedRequest } from './signedAuth.ts';
+
 export interface AuthMiddlewareOptions {
   serviceToken: string;
   nodeEnv: string;
@@ -121,6 +125,13 @@ export interface AuthMiddlewareOptions {
   authFailureRateLimitEnabled?: boolean;
   /** S9.2: Max failed auth attempts per IP per minute before 429. */
   authFailurePerMinute?: number;
+  // S9.4: Signed request options
+  /** Signed requests mode. disabled=bearer only, optional=prefer signed when headers present, required=must sign. */
+  signedRequestsMode?: 'disabled' | 'optional' | 'required';
+  signingKeyRepo?: DrizzleClientSigningKeyRepository;
+  nonceRepo?: DrizzleRequestNonceRepository;
+  signedRequestMaxSkewMs?: number;
+  signedRequestNonceTtlMs?: number;
 }
 
 export function createAuthMiddleware(options: AuthMiddlewareOptions) {
@@ -133,6 +144,11 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
     rateLimiter,
     authFailureRateLimitEnabled = false,
     authFailurePerMinute = 30,
+    signedRequestsMode = 'optional',
+    signingKeyRepo,
+    nonceRepo,
+    signedRequestMaxSkewMs = 300_000,
+    signedRequestNonceTtlMs = 600_000,
   } = options;
 
   if (!serviceToken && nodeEnv === 'production' && !legacyEnabled) {
@@ -140,6 +156,49 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
   }
 
   return async function authMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
+    // ── S9.4: Signed request path ─────────────────────────────────────────────
+    if (signedRequestsMode !== 'disabled' && signingKeyRepo && nonceRepo && clientRepo) {
+      const hasSignedHeaders = hasSignedRequestHeaders(req);
+
+      if (signedRequestsMode === 'required' && !hasSignedHeaders) {
+        res.status(401).json(apiErrorResponse(
+          'SIGNED_REQUEST_REQUIRED',
+          'This service requires signed requests. Include x-nf-client-id, x-nf-key-id, x-nf-timestamp, x-nf-nonce, x-nf-signature, and x-nf-signature-version headers.',
+        ));
+        return;
+      }
+
+      if (hasSignedHeaders) {
+        const result = await verifySignedRequest(req, {
+          signingKeyRepo,
+          nonceRepo,
+          clientRepo,
+          maxSkewMs: signedRequestMaxSkewMs,
+          nonceTtlMs: signedRequestNonceTtlMs,
+        });
+
+        if (typeof result === 'string') {
+          await applyAuthFailureRateLimit(req, res, '', null, rateLimiter, authFailureRateLimitEnabled, authFailurePerMinute);
+          if (res.headersSent) return;
+          const status = result === 'SIGNED_REQUEST_NONCE_REPLAYED' ? 401 : 401;
+          res.status(status).json(apiErrorResponse(result, signedRequestErrorMessage(result)));
+          return;
+        }
+
+        req.auth = result;
+        next();
+        return;
+      }
+    }
+
+    if (signedRequestsMode === 'required') {
+      res.status(401).json(apiErrorResponse(
+        'SIGNED_REQUEST_REQUIRED',
+        'This service requires signed requests.',
+      ));
+      return;
+    }
+
     // P0.2: primary headers always; legacy headers only if legacyEnabled
     const token = extractPrimaryToken(req) ?? (legacyEnabled ? extractLegacyToken(req) : null);
 
@@ -230,6 +289,24 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
 
     res.status(401).json(apiErrorResponse('UNAUTHORIZED', 'Invalid or missing credential.'));
   };
+}
+
+/**
+ * signedRequestErrorMessage — human-readable message for signed request error codes.
+ */
+function signedRequestErrorMessage(code: string): string {
+  switch (code) {
+    case 'SIGNED_REQUEST_HEADERS_MISSING': return 'Missing required signed request headers.';
+    case 'SIGNED_REQUEST_SIGNATURE_INVALID': return 'Signature is invalid. Check signing algorithm and canonical string construction.';
+    case 'SIGNED_REQUEST_TIMESTAMP_INVALID': return 'x-nf-timestamp is not a valid Unix millisecond timestamp.';
+    case 'SIGNED_REQUEST_TIMESTAMP_EXPIRED': return 'Request timestamp is outside the allowed skew window. Synchronize your clock.';
+    case 'SIGNED_REQUEST_KEY_NOT_FOUND': return 'Signing key not found for the provided key ID and client ID.';
+    case 'SIGNED_REQUEST_KEY_REVOKED': return 'Signing key has been revoked.';
+    case 'SIGNED_REQUEST_KEY_EXPIRED': return 'Signing key has expired.';
+    case 'SIGNED_REQUEST_NONCE_REPLAYED': return 'Request nonce has already been used. Each request must use a unique nonce.';
+    case 'SIGNED_REQUEST_SECRET_UNAVAILABLE': return 'Internal error verifying signed request. Contact service operator.';
+    default: return 'Signed request authentication failed.';
+  }
 }
 
 /**

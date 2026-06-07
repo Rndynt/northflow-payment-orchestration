@@ -37,6 +37,7 @@ import {
 } from './routes/paymentMethods.ts';
 import { createAuditLogsRouter } from './routes/auditLogs.ts';
 import { createApiClientCredentialsRouter } from './routes/apiClientCredentials.ts';
+import { createSigningKeysRouter } from './routes/signingKeys.ts';
 import { createAuthMiddleware } from './middleware/auth.ts';
 import { createRateLimitMiddleware } from './middleware/rateLimit.ts';
 import { errorHandler } from './middleware/errors.ts';
@@ -96,6 +97,12 @@ export function createApp(container: ServiceContainer): express.Application {
     rateLimiter: container.rateLimiter,
     authFailureRateLimitEnabled: container.config.rateLimitEnabled,
     authFailurePerMinute: container.config.rateLimitAuthFailurePerMinute,
+    // S9.4: Signed request auth
+    signedRequestsMode: container.config.signedRequestsMode,
+    signingKeyRepo: container.signingKeyRepo,
+    nonceRepo: container.nonceRepo,
+    signedRequestMaxSkewMs: container.config.signedRequestMaxSkewSeconds * 1000,
+    signedRequestNonceTtlMs: container.config.signedRequestNonceTtlSeconds * 1000,
   });
   app.use('/v1', auth);
 
@@ -153,6 +160,12 @@ export function createApp(container: ServiceContainer): express.Application {
   app.use(
     '/v1/api-clients/:clientId/credentials',
     createApiClientCredentialsRouter(container),
+  );
+
+  // ── S9.4: API Client Signing Key Management ───────────────────────────────
+  app.use(
+    '/v1/api-clients/:clientId/signing-keys',
+    createSigningKeysRouter(container),
   );
 
   // ── Dev/test only: FakeGateway confirm ───────────────────────────────────

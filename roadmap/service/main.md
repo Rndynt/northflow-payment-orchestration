@@ -719,13 +719,13 @@ Cloudflare mTLS / Zero Trust integration
 Completed service phases:
 
 ```txt
-S1 -> S2 -> S3 -> S4 -> S5 -> S6 -> S7 -> S7.5 -> S8 -> S9.1 -> S9.2 -> S9.3
+S1 -> S2 -> S3 -> S4 -> S5 -> S6 -> S7 -> S7.5 -> S8 -> S9.1 -> S9.2 -> S9.3 -> S9.4
 ```
 
 Next recommended service protection phases:
 
 ```txt
-S9.4 -> S9.5
+S9.5
 ```
 
 Practical production minimum (all complete):
@@ -734,4 +734,5 @@ Practical production minimum (all complete):
 S9.1 API key rotation          ✅
 S9.2 rate limit                ✅
 S9.3 network-level protection  ✅
+S9.4 signed requests / HMAC    ✅
 ```

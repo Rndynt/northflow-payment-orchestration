@@ -47,6 +47,17 @@ export const AuditAction = {
 
   // S9.2: Rate Limit
   RATE_LIMIT_DENIED:              'rate_limit.denied',
+
+  // S9.4: Signing Key Lifecycle
+  API_CLIENT_SIGNING_KEY_CREATE:  'api_client.signing_key.create',
+  API_CLIENT_SIGNING_KEY_READ:    'api_client.signing_key.read',
+  API_CLIENT_SIGNING_KEY_ROTATE:  'api_client.signing_key.rotate',
+  API_CLIENT_SIGNING_KEY_REVOKE:  'api_client.signing_key.revoke',
+
+  // S9.4: Signed Request Auth
+  SIGNED_REQUEST_AUTH_SUCCESS:    'signed_request.auth.success',
+  SIGNED_REQUEST_AUTH_FAILURE:    'signed_request.auth.failure',
+  SIGNED_REQUEST_NONCE_REPLAY:    'signed_request.nonce_replay',
 } as const;
 
 export type AuditActionValue = typeof AuditAction[keyof typeof AuditAction];
