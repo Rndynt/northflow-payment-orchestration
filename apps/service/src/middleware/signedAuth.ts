@@ -27,15 +27,16 @@
  *   - Rate limiting applies regardless of auth method.
  */
 
-import { timingSafeEqual, randomUUID } from 'node:crypto';
+import { timingSafeEqual } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import type { Request, Response, NextFunction } from 'express';
 import type { RequestAuthContext } from '../types/auth.ts';
 import { apiErrorResponse } from '../routes/utils.ts';
 import { decrypt } from '../security/signingSecretProtector.ts';
 import {
   buildCanonicalString,
-  computeSignatureSync,
-  hashBodySync,
+  computeSignature,
+  hashBody,
   SIGNATURE_VERSION,
 } from '@northflow/payment-orchestration-core';
 import type { DrizzleClientSigningKeyRepository } from '../infrastructure/repositories/DrizzleClientSigningKeyRepository.ts';
@@ -142,7 +143,7 @@ export async function verifySignedRequest(
   }
 
   const rawBody: Buffer | undefined = (req as any).rawBody;
-  const bodyHash = hashBodySync(rawBody ?? null);
+  const bodyHash = hashBody(rawBody ?? null);
 
   const path = req.baseUrl + req.path;
   const query = req.query as Record<string, string | string[] | undefined>;
@@ -156,7 +157,7 @@ export async function verifySignedRequest(
     bodyHash,
   });
 
-  const expected = computeSignatureSync(rawSecret, canonicalStr);
+  const expected = computeSignature(rawSecret, canonicalStr);
 
   let sigMatches = false;
   try {

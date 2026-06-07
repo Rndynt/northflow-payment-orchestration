@@ -1,18 +1,18 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { RefreshProviderStatus } from '../apps/service/src/application/use-cases/RefreshProviderStatus.ts';
-import { StandaloneFakeGatewayProvider } from '../apps/service/src/infrastructure/providers/StandaloneFakeGatewayProvider.ts';
+import { FakeGatewayProvider } from '../apps/service/src/infrastructure/providers/FakeGatewayProvider.ts';
 import type {
   PaymentIntentRepository,
   PaymentProviderAccountRepository,
   PaymentTransactionRepository,
-  StandalonePaymentIntentDTO,
-  StandalonePaymentTransactionDTO,
+  PaymentIntentDTO,
+  PaymentTransactionDTO,
 } from '@northflow/payment-orchestration-core';
 
 describe('provider status refresh foundation', () => {
   test('polls provider through registry and preserves merchant-scoped transaction lookup', async () => {
-    let intent: StandalonePaymentIntentDTO = {
+    let intent: PaymentIntentDTO = {
       id: 'intent_1',
       merchantId: 'merchant_1',
       providerAccountId: null,
@@ -34,7 +34,7 @@ describe('provider status refresh foundation', () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     };
-    let tx: StandalonePaymentTransactionDTO = {
+    let tx: PaymentTransactionDTO = {
       id: 'tx_1',
       merchantId: 'merchant_1',
       intentId: 'intent_1',
@@ -106,7 +106,7 @@ describe('provider status refresh foundation', () => {
       txRepo,
       intentRepo,
       providerAccountRepo,
-      new Map([['fake_gateway', new StandaloneFakeGatewayProvider()]]),
+      new Map([['fake_gateway', new FakeGatewayProvider()]]),
     );
 
     const result = await useCase.execute({ merchantId: 'merchant_1', transactionId: 'tx_1' });

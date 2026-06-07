@@ -5,7 +5,7 @@
  *
  * Validates that the standalone northflow payment-orchestration-service has feature
  * parity with the legacy Consumer A RefundPaymentTransaction and VoidPaymentTransaction
- * use cases, and that StandaloneManualProvider behaves correctly.
+ * use cases, and that ManualProvider behaves correctly.
  *
  * Strategy: in-memory repos + real use-case classes (no HTTP server, no DB).
  *
@@ -28,47 +28,47 @@ import type {
   MarkSucceededIfConfirmableResult,
   UpdateIntentTotalsInput,
   UpdateIntentStatusInput,
-  StandalonePaymentIntentDTO,
-  StandalonePaymentTransactionDTO,
+  PaymentIntentDTO,
+  PaymentTransactionDTO,
   PaymentProviderAccount,
 } from '@northflow/payment-orchestration-core';
 
 import { RefundPaymentTransaction } from '../apps/service/src/application/use-cases/RefundPaymentTransaction.ts';
 import { VoidPaymentTransaction } from '../apps/service/src/application/use-cases/VoidPaymentTransaction.ts';
-import { StandaloneManualProvider } from '../apps/service/src/infrastructure/providers/StandaloneManualProvider.ts';
-import { StandaloneFakeGatewayProvider } from '../apps/service/src/infrastructure/providers/StandaloneFakeGatewayProvider.ts';
+import { ManualProvider } from '../apps/service/src/infrastructure/providers/ManualProvider.ts';
+import { FakeGatewayProvider } from '../apps/service/src/infrastructure/providers/FakeGatewayProvider.ts';
 import type { ProviderRegistry } from '../apps/service/src/infrastructure/providers/providerRegistry.ts';
 
 // ── In-memory repo helpers ────────────────────────────────────────────────────
 
 class InMemoryTransactionRepo implements PaymentTransactionRepository {
-  readonly store = new Map<string, StandalonePaymentTransactionDTO>();
+  readonly store = new Map<string, PaymentTransactionDTO>();
 
-  async findById(id: string, merchantId: string): Promise<StandalonePaymentTransactionDTO | null> {
+  async findById(id: string, merchantId: string): Promise<PaymentTransactionDTO | null> {
     const tx = this.store.get(id);
     if (!tx || tx.merchantId !== merchantId) return null;
     return tx;
   }
 
-  async findByIntentId(intentId: string, merchantId: string): Promise<StandalonePaymentTransactionDTO[]> {
+  async findByIntentId(intentId: string, merchantId: string): Promise<PaymentTransactionDTO[]> {
     return [...this.store.values()].filter(
       (tx) => tx.intentId === intentId && tx.merchantId === merchantId,
     );
   }
 
-  async findByProviderReference(_provider: string, _ref: string): Promise<StandalonePaymentTransactionDTO | null> {
+  async findByProviderReference(_provider: string, _ref: string): Promise<PaymentTransactionDTO | null> {
     return null;
   }
 
-  async findByMerchantIdempotencyKey(merchantId: string, idempotencyKey: string): Promise<StandalonePaymentTransactionDTO | null> {
+  async findByMerchantIdempotencyKey(merchantId: string, idempotencyKey: string): Promise<PaymentTransactionDTO | null> {
     return [...this.store.values()].find(
       (tx) => tx.merchantId === merchantId && tx.idempotencyKey === idempotencyKey,
     ) ?? null;
   }
 
-  async create(input: CreatePaymentTransactionInput): Promise<StandalonePaymentTransactionDTO> {
+  async create(input: CreatePaymentTransactionInput): Promise<PaymentTransactionDTO> {
     const now = new Date();
-    const tx: StandalonePaymentTransactionDTO = {
+    const tx: PaymentTransactionDTO = {
       id: input.id,
       merchantId: input.merchantId,
       intentId: input.intentId,
@@ -97,7 +97,7 @@ class InMemoryTransactionRepo implements PaymentTransactionRepository {
     return tx;
   }
 
-  async updateStatus(input: UpdateTransactionStatusInput): Promise<StandalonePaymentTransactionDTO> {
+  async updateStatus(input: UpdateTransactionStatusInput): Promise<PaymentTransactionDTO> {
     const tx = this.store.get(input.id);
     if (!tx || tx.merchantId !== input.merchantId) throw new Error(`Transaction not found: ${input.id}`);
     const updated = {
@@ -140,19 +140,19 @@ class InMemoryTransactionRepo implements PaymentTransactionRepository {
 }
 
 class InMemoryIntentRepo implements PaymentIntentRepository {
-  readonly store = new Map<string, StandalonePaymentIntentDTO>();
+  readonly store = new Map<string, PaymentIntentDTO>();
 
-  async findById(id: string, merchantId: string): Promise<StandalonePaymentIntentDTO | null> {
+  async findById(id: string, merchantId: string): Promise<PaymentIntentDTO | null> {
     const intent = this.store.get(id);
     if (!intent || intent.merchantId !== merchantId) return null;
     return intent;
   }
 
-  async findByExternalPayable(): Promise<StandalonePaymentIntentDTO | null> { return null; }
+  async findByExternalPayable(): Promise<PaymentIntentDTO | null> { return null; }
 
-  async create(input: any): Promise<StandalonePaymentIntentDTO> {
+  async create(input: any): Promise<PaymentIntentDTO> {
     const now = new Date();
-    const intent: StandalonePaymentIntentDTO = {
+    const intent: PaymentIntentDTO = {
       id: input.id,
       merchantId: input.merchantId,
       providerAccountId: null,
@@ -179,7 +179,7 @@ class InMemoryIntentRepo implements PaymentIntentRepository {
     return intent;
   }
 
-  async updateTotals(input: UpdateIntentTotalsInput): Promise<StandalonePaymentIntentDTO> {
+  async updateTotals(input: UpdateIntentTotalsInput): Promise<PaymentIntentDTO> {
     const intent = this.store.get(input.id);
     if (!intent || intent.merchantId !== input.merchantId) throw new Error(`Intent not found: ${input.id}`);
     const updated = {
@@ -193,7 +193,7 @@ class InMemoryIntentRepo implements PaymentIntentRepository {
     return updated;
   }
 
-  async updateStatus(input: UpdateIntentStatusInput): Promise<StandalonePaymentIntentDTO> {
+  async updateStatus(input: UpdateIntentStatusInput): Promise<PaymentIntentDTO> {
     const intent = this.store.get(input.id);
     if (!intent || intent.merchantId !== input.merchantId) throw new Error(`Intent not found: ${input.id}`);
     const updated = { ...intent, status: input.status, updatedAt: new Date() };
@@ -216,8 +216,8 @@ class InMemoryProviderAccountRepo implements PaymentProviderAccountRepository {
 function buildSucceededTransaction(
   merchantId: string,
   intentId: string,
-  overrides: Partial<StandalonePaymentTransactionDTO> = {},
-): StandalonePaymentTransactionDTO {
+  overrides: Partial<PaymentTransactionDTO> = {},
+): PaymentTransactionDTO {
   const now = new Date();
   return {
     id: randomUUID(),
@@ -250,8 +250,8 @@ function buildSucceededTransaction(
 function buildPendingTransaction(
   merchantId: string,
   intentId: string,
-  overrides: Partial<StandalonePaymentTransactionDTO> = {},
-): StandalonePaymentTransactionDTO {
+  overrides: Partial<PaymentTransactionDTO> = {},
+): PaymentTransactionDTO {
   return buildSucceededTransaction(merchantId, intentId, {
     status: 'requires_action',
     ...overrides,
@@ -266,10 +266,10 @@ function makeRegistry(providers: Record<string, any> = {}): ProviderRegistry {
   return registry;
 }
 
-// ── Tests: StandaloneManualProvider ──────────────────────────────────────────
+// ── Tests: ManualProvider ───────────────────────────────────────────────────
 
-describe('StandaloneManualProvider', () => {
-  const manual = new StandaloneManualProvider();
+describe('ManualProvider', () => {
+  const manual = new ManualProvider();
 
   test('providerCode is "manual"', () => {
     assert.equal(manual.providerCode, 'manual');
@@ -326,10 +326,10 @@ describe('StandaloneManualProvider', () => {
 
 });
 
-// ── Tests: StandaloneFakeGatewayProvider — cancel/refund ─────────────────────
+// ── Tests: FakeGatewayProvider — cancel/refund ──────────────────────────────
 
-describe('StandaloneFakeGatewayProvider — Phase 8F cancel/refund', () => {
-  const fake = new StandaloneFakeGatewayProvider();
+describe('FakeGatewayProvider — Phase 8F cancel/refund', () => {
+  const fake = new FakeGatewayProvider();
 
   test('capabilities: supportsRefund=true, supportsCancel=true', () => {
     assert.equal(fake.capabilities.supportsRefund, true);
@@ -367,7 +367,7 @@ describe('StandaloneFakeGatewayProvider — Phase 8F cancel/refund', () => {
 
 describe('RefundPaymentTransaction', () => {
   const merchantId = 'merchant-ref-test';
-  const fake = new StandaloneFakeGatewayProvider();
+  const fake = new FakeGatewayProvider();
 
   function setup(providerOverrides: Record<string, any> = { fake_gateway: fake }) {
     const txRepo = new InMemoryTransactionRepo();
@@ -442,7 +442,7 @@ describe('RefundPaymentTransaction', () => {
   });
 
   test('refund with manual provider succeeds without API call', async () => {
-    const manual = new StandaloneManualProvider();
+    const manual = new ManualProvider();
     const { txRepo, intentRepo, useCase } = setup({ manual });
 
     const intentId = randomUUID();
@@ -711,7 +711,7 @@ describe('RefundPaymentTransaction', () => {
 
 describe('VoidPaymentTransaction', () => {
   const merchantId = 'merchant-void-test';
-  const fake = new StandaloneFakeGatewayProvider();
+  const fake = new FakeGatewayProvider();
 
   function setup(providerOverrides: Record<string, any> = { fake_gateway: fake }) {
     const txRepo = new InMemoryTransactionRepo();
@@ -786,7 +786,7 @@ describe('VoidPaymentTransaction', () => {
   });
 
   test('voids with manual provider', async () => {
-    const manual = new StandaloneManualProvider();
+    const manual = new ManualProvider();
     const { txRepo, intentRepo, useCase } = setup({ manual });
 
     const intentId = randomUUID();

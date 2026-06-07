@@ -1,9 +1,6 @@
 /**
  * canonicalRequest — S9.4: deterministic canonical request builder for HMAC signing.
  *
- * Cross-environment: uses the Web Crypto API (globalThis.crypto) which is available
- * in Node.js 18+, modern browsers, and edge runtimes. No node:crypto dependency.
- *
  * Canonical string format (NF-HMAC-SHA256-V1):
  *
  *   NF-HMAC-SHA256-V1\n
@@ -33,67 +30,25 @@
  * canonical strings for the same inputs.
  */
 
+import { createHash, createHmac } from 'node:crypto';
+
 export const SIGNATURE_VERSION = 'v1' as const;
 export const CANONICAL_ALGORITHM = 'NF-HMAC-SHA256-V1' as const;
 
-function toHex(buffer: ArrayBuffer): string {
-  return Array.from(new Uint8Array(buffer))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
-async function sha256Hex(data: Uint8Array | string): Promise<string> {
-  const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data;
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
-  return toHex(digest);
-}
-
-export const EMPTY_BODY_HASH: string = (() => {
-  // Pre-computed SHA-256 of empty string — stable, well-known value.
-  // Avoids async initialization at module load time.
-  return 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
-})();
+export const EMPTY_BODY_HASH = createHash('sha256').update('').digest('hex');
 
 /**
  * hashBody — compute SHA-256 hex digest of raw body bytes.
- * Synchronous for empty/null bodies (returns EMPTY_BODY_HASH).
- * Returns a Promise for non-empty bodies.
+ * Pass a Buffer or Uint8Array for request body bytes.
+ * For empty or missing body, returns EMPTY_BODY_HASH.
  */
-export function hashBody(body: Buffer | Uint8Array | string | null | undefined): string | Promise<string> {
-  if (body == null) return EMPTY_BODY_HASH;
-  if (typeof body === 'string') {
-    if (body.length === 0) return EMPTY_BODY_HASH;
-    return sha256Hex(body);
-  }
-  if (body instanceof Uint8Array || (typeof Buffer !== 'undefined' && Buffer.isBuffer(body))) {
-    if (body.length === 0) return EMPTY_BODY_HASH;
-    return sha256Hex(body as Uint8Array);
-  }
-  return EMPTY_BODY_HASH;
-}
-
-/**
- * hashBodySync — synchronous hash for service-side use where body bytes are
- * already available as a Buffer. Falls back to EMPTY_BODY_HASH for empty/null.
- * NOTE: This is provided for backward compatibility. Prefer hashBodyAsync when possible.
- */
-export function hashBodySync(body: Buffer | Uint8Array | string | null | undefined): string {
-  if (body == null) return EMPTY_BODY_HASH;
-  if (typeof body === 'string' && body.length === 0) return EMPTY_BODY_HASH;
-  if ((body instanceof Uint8Array || (typeof Buffer !== 'undefined' && Buffer.isBuffer(body))) && body.length === 0) {
+export function hashBody(body: Buffer | Uint8Array | string | null | undefined): string {
+  if (body == null || (typeof body !== 'string' && !Buffer.isBuffer(body) && !(body instanceof Uint8Array))) {
     return EMPTY_BODY_HASH;
   }
-  // For non-empty bodies in sync context, we use the Node.js crypto module if available.
-  // This path is only hit on the server side (service/worker), never in the browser.
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const nodeCrypto = require('crypto') as typeof import('crypto');
-    return nodeCrypto.createHash('sha256').update(body as Buffer).digest('hex');
-  } catch {
-    // Browser environment — synchronous hashing not available for non-empty bodies.
-    // Callers should use hashBodyAsync instead.
-    throw new Error('hashBodySync: non-empty body hashing requires Node.js crypto. Use hashBodyAsync in browser environments.');
-  }
+  if (typeof body === 'string' && body.length === 0) return EMPTY_BODY_HASH;
+  if ((Buffer.isBuffer(body) || body instanceof Uint8Array) && body.length === 0) return EMPTY_BODY_HASH;
+  return createHash('sha256').update(body).digest('hex');
 }
 
 /**
@@ -172,48 +127,22 @@ export function buildCanonicalString(input: CanonicalRequestInput): string {
 
 /**
  * computeSignature — HMAC-SHA256 of the canonical string, returned as lowercase hex.
- * Returns a Promise (uses Web Crypto API — works in browsers and Node.js 18+).
  *
  * @param signingSecret  raw signing secret (plaintext) — never log this
  * @param canonicalStr   output of buildCanonicalString
  */
-export async function computeSignature(signingSecret: string, canonicalStr: string): Promise<string> {
-  const keyBytes = new TextEncoder().encode(signingSecret);
-  const msgBytes = new TextEncoder().encode(canonicalStr);
-  const cryptoKey = await globalThis.crypto.subtle.importKey(
-    'raw',
-    keyBytes,
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-  const sig = await globalThis.crypto.subtle.sign('HMAC', cryptoKey, msgBytes);
-  return toHex(sig);
-}
-
-/**
- * computeSignatureSync — synchronous HMAC-SHA256 for server-side use only.
- * Uses Node.js crypto module via require(). Throws in browser environments.
- */
-export function computeSignatureSync(signingSecret: string, canonicalStr: string): string {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const nodeCrypto = require('crypto') as typeof import('crypto');
-    return nodeCrypto.createHmac('sha256', signingSecret).update(canonicalStr).digest('hex');
-  } catch {
-    throw new Error('computeSignatureSync: requires Node.js crypto. Use computeSignature (async) in browser environments.');
-  }
+export function computeSignature(signingSecret: string, canonicalStr: string): string {
+  return createHmac('sha256', signingSecret).update(canonicalStr).digest('hex');
 }
 
 /**
  * signRequest — convenience: build canonical string and compute signature in one step.
- * Async — uses Web Crypto API (browser + Node.js 18+).
  */
-export async function signRequest(
+export function signRequest(
   signingSecret: string,
   input: CanonicalRequestInput,
-): Promise<{ signature: string; canonicalString: string }> {
+): { signature: string; canonicalString: string } {
   const canonicalString = buildCanonicalString(input);
-  const signature = await computeSignature(signingSecret, canonicalString);
+  const signature = computeSignature(signingSecret, canonicalString);
   return { signature, canonicalString };
 }

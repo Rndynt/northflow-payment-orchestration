@@ -81,26 +81,26 @@ describe('hashBody', () => {
     assert.equal(hashBody(Buffer.alloc(0)), EMPTY_BODY_HASH);
   });
 
-  it('returns correct hash for non-empty string', async () => {
-    const hash = await hashBody('hello');
+  it('returns correct hash for non-empty string', () => {
+    const hash = hashBody('hello');
     assert.equal(hash, '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824');
   });
 
-  it('returns correct hash for Buffer body', async () => {
-    const hash = await hashBody(Buffer.from('hello'));
+  it('returns correct hash for Buffer body', () => {
+    const hash = hashBody(Buffer.from('hello'));
     assert.equal(hash, '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824');
   });
 
-  it('returns correct hash for JSON body', async () => {
+  it('returns correct hash for JSON body', () => {
     const json = JSON.stringify({ amount: 5000, currency: 'IDR' });
-    const hash = await hashBody(json);
-    assert.match(hash as string, /^[0-9a-f]{64}$/);
+    const hash = hashBody(json);
+    assert.match(hash, /^[0-9a-f]{64}$/);
   });
 });
 
 describe('buildCanonicalString', () => {
-  it('produces correct structure for a POST with body', async () => {
-    const bodyHash = await hashBody('{"amount":5000}') as string;
+  it('produces correct structure for a POST with body', () => {
+    const bodyHash = hashBody('{"amount":5000}');
     const result = buildCanonicalString({
       timestampMs: 1749312000000,
       nonce: 'testnonce123',
@@ -155,40 +155,40 @@ describe('buildCanonicalString', () => {
       method: 'POST',
       path: '/v1/merchants',
       query: { env: 'live' },
-      bodyHash: EMPTY_BODY_HASH,
+      bodyHash: hashBody('{}'),
     };
     assert.equal(buildCanonicalString(input), buildCanonicalString(input));
   });
 });
 
 describe('computeSignature', () => {
-  it('returns a 64-char lowercase hex string', async () => {
-    const sig = await computeSignature('my-secret', 'some-canonical-string');
+  it('returns a 64-char lowercase hex string', () => {
+    const sig = computeSignature('my-secret', 'some-canonical-string');
     assert.match(sig, /^[0-9a-f]{64}$/);
   });
 
-  it('is deterministic', async () => {
-    const s1 = await computeSignature('secret', 'canonical');
-    const s2 = await computeSignature('secret', 'canonical');
+  it('is deterministic', () => {
+    const s1 = computeSignature('secret', 'canonical');
+    const s2 = computeSignature('secret', 'canonical');
     assert.equal(s1, s2);
   });
 
-  it('is different for different secrets', async () => {
-    const s1 = await computeSignature('secret-a', 'canonical');
-    const s2 = await computeSignature('secret-b', 'canonical');
+  it('is different for different secrets', () => {
+    const s1 = computeSignature('secret-a', 'canonical');
+    const s2 = computeSignature('secret-b', 'canonical');
     assert.notEqual(s1, s2);
   });
 
-  it('is different for different canonical strings', async () => {
-    const s1 = await computeSignature('secret', 'canonical-a');
-    const s2 = await computeSignature('secret', 'canonical-b');
+  it('is different for different canonical strings', () => {
+    const s1 = computeSignature('secret', 'canonical-a');
+    const s2 = computeSignature('secret', 'canonical-b');
     assert.notEqual(s1, s2);
   });
 });
 
 describe('signRequest', () => {
-  it('returns both signature and canonicalString', async () => {
-    const result = await signRequest('my-secret', {
+  it('returns both signature and canonicalString', () => {
+    const result = signRequest('my-secret', {
       timestampMs: 1749312000000,
       nonce: 'nonce123',
       method: 'POST',
@@ -202,7 +202,7 @@ describe('signRequest', () => {
     assert.ok(result.canonicalString.startsWith(CANONICAL_ALGORITHM));
   });
 
-  it('signature verifies correctly', async () => {
+  it('signature verifies correctly', () => {
     const secret = 'test-signing-secret-32bytes-pad!!';
     const input = {
       timestampMs: 1749312000000,
@@ -212,7 +212,7 @@ describe('signRequest', () => {
       bodyHash: EMPTY_BODY_HASH,
     };
 
-    const { signature, canonicalString } = await signRequest(secret, input);
+    const { signature, canonicalString } = signRequest(secret, input);
 
     // Re-compute independently using top-level import
     const expected = createHmac('sha256', secret).update(canonicalString).digest('hex');

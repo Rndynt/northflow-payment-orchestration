@@ -61,8 +61,8 @@ import type {
   PaymentProviderEventRepository,
   ClientMerchantAccessRepository,
   PaymentMerchant,
-  StandalonePaymentIntentDTO,
-  StandalonePaymentTransactionDTO,
+  PaymentIntentDTO,
+  PaymentTransactionDTO,
   PaymentIdempotencyKeyDTO,
   PaymentProviderEventDTO,
 } from '@northflow/payment-orchestration-core';
@@ -79,7 +79,7 @@ import { GetRefundability } from '../apps/service/src/application/use-cases/GetR
 import { RefundPaymentTransaction } from '../apps/service/src/application/use-cases/RefundPaymentTransaction.ts';
 import { VoidPaymentTransaction } from '../apps/service/src/application/use-cases/VoidPaymentTransaction.ts';
 import { HandleProviderWebhook } from '../apps/service/src/application/use-cases/HandleProviderWebhook.ts';
-import { StandaloneFakeGatewayProvider } from '../apps/service/src/infrastructure/providers/StandaloneFakeGatewayProvider.ts';
+import { FakeGatewayProvider } from '../apps/service/src/infrastructure/providers/FakeGatewayProvider.ts';
 import { FakeGatewayWebhookHandler } from '../apps/service/src/infrastructure/providers/FakeGatewayWebhookHandler.ts';
 
 // ════════════════════════════════════════════════════════════════════
@@ -143,8 +143,8 @@ class InMemoryAuditLogRepository implements AuditLogRepository {
 // IN-MEMORY REPOS FOR HTTP INTEGRATION TESTS
 // ════════════════════════════════════════════════════════════════════
 
-type IntentStatus = StandalonePaymentIntentDTO['status'];
-type TxStatus = StandalonePaymentTransactionDTO['status'];
+type IntentStatus = PaymentIntentDTO['status'];
+type TxStatus = PaymentTransactionDTO['status'];
 
 class InMemoryMerchantRepo implements PaymentMerchantRepository {
   private store = new Map<string, PaymentMerchant>();
@@ -185,16 +185,16 @@ class InMemoryProviderAccountRepo implements PaymentProviderAccountRepository {
 }
 
 class InMemoryIntentRepo implements PaymentIntentRepository {
-  private store = new Map<string, StandalonePaymentIntentDTO>();
+  private store = new Map<string, PaymentIntentDTO>();
 
   async findById(id: string, merchantId: string) {
     const i = this.store.get(id);
     return i && i.merchantId === merchantId ? i : null;
   }
   async findByExternalPayable() { return null; }
-  async create(input: any): Promise<StandalonePaymentIntentDTO> {
+  async create(input: any): Promise<PaymentIntentDTO> {
     const now = new Date();
-    const i: StandalonePaymentIntentDTO = {
+    const i: PaymentIntentDTO = {
       id: input.id ?? randomUUID(),
       merchantId: input.merchantId,
       providerAccountId: input.providerAccountId ?? null,
@@ -230,7 +230,7 @@ class InMemoryIntentRepo implements PaymentIntentRepository {
 }
 
 class InMemoryTransactionRepo implements PaymentTransactionRepository {
-  private store = new Map<string, StandalonePaymentTransactionDTO>();
+  private store = new Map<string, PaymentTransactionDTO>();
 
   async findById(id: string, merchantId: string) {
     const tx = this.store.get(id);
@@ -245,9 +245,9 @@ class InMemoryTransactionRepo implements PaymentTransactionRepository {
     }
     return null;
   }
-  async create(input: any): Promise<StandalonePaymentTransactionDTO> {
+  async create(input: any): Promise<PaymentTransactionDTO> {
     const now = new Date();
-    const tx: StandalonePaymentTransactionDTO = {
+    const tx: PaymentTransactionDTO = {
       id: input.id ?? randomUUID(),
       merchantId: input.merchantId,
       intentId: input.intentId,
@@ -366,7 +366,7 @@ function buildAuditTestContainer(opts: {
   const providerEventRepo = new StubProviderEventRepo();
   const accessRepo = new InMemoryAccessRepo(opts.grants ?? []);
 
-  const fakeGateway = new StandaloneFakeGatewayProvider();
+  const fakeGateway = new FakeGatewayProvider();
   const providerRegistry = new Map([[fakeGateway.providerCode, fakeGateway]]);
 
   const config: PaymentOrchestrationServiceConfig = {
