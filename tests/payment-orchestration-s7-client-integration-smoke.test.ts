@@ -419,7 +419,7 @@ function errCode(body: Record<string, unknown>): string {
 }
 
 // ════════════════════════════════════════════════════════════════════
-// S7.2 — AURAPOS REST POSITIVE SMOKE FLOW
+// S7.2 — CONSUMER A REST POSITIVE SMOKE FLOW
 // ════════════════════════════════════════════════════════════════════
 
 describe('S7.2 Consumer A REST: positive smoke flow', () => {
@@ -556,7 +556,7 @@ describe('S7.2 Consumer A REST: positive smoke flow', () => {
 });
 
 // ════════════════════════════════════════════════════════════════════
-// S7.2 — TRANSITY SDK POSITIVE SMOKE FLOW
+// S7.2 — CONSUMER B SDK POSITIVE SMOKE FLOW
 // ════════════════════════════════════════════════════════════════════
 
 describe('S7.2 Consumer B SDK: positive smoke flow', () => {
@@ -649,7 +649,7 @@ describe('S7.2 Consumer B SDK: positive smoke flow', () => {
 });
 
 // ════════════════════════════════════════════════════════════════════
-// S7.2 — KIOSKOIN REST POSITIVE SMOKE FLOW
+// S7.2 — CONSUMER C REST POSITIVE SMOKE FLOW
 // ════════════════════════════════════════════════════════════════════
 
 describe('S7.2 Consumer C REST: positive smoke flow', () => {
@@ -763,12 +763,12 @@ describe('S7.3 Negative: cross-app merchant access, sourceApp spoofing, and scop
   let baseUrl: string;
 
   // 3 client tokens
-  let tokenAurapos: string;
+  let tokenConsumerA: string;
   let tokenConsumerB: string;
   let tokenConsumerC: string;
 
   // 3 merchant IDs — one per client
-  let merchantAurapos: string;
+  let merchantConsumerA: string;
   let merchantConsumerB: string;
   let merchantConsumerC: string;
 
@@ -780,7 +780,7 @@ describe('S7.3 Negative: cross-app merchant access, sourceApp spoofing, and scop
     const built = buildS7Container();
     const { accessRepo, merchantRepo } = built;
 
-    tokenAurapos = built.seedClient({ id: 'client-consumer-a-n', sourceApp: 'consumer-a', scopes: FULL_SCOPES });
+    tokenConsumerA = built.seedClient({ id: 'client-consumer-a-n', sourceApp: 'consumer-a', scopes: FULL_SCOPES });
     tokenConsumerB = built.seedClient({ id: 'client-consumer-b-n', sourceApp: 'consumer-b', scopes: FULL_SCOPES });
     tokenConsumerC = built.seedClient({ id: 'client-consumer-c-n', sourceApp: 'consumer-c', scopes: FULL_SCOPES });
     tokenLimitedScope = built.seedClient({ id: 'client-limited-n', sourceApp: 'consumer-a', scopes: LIMITED_SCOPES });
@@ -791,13 +791,13 @@ describe('S7.3 Negative: cross-app merchant access, sourceApp spoofing, and scop
 
     // Seed merchants directly in the in-memory store
     const now = new Date();
-    merchantAurapos = 'mer-consumer-a-smoke';
+    merchantConsumerA = 'mer-consumer-a-smoke';
     merchantConsumerB = 'mer-consumer-b-smoke';
     merchantConsumerC = 'mer-consumer-c-smoke';
     merchantLimitedScope = 'mer-limited-smoke';
 
     for (const [id, app] of [
-      [merchantAurapos, 'consumer-a'],
+      [merchantConsumerA, 'consumer-a'],
       [merchantConsumerB, 'consumer-b'],
       [merchantConsumerC, 'consumer-c'],
       [merchantLimitedScope, 'consumer-a'],
@@ -806,7 +806,7 @@ describe('S7.3 Negative: cross-app merchant access, sourceApp spoofing, and scop
     }
 
     // Grant each client access ONLY to its own merchant
-    accessRepo.grant('client-consumer-a-n', merchantAurapos, FULL_SCOPES);
+    accessRepo.grant('client-consumer-a-n', merchantConsumerA, FULL_SCOPES);
     accessRepo.grant('client-consumer-b-n', merchantConsumerB, FULL_SCOPES);
     accessRepo.grant('client-consumer-c-n', merchantConsumerC, FULL_SCOPES);
     // Limited-scope client has access to its merchant but with limited scopes (no refund/void/pa:create)
@@ -819,7 +819,7 @@ describe('S7.3 Negative: cross-app merchant access, sourceApp spoofing, and scop
 
   test('N01: Consumer A credential → Consumer B merchant → 403 MERCHANT_ACCESS_DENIED', async () => {
     const { status, body } = await req(baseUrl, '/v1/merchants/' + merchantConsumerB, {
-      bearer: tokenAurapos,
+      bearer: tokenConsumerA,
     });
     assert.equal(status, 403);
     assert.equal(errCode(body), 'MERCHANT_ACCESS_DENIED');
@@ -827,14 +827,14 @@ describe('S7.3 Negative: cross-app merchant access, sourceApp spoofing, and scop
 
   test('N02: Consumer A credential → Consumer C merchant → 403 MERCHANT_ACCESS_DENIED', async () => {
     const { status, body } = await req(baseUrl, '/v1/merchants/' + merchantConsumerC, {
-      bearer: tokenAurapos,
+      bearer: tokenConsumerA,
     });
     assert.equal(status, 403);
     assert.equal(errCode(body), 'MERCHANT_ACCESS_DENIED');
   });
 
   test('N03: Consumer B credential → Consumer A merchant → 403 MERCHANT_ACCESS_DENIED', async () => {
-    const { status, body } = await req(baseUrl, '/v1/merchants/' + merchantAurapos, {
+    const { status, body } = await req(baseUrl, '/v1/merchants/' + merchantConsumerA, {
       bearer: tokenConsumerB,
     });
     assert.equal(status, 403);
@@ -850,7 +850,7 @@ describe('S7.3 Negative: cross-app merchant access, sourceApp spoofing, and scop
   });
 
   test('N05: Consumer C credential → Consumer A merchant → 403 MERCHANT_ACCESS_DENIED', async () => {
-    const { status, body } = await req(baseUrl, '/v1/merchants/' + merchantAurapos, {
+    const { status, body } = await req(baseUrl, '/v1/merchants/' + merchantConsumerA, {
       bearer: tokenConsumerC,
     });
     assert.equal(status, 403);
@@ -869,9 +869,9 @@ describe('S7.3 Negative: cross-app merchant access, sourceApp spoofing, and scop
 
   test('N07: Consumer A credential sends sourceApp=consumer-b → 403 SOURCE_APP_MISMATCH', async () => {
     const { status, body } = await req(baseUrl, '/v1/payment-intents', {
-      bearer: tokenAurapos,
+      bearer: tokenConsumerA,
       body: {
-        merchantId: merchantAurapos,
+        merchantId: merchantConsumerA,
         sourceApp: 'consumer-b',          // spoofed — credential is consumer-a
         externalPayableType: 'pos_order',
         externalPayableId: `order-spoof-${randomUUID()}`,

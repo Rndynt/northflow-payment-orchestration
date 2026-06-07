@@ -663,7 +663,7 @@ describe('Phase 8D Hardening — HTTP/Auth Tests', () => {
   });
 
   // A13: No tenantId in any response
-  test('A13: Responses never expose tenantId or internal AuraPoS fields', async () => {
+  test('A13: Responses never expose tenantId or internal legacy fields', async () => {
     const mRes = await apiFetch('/v1/merchants', {
       body: { name: 'No TenantId Test', sourceApp: 'test', externalRef: 'ntid-001' },
       token: TOKEN,

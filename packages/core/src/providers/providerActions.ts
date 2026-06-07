@@ -2,7 +2,7 @@
  * providerActions — canonical provider action types for the standalone payment engine.
  *
  * TODO(Phase 8B): migrate existing types from packages/domain/payments/provider.ts
- * into this file and have the embedded AuraPoS re-export from here.
+ * into this file and have the embedded legacy system re-export from here.
  *
  * Phase 8A: standalone definitions — does NOT import from @pos/domain.
  * These mirror the embedded types to ensure contract alignment.

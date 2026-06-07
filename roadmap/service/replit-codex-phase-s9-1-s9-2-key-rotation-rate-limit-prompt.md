@@ -22,9 +22,9 @@ Do not weaken S1-S8 authentication, merchant access, sourceApp, scope authorizat
 Northflow now uses API client credentials for consumer backends:
 
 ```txt
-AuraPoS backend  -> Northflow API client credential
-Transity backend -> Northflow API client credential / SDK
-Kioskoin backend -> Northflow API client credential
+Consumer A backend -> Northflow API client credential
+Consumer B backend -> Northflow API client credential / SDK
+Consumer C backend -> Northflow API client credential
 ```
 
 The service already supports hashed credentials, prefix lookup, scopes, merchant grants, audit logs, and legacy-token compatibility mode.
@@ -272,7 +272,7 @@ The doc must explain:
 
 ```txt
 how to create a new key
-how to deploy new key to AuraPoS/Transity/Kioskoin
+how to deploy new key to Consumer A/B/C backends
 how to verify lastUsedAt
 how to revoke old key
 how to rotate without downtime
@@ -519,9 +519,9 @@ docs/security/rate-limits.md
 Docs must include examples for:
 
 ```txt
-AuraPoS key rotation
-Transity SDK key rotation
-Kioskoin key rotation
+Consumer A key rotation
+Consumer B SDK key rotation
+Consumer C key rotation
 rate limit behavior
 429 response shape
 safe incident response if a key leaks
@@ -620,7 +620,7 @@ lastUsedAt is updated on successful auth.
 Credential lifecycle operations are audited and redacted.
 Service has configurable rate limiting for authenticated clients and auth failures.
 429 RATE_LIMITED responses include rate limit headers.
-Docs explain key rotation and rate limit behavior for AuraPoS, Transity, and Kioskoin.
+Docs explain key rotation and rate limit behavior for Consumer A, Consumer B, and Consumer C.
 Validation report is committed.
 ```
 

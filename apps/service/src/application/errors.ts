@@ -7,7 +7,7 @@
  * Phase 8K: all public error codes frozen. Add new codes to PAYMENT_ORCHESTRATION_ERROR_CODES
  * and KNOWN_CODES together — never orphan a code in one list only.
  *
- * Phase 8F: added refund/void/cancel error codes for parity with legacy AuraPoS.
+ * Phase 8F: added refund/void/cancel error codes for parity with legacy payment engine.
  * Phase S9.1-S9.2: added credential lifecycle + rate limit error codes.
  */
 

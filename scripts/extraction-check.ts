@@ -14,9 +14,9 @@
  * 7. Docs and OpenAPI spec present.
  * 8. Phase 8L extraction report exists.
  * 9. .env.example files contain no real-looking secrets.
- * 10. README opens as standalone product (not as AuraPoS child).
+ * 10. README opens as standalone product (not as a child of another project).
  * 11. Docker docs use correct -f apps/service/Dockerfile flag.
- * 12. No forbidden AuraPoS imports in standalone source.
+ * 12. No forbidden legacy imports in standalone source.
  * 13. No shared/schema references in standalone source.
  * 14. Package name consistency.
  * 15. No random assets/logs/build outputs in repo.
@@ -224,14 +224,14 @@ check('no .env file committed (only .env.example)', !exists('.env'));
 console.log('\nSection 10: README standalone wording');
 const readmeText = readText('README.md');
 const firstParagraph = readmeText.split('\n').slice(0, 6).join('\n');
-const auraposChildPhrases = [
-  'extracted from the AuraPoS monorepo',
-  'AuraPoS child',
-  'part of AuraPoS',
+const legacyChildPhrases = [
+  'extracted from the legacy monorepo',
+  'child project',
+  'part of another project',
 ];
-const hasAuraposChildWording = auraposChildPhrases.some((p) => firstParagraph.includes(p));
-check('README does not open with AuraPoS-child wording', !hasAuraposChildWording,
-  hasAuraposChildWording ? `Found in first 6 lines: "${firstParagraph.slice(0, 100)}..."` : undefined);
+const hasLegacyChildWording = legacyChildPhrases.some((p) => firstParagraph.includes(p));
+check('README does not open with legacy-child wording', !hasLegacyChildWording,
+  hasLegacyChildWording ? `Found in first 6 lines: "${firstParagraph.slice(0, 100)}..."` : undefined);
 check('README mentions standalone payment orchestration', readmeText.includes('standalone payment orchestration'));
 
 // ── Section 11: Docker docs use -f flag ──────────────────────────────────────
@@ -280,7 +280,7 @@ for (const file of allSourceFiles) {
   }
 }
 
-check('No forbidden @pos/* or AuraPoS imports in standalone source', importViolations.length === 0,
+check('No forbidden @pos/* or legacy imports in standalone source', importViolations.length === 0,
   importViolations.length > 0 ? `\n    ${importViolations.join('\n    ')}` : undefined);
 check('No shared/schema references in standalone source', schemaViolations.length === 0,
   schemaViolations.length > 0 ? `\n    ${schemaViolations.join('\n    ')}` : undefined);

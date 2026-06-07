@@ -12,9 +12,9 @@ Do not rewrite unrelated payment orchestration behavior.
 
 Harden the Phase S1-S5 implementation so it is safe for multi-app consumers:
 
-- AuraPoS: direct REST API consumer.
-- Transity: SDK consumer.
-- Kioskoin: direct REST API consumer.
+- Consumer A: direct REST API consumer.
+- Consumer B: SDK consumer.
+- Consumer C: direct REST API consumer.
 
 The final security model remains:
 
@@ -286,7 +286,7 @@ Include:
 - Chosen strategy.
 - Why the chosen strategy is safe.
 
-Use the KiosKoin migration naming cleanup style:
+Use the generic migration naming cleanup style:
 
 ```txt
 NNNN_<domain>_<purpose>.sql
@@ -387,9 +387,9 @@ If the repo has a more specific service test command, run that too.
 After this hardening patch:
 
 ```txt
-AuraPoS credentials can access only AuraPoS merchants and only granted scopes.
-Transity credentials can access only Transity merchants and only granted scopes.
-Kioskoin credentials can access only Kioskoin merchants and only granted scopes.
+Consumer A credentials can access only Consumer A merchants and only granted scopes.
+Consumer B credentials can access only Consumer B merchants and only granted scopes.
+Consumer C credentials can access only Consumer C merchants and only granted scopes.
 ```
 
 Auth supports both standard bearer credentials and the dedicated Northflow API key header.

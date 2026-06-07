@@ -1,7 +1,7 @@
 /**
  * XenditSandboxProvider — standalone sandbox-only Xendit runtime adapter.
  *
- * This adapter is intentionally isolated from the embedded AuraPoS Xendit provider.
+ * This adapter is intentionally isolated from the embedded legacy Xendit provider.
  * It uses an injectable HTTP client and an opaque credentialsRef resolver so tests
  * never call the network and raw provider secrets are never read from DB rows.
  */

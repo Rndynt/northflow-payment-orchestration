@@ -203,8 +203,8 @@ describe('Unit: assertMerchantAccessWithScope (P0.3 + P0.4)', () => {
   };
 
   const normalAuth: RequestAuthContext = {
-    clientId: 'client-aurapos',
-    sourceApp: 'aurapos',
+    clientId: 'client-consumer-a',
+    sourceApp: 'consumer-a',
     environment: 'live',
     credentialId: 'cred-1',
     scopes: ['merchant:read', 'payment:refund'],
@@ -216,7 +216,7 @@ describe('Unit: assertMerchantAccessWithScope (P0.3 + P0.4)', () => {
   function makeAccessRepo(grants: Partial<ClientMerchantAccessDTO>[]): ClientMerchantAccessRepository {
     const store: ClientMerchantAccessDTO[] = grants.map((g, i) => ({
       id: `grant-${i}`,
-      clientId: g.clientId ?? 'client-aurapos',
+      clientId: g.clientId ?? 'client-consumer-a',
       merchantId: g.merchantId ?? merchantId,
       scopes: g.scopes ?? ['*'],
       status: g.status ?? 'active' as ClientMerchantAccessStatus,
@@ -303,14 +303,14 @@ describe('Unit: assertMerchantAccessWithScope (P0.3 + P0.4)', () => {
 describe('Unit: assertSourceApp (P0.4)', () => {
   const clientAuth: RequestAuthContext = {
     clientId: 'client-1',
-    sourceApp: 'aurapos',
+    sourceApp: 'consumer-a',
     environment: 'live',
     credentialId: 'cred-1',
     scopes: ['*'],
   };
 
   test('U12: sourceApp mismatch → SOURCE_APP_MISMATCH', () => {
-    const payload: Record<string, unknown> = { sourceApp: 'kioskoin' };
+    const payload: Record<string, unknown> = { sourceApp: 'consumer-c' };
     const err = assertSourceApp(clientAuth, payload);
     assert.ok(err !== null);
     const code = (err as any).error?.code ?? (err as any).code;
@@ -321,11 +321,11 @@ describe('Unit: assertSourceApp (P0.4)', () => {
     const payload: Record<string, unknown> = {};
     const err = assertSourceApp(clientAuth, payload);
     assert.equal(err, null);
-    assert.equal(payload['sourceApp'], 'aurapos');
+    assert.equal(payload['sourceApp'], 'consumer-a');
   });
 
   test('U14: matching sourceApp → allowed', () => {
-    const payload: Record<string, unknown> = { sourceApp: 'aurapos' };
+    const payload: Record<string, unknown> = { sourceApp: 'consumer-a' };
     const err = assertSourceApp(clientAuth, payload);
     assert.equal(err, null);
   });
@@ -565,7 +565,7 @@ function buildSecurityContainer(opts: TestContainerOptions = {}): {
     useCases,
   };
 
-  function seedClient(clientId: string, scopes: string[], sourceApp = 'aurapos') {
+  function seedClient(clientId: string, scopes: string[], sourceApp = 'consumer-a') {
     const credentialId = randomUUID().replace(/-/g, '');
     const env = 'live';
     const { raw, prefix, hash } = generateCredential(env, credentialId);
@@ -657,7 +657,7 @@ describe('HTTP: Auth header variants and credential lifecycle (P0.1 + P0.2)', ()
   after(() => stopServer(server));
 
   test('H01: Authorization: Bearer <nf. credential> → auth passes (201 on merchant create)', async () => {
-    const { raw } = seedClient('client-h01', ['*'], 'aurapos');
+    const { raw } = seedClient('client-h01', ['*'], 'consumer-a');
     const { status } = await req(baseUrl, '/v1/merchants', {
       bearer: raw,
       body: { name: 'Bearer Test Merchant' },
@@ -666,7 +666,7 @@ describe('HTTP: Auth header variants and credential lifecycle (P0.1 + P0.2)', ()
   });
 
   test('H02: x-nf-api-key: <nf. credential> → auth passes (201)', async () => {
-    const { raw } = seedClient('client-h02', ['*'], 'aurapos');
+    const { raw } = seedClient('client-h02', ['*'], 'consumer-a');
     const { status } = await req(baseUrl, '/v1/merchants', {
       nfApiKey: raw,
       body: { name: 'NF API Key Test Merchant' },
@@ -690,7 +690,7 @@ describe('HTTP: Auth header variants and credential lifecycle (P0.1 + P0.2)', ()
   });
 
   test('H05: Revoked credential → 401 UNAUTHORIZED', async () => {
-    const { raw, credentialId } = seedClient('client-h05', ['*'], 'aurapos');
+    const { raw, credentialId } = seedClient('client-h05', ['*'], 'consumer-a');
     credentialRepo.revoke(credentialId);
     const { status, body } = await req(baseUrl, '/v1/merchants', {
       bearer: raw,
@@ -701,7 +701,7 @@ describe('HTTP: Auth header variants and credential lifecycle (P0.1 + P0.2)', ()
   });
 
   test('H06: Expired credential → 401 UNAUTHORIZED', async () => {
-    const { raw, credentialId } = seedClient('client-h06', ['*'], 'aurapos');
+    const { raw, credentialId } = seedClient('client-h06', ['*'], 'consumer-a');
     credentialRepo.setExpired(credentialId);
     const { status, body } = await req(baseUrl, '/v1/merchants', {
       bearer: raw,
@@ -743,13 +743,13 @@ describe('HTTP: Merchant access + grant scope enforcement (P0.3 + P0.4)', () => 
 
     // Pre-create a test merchant in the store
     testMerchantId = randomUUID();
-    await merchantRepo.create({ id: testMerchantId, name: 'Grant Test Merchant', sourceApp: 'aurapos' });
+    await merchantRepo.create({ id: testMerchantId, name: 'Grant Test Merchant', sourceApp: 'consumer-a' });
   });
 
   after(() => stopServer(server));
 
   test('H07: Client without active merchant access grant → 403 MERCHANT_ACCESS_DENIED', async () => {
-    const { raw } = seedClient('client-h07', ['merchant:read'], 'aurapos');
+    const { raw } = seedClient('client-h07', ['merchant:read'], 'consumer-a');
     // No grant created for this merchant
     const { status, body } = await req(baseUrl, `/v1/merchants/${testMerchantId}`, { bearer: raw });
     assert.equal(status, 403);
@@ -757,7 +757,7 @@ describe('HTTP: Merchant access + grant scope enforcement (P0.3 + P0.4)', () => 
   });
 
   test('H08: Client with grant but missing grant scope → 403 SCOPE_DENIED', async () => {
-    const { raw } = seedClient('client-h08', ['merchant:read', 'payment:refund'], 'aurapos');
+    const { raw } = seedClient('client-h08', ['merchant:read', 'payment:refund'], 'consumer-a');
     // Grant exists, but only has merchant:read — not payment:refund for this merchant
     accessRepo.grant('client-h08', testMerchantId, ['merchant:read']); // no payment:refund in grant
     // Try to GET merchant (merchant:read in both global and grant — should work)
@@ -770,7 +770,7 @@ describe('HTTP: Merchant access + grant scope enforcement (P0.3 + P0.4)', () => 
     // Client has global payment:refund but grant only has merchant:read (no payment:refund)
     // This is already partially covered by H08. Full enforcement is in unit tests U07/U08.
     // Here we do HTTP-level verification using a separate client.
-    const { raw } = seedClient('client-h09', ['merchant:read', 'payment:refund'], 'aurapos');
+    const { raw } = seedClient('client-h09', ['merchant:read', 'payment:refund'], 'consumer-a');
     accessRepo.grant('client-h09', testMerchantId, ['merchant:read']); // grant has only merchant:read
     // Accessing merchant with merchant:read scope → should succeed (grant has merchant:read)
     const getRes = await req(baseUrl, `/v1/merchants/${testMerchantId}`, { bearer: raw });
@@ -779,7 +779,7 @@ describe('HTTP: Merchant access + grant scope enforcement (P0.3 + P0.4)', () => 
 
   test('H10: Client with grant scope but missing global scope → 403 SCOPE_DENIED from requireScope', async () => {
     // Client global scopes: only ['merchant:read'], no payment:refund
-    const { raw } = seedClient('client-h10', ['merchant:read'], 'aurapos');
+    const { raw } = seedClient('client-h10', ['merchant:read'], 'consumer-a');
     accessRepo.grant('client-h10', testMerchantId, ['merchant:read', 'payment:refund']);
     // GET merchant (merchant:read in global) → should succeed
     const getRes = await req(baseUrl, `/v1/merchants/${testMerchantId}`, { bearer: raw });
@@ -787,7 +787,7 @@ describe('HTTP: Merchant access + grant scope enforcement (P0.3 + P0.4)', () => 
   });
 
   test('H11: Client with both global and grant scopes → 200 allowed', async () => {
-    const { raw } = seedClient('client-h11', ['merchant:read', 'intent:create', 'payment:create'], 'aurapos');
+    const { raw } = seedClient('client-h11', ['merchant:read', 'intent:create', 'payment:create'], 'consumer-a');
     accessRepo.grant('client-h11', testMerchantId, ['merchant:read', 'intent:create', 'payment:create']);
     const getRes = await req(baseUrl, `/v1/merchants/${testMerchantId}`, { bearer: raw });
     assert.equal(getRes.status, 200, 'client with all required scopes must be allowed');
@@ -811,17 +811,17 @@ describe('HTTP: SourceApp enforcement (P0.4)', () => {
   after(() => stopServer(server));
 
   test('H12: SourceApp mismatch in body → 403 SOURCE_APP_MISMATCH', async () => {
-    const { raw } = seedClient('client-h12', ['*'], 'aurapos');
+    const { raw } = seedClient('client-h12', ['*'], 'consumer-a');
     const { status, body } = await req(baseUrl, '/v1/merchants', {
       bearer: raw,
-      body: { name: 'Wrong Source App Merchant', sourceApp: 'kioskoin' }, // mismatches 'aurapos'
+      body: { name: 'Wrong Source App Merchant', sourceApp: 'consumer-c' }, // mismatches 'consumer-a'
     });
     assert.equal(status, 403);
     assert.equal(errCode(body), 'SOURCE_APP_MISMATCH');
   });
 
   test('H14: Missing sourceApp in body → auto-filled from auth, 201', async () => {
-    const { raw } = seedClient('client-h14', ['*'], 'aurapos');
+    const { raw } = seedClient('client-h14', ['*'], 'consumer-a');
     const { status, body } = await req(baseUrl, '/v1/merchants', {
       bearer: raw,
       body: { name: 'Auto SourceApp Merchant' }, // no sourceApp — should be filled in
@@ -865,7 +865,7 @@ describe('HTTP: P1.4 — Grant-scope denial on gateway-payment, reconcile, refun
     await (built.container.repos.merchantRepo as InMemoryMerchantRepo).create({
       id: testMerchantId,
       name: 'P1.4 Test Merchant',
-      sourceApp: 'aurapos',
+      sourceApp: 'consumer-a',
     });
 
     await intentRepo.create({
@@ -875,7 +875,7 @@ describe('HTTP: P1.4 — Grant-scope denial on gateway-payment, reconcile, refun
       externalPayableId: 'order-p14',
       amountDue: 10000,
       currency: 'IDR',
-      sourceApp: 'aurapos',
+      sourceApp: 'consumer-a',
     });
 
     // Seed a succeeded transaction for the refund tests
@@ -898,7 +898,7 @@ describe('HTTP: P1.4 — Grant-scope denial on gateway-payment, reconcile, refun
   // ── H15: gateway payment route ───────────────────────────────────────────
 
   test('H15a: payment:create global allowed, grant lacks payment:create → 403 SCOPE_DENIED (gateway payment)', async () => {
-    const { raw } = seedClient('client-h15a', ['payment:create'], 'aurapos');
+    const { raw } = seedClient('client-h15a', ['payment:create'], 'consumer-a');
     // Grant exists but only has intent:read — no payment:create in grant
     accessRepo.grant('client-h15a', testMerchantId, ['intent:read']);
 
@@ -911,7 +911,7 @@ describe('HTTP: P1.4 — Grant-scope denial on gateway-payment, reconcile, refun
   });
 
   test('H15b: payment:create in grant but global client lacks payment:create → 403 SCOPE_DENIED (gateway payment)', async () => {
-    const { raw } = seedClient('client-h15b', ['intent:read'], 'aurapos'); // no payment:create globally
+    const { raw } = seedClient('client-h15b', ['intent:read'], 'consumer-a'); // no payment:create globally
     // Grant has payment:create but global scopes do not
     accessRepo.grant('client-h15b', testMerchantId, ['payment:create']);
 
@@ -927,7 +927,7 @@ describe('HTTP: P1.4 — Grant-scope denial on gateway-payment, reconcile, refun
   // ── H16: reconcile route ─────────────────────────────────────────────────
 
   test('H16a: payment:reconcile global allowed, grant lacks payment:reconcile → 403 SCOPE_DENIED (reconcile)', async () => {
-    const { raw } = seedClient('client-h16a', ['payment:reconcile'], 'aurapos');
+    const { raw } = seedClient('client-h16a', ['payment:reconcile'], 'consumer-a');
     // Grant exists but only has intent:read — missing payment:reconcile
     accessRepo.grant('client-h16a', testMerchantId, ['intent:read']);
 
@@ -940,7 +940,7 @@ describe('HTTP: P1.4 — Grant-scope denial on gateway-payment, reconcile, refun
   });
 
   test('H16b: payment:reconcile in grant but global lacks payment:reconcile → 403 SCOPE_DENIED (reconcile)', async () => {
-    const { raw } = seedClient('client-h16b', ['intent:read'], 'aurapos'); // no payment:reconcile globally
+    const { raw } = seedClient('client-h16b', ['intent:read'], 'consumer-a'); // no payment:reconcile globally
     accessRepo.grant('client-h16b', testMerchantId, ['payment:reconcile']);
 
     const { status, body } = await req(baseUrl, `/v1/payment-intents/${testIntentId}/reconcile`, {
@@ -954,7 +954,7 @@ describe('HTTP: P1.4 — Grant-scope denial on gateway-payment, reconcile, refun
   // ── H17: refund route ────────────────────────────────────────────────────
 
   test('H17a: payment:refund global allowed, grant lacks payment:refund → 403 SCOPE_DENIED (refund)', async () => {
-    const { raw } = seedClient('client-h17a', ['payment:refund'], 'aurapos');
+    const { raw } = seedClient('client-h17a', ['payment:refund'], 'consumer-a');
     // Grant exists but only has intent:read — missing payment:refund
     accessRepo.grant('client-h17a', testMerchantId, ['intent:read']);
 
@@ -967,7 +967,7 @@ describe('HTTP: P1.4 — Grant-scope denial on gateway-payment, reconcile, refun
   });
 
   test('H17b: payment:refund in grant but global client lacks payment:refund → 403 SCOPE_DENIED (refund)', async () => {
-    const { raw } = seedClient('client-h17b', ['intent:read'], 'aurapos'); // no payment:refund globally
+    const { raw } = seedClient('client-h17b', ['intent:read'], 'consumer-a'); // no payment:refund globally
     accessRepo.grant('client-h17b', testMerchantId, ['payment:refund']);
 
     const { status, body } = await req(baseUrl, `/v1/payment-transactions/${testTransactionId}/refund`, {
@@ -980,7 +980,7 @@ describe('HTTP: P1.4 — Grant-scope denial on gateway-payment, reconcile, refun
   });
 
   test('H17c: payment:refund in both global and grant → scope passes (refund reaches business logic)', async () => {
-    const { raw } = seedClient('client-h17c', ['payment:refund'], 'aurapos');
+    const { raw } = seedClient('client-h17c', ['payment:refund'], 'consumer-a');
     accessRepo.grant('client-h17c', testMerchantId, ['payment:refund']);
 
     const { status } = await req(baseUrl, `/v1/payment-transactions/${testTransactionId}/refund`, {

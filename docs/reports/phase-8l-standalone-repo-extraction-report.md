@@ -9,15 +9,15 @@
 
 ## Summary
 
-The Northflow Payment Orchestration system has been fully extracted from the AuraPoS monorepo into a self-contained, type-checkable standalone directory `northflow-payment-orchestration/` within the AuraPoS workspace. All source files, migrations, tests, docs, and config have been copied, adapted, and validated.
+The Northflow Payment Orchestration system has been fully extracted from the legacy monorepo into a self-contained, type-checkable standalone directory `northflow-payment-orchestration/` within the legacy system workspace. All source files, migrations, tests, docs, and config have been copied, adapted, and validated.
 
 ---
 
 ## Source Repository
 
-- **Source repo:** `https://github.com/Rndynt/AuraPoS.git`
+- **Source repo:** `https://github.com/Rndynt/legacy system.git` (legacy monorepo)
 - **Source commit:** `96d77ad7f412ff220be90995183d223cc32449c9`
-- **Extracted folder:** `northflow-payment-orchestration/` (inside AuraPoS workspace)
+- **Extracted folder:** `northflow-payment-orchestration/` (inside legacy workspace)
 - **Intended standalone target:** `https://github.com/Rndynt/northflow-payment-orchestration.git`
 
 ---
@@ -78,7 +78,7 @@ northflow-payment-orchestration/
 
 ### Source → Target mappings
 
-| AuraPoS Source | Standalone Target | Change |
+| legacy system Source | Standalone Target | Change |
 |---|---|---|
 | `packages/payment-orchestration-core/src/` | `packages/core/src/` | None (identical copy) |
 | `packages/payment-orchestration-client-sdk/src/` | `packages/client-sdk/src/` | None (identical copy) |
@@ -90,8 +90,8 @@ northflow-payment-orchestration/
 | `docs/openapi/payment-orchestration.openapi.json` | `docs/openapi/payment-orchestration.openapi.json` | Copied as-is |
 | `apps/api/src/__tests__/payment-orchestration-*.test.ts` | `tests/*.test.ts` | Import paths adapted |
 
-### Test excluded (AuraPoS-only)
-- `payment-orchestration-core-contract-adapter.test.ts` — imports `@pos/application/payments/adapters/...` and `@pos/infrastructure/payments/...` which don't exist outside AuraPoS.
+### Test excluded (legacy system-only)
+- `payment-orchestration-core-contract-adapter.test.ts` — imports `@pos/application/payments/adapters/...` and `@pos/infrastructure/payments/...` which don't exist outside the legacy context.
 
 ---
 
@@ -110,7 +110,7 @@ northflow-payment-orchestration/
 - `paths`: `@northflow/payment-orchestration-core` → `../../packages/core/src` (was `../../packages/payment-orchestration-core/src`)
 
 ### apps/service/tsconfig.json
-- New file (original service tsconfig used AuraPoS monorepo root paths)
+- New file (original service tsconfig used legacy system monorepo root paths)
 - `paths`: `@northflow/payment-orchestration-core` → `../../packages/core/src`
 - `module: CommonJS`, `moduleResolution: node` (matches original service tsconfig)
 
@@ -167,7 +167,7 @@ packages/client-sdk — tsc -p packages/client-sdk/tsconfig.json --noEmit → 0 
 apps/service     — tsc -p apps/service/tsconfig.json --noEmit      → 0 errors
 ```
 
-**Note on @types/express isolation:** The standalone repo's own `node_modules` (installed via `pnpm install`) provides `@types/express@4.17.21`. This is important because the root AuraPoS workspace also has `@types/express@5.0.6` installed, which would cause ~10 type errors in route files if picked up.
+**Note on @types/express isolation:** The standalone repo's own `node_modules` (installed via `pnpm install`) provides `@types/express@4.17.21`. This is important because the root legacy workspace also has `@types/express@5.0.6` installed, which would cause ~10 type errors in route files if picked up.
 
 ### Extraction check (Phase 8L)
 ```
@@ -185,7 +185,7 @@ See validation section in this phase's report.
 
 2. **FakeGateway is dev/test only** — `StandaloneFakeGatewayProvider` is only registered when `NODE_ENV !== 'production'`. Real money movement requires a configured Xendit or production provider.
 
-3. **`payment-orchestration-core-contract-adapter.test.ts` excluded** — This test validates AuraPoS embedded provider adapters and cannot run outside the AuraPoS context.
+3. **`payment-orchestration-core-contract-adapter.test.ts` excluded** — This test validates legacy embedded provider adapters and cannot run outside the legacy context.
 
 4. **Integration tests require a live PostgreSQL DB** — Tests that create real DB rows (fakegateway flow, HTTP auth, webhook route tests) require `DATABASE_URL` or `PAYMENT_ORCHESTRATION_DATABASE_URL` to be set.
 
@@ -202,4 +202,4 @@ IN_REPO_STANDALONE_FOLDER_READY_TO_PUSH_TO_PAYMENT_REPO
 ## Next Steps
 
 1. **Push this folder** to `https://github.com/Rndynt/northflow-payment-orchestration.git` as the initial standalone repo commit.
-2. **AuraPoS cleanup** (future phase) — Remove or archive the AuraPoS embedded payment runtime (`apps/payment-orchestration-service/`, `packages/payment-orchestration-core/`, `packages/payment-orchestration-client-sdk/`, `packages/application/payments/`, `packages/domain/payments/`, `packages/infrastructure/payments/providers/`) once the standalone service is fully production-ready and integrated.
+2. **legacy system cleanup** (future phase) — Remove or archive the legacy embedded payment runtime (`apps/payment-orchestration-service/`, `packages/payment-orchestration-core/`, `packages/payment-orchestration-client-sdk/`, `packages/application/payments/`, `packages/domain/payments/`, `packages/infrastructure/payments/providers/`) once the standalone service is fully production-ready and integrated.

@@ -21,7 +21,7 @@ This guide covers how to install, configure, and run the `@northflow/payment-orc
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `NODE_ENV` | No | `development` | Runtime environment. Set to `production` in production. |
-| `PAYMENT_ORCHESTRATION_SERVICE_PORT` | No | `5100` | Port the service listens on. Avoid 5000 (reserved for AuraPoS API). |
+| `PAYMENT_ORCHESTRATION_SERVICE_PORT` | No | `5100` | Port the service listens on. Avoid 5000 (reserved for legacy API). |
 | `PAYMENT_ORCHESTRATION_DATABASE_URL` | **Yes** | — | PostgreSQL connection string. Falls back to `DATABASE_URL`. |
 | `PAYMENT_ORCHESTRATION_SERVICE_TOKEN` | **Yes** (prod) | — | Service-to-service auth token for `/v1/...` routes. Falls back to `PAYMENT_ENGINE_SERVICE_TOKEN`. |
 | `PAYMENT_ORCHESTRATION_FAKEGATEWAY_WEBHOOK_SECRET` | Yes (prod) | — | HMAC-SHA256 secret for FakeGateway webhook signature verification. Required in production. |
@@ -183,7 +183,7 @@ curl $BASE/ready
 
 ## Deployment Notes
 
-- The service runs on port `5100` by default. Port `5000` is reserved for the AuraPoS API.
+- The service runs on port `5100` by default. Port `5000` is reserved for the legacy API.
 - Webhook route (`POST /v1/webhooks/:provider`) intentionally bypasses service-token auth. Provider identity is verified via HMAC signature.
 - Set `PAYMENT_ORCHESTRATION_FAKEGATEWAY_WEBHOOK_SECRET` in production to enforce signed webhooks.
 - `credentialsRef` must always be an env var name, never a raw secret. Never store raw API keys in the database.

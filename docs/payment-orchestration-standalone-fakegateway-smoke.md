@@ -23,7 +23,7 @@ curl -s $BASE_URL/health | jq .
 curl -s -X POST $BASE_URL/v1/merchants \
   -H "Content-Type: application/json" \
   -H "x-payment-orchestration-service-token: $TOKEN" \
-  -d '{"name":"Warung Demo","sourceApp":"aurapos","externalRef":"tenant-demo-001"}' | jq .
+  -d '{"name":"Warung Demo","sourceApp":"consumer-a","externalRef":"tenant-demo-001"}' | jq .
 ```
 
 **Save the `id` field** as `MERCHANT_ID`.

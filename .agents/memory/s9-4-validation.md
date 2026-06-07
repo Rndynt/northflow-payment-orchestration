@@ -45,24 +45,32 @@ api_client:signing_key:rotate
 api_client:signing_key:revoke
 ```
 
-### 7. Named External App References Removed
-Replaced `AuraPoS`, `Transity`, `Kioskoin` (all case variants) with generic consumer terms across:
-- `docs/integration/aurapos-rest-integration.md` → Consumer A integration docs
-- `docs/integration/kioskoin-rest-integration.md` → Consumer C integration docs
-- `docs/integration/transity-sdk-integration.md` → Consumer B integration docs
-- `docs/integration/client-integration-contract.md`
-- `roadmap/service/main.md` (Consumer Integration Model section, Identity Model examples, S6/S7 sections, S0 sourceApp values)
-- `roadmap/service/replit-codex-phase-s9-4-signed-requests-hmac-prompt.md`
-- `tests/payment-orchestration-s7-client-integration-smoke.test.ts`
-- `tests/payment-orchestration-boundary-purity.test.ts`
-- `tests/payment-orchestration-refund-void-parity.test.ts`
-- `packages/core/src/index.ts` (JSDoc comment)
-- `packages/client-sdk/src/client.ts` (JSDoc comment)
-- `packages/client-sdk/src/index.ts` (JSDoc comment, sourceApp example)
-- `apps/service/src/config/env.ts` (JSDoc comment)
-- `apps/service/src/application/use-cases/CreateMerchant.ts` (JSDoc comment)
+### 7. Named External App References Removed (Final Cleanup)
+All named external consumer project references replaced with generic consumer terms. Files changed include:
 
-Note: `createAuraPosPaymentScope` (a backward-compat migration API function) and "No AuraPoS tenantId" architectural comments (internal design documentation about legacy migration) were intentionally left unchanged as they document internal system history, not external consumer integration examples.
+**Integration docs renamed:**
+- `docs/integration/aurapos-rest-integration.md` → `docs/integration/consumer-a-rest-integration.md`
+- `docs/integration/transity-sdk-integration.md` → `docs/integration/consumer-b-sdk-integration.md`
+- `docs/integration/kioskoin-rest-integration.md` → `docs/integration/consumer-c-rest-integration.md`
+
+**PaymentScope.ts helper renamed:**
+- `createAuraPosPaymentScope` → `createLegacyTenantPaymentScope` (no old alias left)
+- `packages/core/src/index.ts` export updated accordingly
+- `sourceApp` default changed from `'aurapos'` to `'consumer-a'`; new generic `sourceApp` parameter added
+
+**All comments and fixtures genericized across:**
+- `packages/core/src/domain/` (PaymentScope, PaymentIntent, PaymentMerchant, PaymentTransaction, PaymentErrors)
+- `packages/core/src/application/` (contracts, repositories)
+- `packages/core/src/providers/providerActions.ts`
+- `packages/client-sdk/src/index.ts`, `packages/client-sdk/src/client.ts`
+- `apps/service/src/` (all use-cases, container, providers, mappers, errors, .env.example)
+- `apps/dashboard/src/app/(dashboard)/merchants/page.tsx`
+- `tests/` (all test files: schema-mappers, security-hardening, fakegateway-flow, s8-audit-log, client-sdk, boundary-purity, http-auth, refund-void-parity, s7-smoke)
+- `docs/` (openapi, deployment, sdk-contract, fakegateway-smoke, service-audit-log, standalone-repo-layout, hybrid-standalone-architecture, reports)
+- `roadmap/service/` (main.md and all prompt files)
+- `.agents/memory/` (s6-s7-client-integration-validation.md)
+- `README.md`, `scripts/extraction-check.ts`
+
 
 ### 8. Test Fixture Updated for Strict Key Enforcement
 - **File:** `tests/s9-4-signed-requests-hmac.test.ts`
@@ -78,6 +86,25 @@ Note: `createAuraPosPaymentScope` (a backward-compat migration API function) and
 | S9.4 HMAC signed requests (s9-4-signed-requests-hmac.test.ts) | 22/22 ✅ |
 | S7 client integration smoke (payment-orchestration-s7-client-integration-smoke.test.ts) | 35/35 ✅ |
 | **Full suite (all tests/*.test.ts)** | **444/444 ✅** |
+
+---
+
+## Zero-Reference Proof
+
+Search command run after all changes:
+```bash
+grep -Rni "AuraPoS|aurapos|Transity|transity|Kioskoin|kioskoin|createAuraPosPaymentScope" \
+  README.md docs roadmap .agents packages apps tests scripts \
+  --exclude-dir=node_modules --exclude-dir=.git
+```
+
+**Result: NO_MATCHES** (excluding the cleanup prompt file itself which lists the old names as search targets).
+
+Type-check results:
+- `pnpm --filter @northflow/payment-orchestration-service type-check` → ✅ no errors
+- `pnpm --filter @northflow/payment-orchestration-client-sdk type-check` → ✅ no errors
+
+Final test run: **444/444 pass**
 
 ---
 

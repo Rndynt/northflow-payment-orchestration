@@ -4,7 +4,7 @@
  * These are framework-agnostic and safe to use from any context:
  * apps, tests, service workers, and Node.js services.
  *
- * Designed for Phase 8A+. Not tied to AuraPoS tenantId or Express.
+ * Designed for Phase 8A+. Not tied to legacy tenantId or Express.
  */
 
 /**

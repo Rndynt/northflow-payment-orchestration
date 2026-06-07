@@ -1,7 +1,7 @@
 /**
  * StandaloneManualProvider — manual/cash payment provider for payment-orchestration-service.
  *
- * Equivalent of the legacy AuraPoS ManualProvider. Handles cash, bank transfer, and
+ * Equivalent of the legacy ManualProvider. Handles cash, bank transfer, and
  * any payment channel that does not require a third-party gateway API call.
  *
  * ┌──────────────────────────────────────────────────────────────────────────┐

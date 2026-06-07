@@ -2,10 +2,10 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Payment Orchestration Service API",
-    "description": "Standalone payment orchestration service for AuraPoS (northflow). Manages payment merchants, provider accounts, payment intents, gateway payments, and webhooks. Phase 8K — frozen API contract.",
+    "description": "Standalone payment orchestration service (northflow). Manages payment merchants, provider accounts, payment intents, gateway payments, and webhooks. Phase 8K — frozen API contract.",
     "version": "0.3.0",
     "contact": {
-      "name": "AuraPoS Engineering"
+      "name": "Northflow Engineering"
     }
   },
   "servers": [

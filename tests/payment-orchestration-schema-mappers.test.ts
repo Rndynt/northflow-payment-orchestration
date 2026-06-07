@@ -11,7 +11,7 @@
  * 4. Transaction row maps provider refs/action fields safely.
  * 5. Provider event row supports nullable merchantId before resolution.
  * 6. Idempotency key row maps status/resource snapshot correctly.
- * 7. No mapper output includes AuraPoS tenantId field.
+ * 7. No mapper output includes legacy tenantId field.
  *
  * Test runner: npx tsx --tsconfig apps/api/tsconfig.node.json --test <this file>
  *
@@ -46,9 +46,9 @@ import type {
 const NOW = new Date('2026-06-05T00:00:00Z');
 
 const BASE_MERCHANT_ROW: MerchantRow = {
-  id: 'merchant-aurapos-demo',
-  externalRef: 'aurapos-tenant-demo',
-  sourceApp: 'aurapos',
+  id: 'merchant-consumer-a-demo',
+  externalRef: 'consumer-a-tenant-demo',
+  sourceApp: 'consumer-a',
   name: 'Demo Coffee Shop',
   legalName: 'PT Demo Kopi Indonesia',
   status: 'active',
@@ -59,7 +59,7 @@ const BASE_MERCHANT_ROW: MerchantRow = {
 
 const BASE_PROVIDER_ACCOUNT_ROW: ProviderAccountRow = {
   id: 'pa-xendit-sandbox-001',
-  merchantId: 'merchant-aurapos-demo',
+  merchantId: 'merchant-consumer-a-demo',
   provider: 'xendit_sandbox',
   providerAccountRef: 'xnd-sub-abc',
   environment: 'sandbox',
@@ -73,9 +73,9 @@ const BASE_PROVIDER_ACCOUNT_ROW: ProviderAccountRow = {
 
 const BASE_INTENT_ROW: IntentRow = {
   id: 'intent-001',
-  merchantId: 'merchant-aurapos-demo',
+  merchantId: 'merchant-consumer-a-demo',
   providerAccountId: 'pa-xendit-sandbox-001',
-  sourceApp: 'aurapos',
+  sourceApp: 'consumer-a',
   externalTenantId: 'tenant-abc',
   externalOutletId: 'outlet-main',
   externalLocationId: 'location-floor1',
@@ -96,7 +96,7 @@ const BASE_INTENT_ROW: IntentRow = {
 
 const BASE_TRANSACTION_ROW: TransactionRow = {
   id: 'txn-001',
-  merchantId: 'merchant-aurapos-demo',
+  merchantId: 'merchant-consumer-a-demo',
   intentId: 'intent-001',
   providerAccountId: 'pa-xendit-sandbox-001',
   provider: 'xendit_sandbox',
@@ -141,7 +141,7 @@ const BASE_PROVIDER_EVENT_ROW: ProviderEventRow = {
 
 const BASE_IDEMPOTENCY_ROW: IdempotencyKeyRow = {
   id: 'idmp-001',
-  merchantId: 'merchant-aurapos-demo',
+  merchantId: 'merchant-consumer-a-demo',
   scope: 'create_payment',
   idempotencyKey: 'idem-key-001',
   requestHash: 'sha256-abcdef',
@@ -159,7 +159,7 @@ const BASE_IDEMPOTENCY_ROW: IdempotencyKeyRow = {
 describe('mapMerchantRow', () => {
   it('maps id and displayName correctly', () => {
     const merchant = mapMerchantRow(BASE_MERCHANT_ROW);
-    assert.equal(merchant.id, 'merchant-aurapos-demo');
+    assert.equal(merchant.id, 'merchant-consumer-a-demo');
     assert.equal(merchant.displayName, 'Demo Coffee Shop');
   });
 
@@ -196,7 +196,7 @@ describe('mapProviderAccountRow', () => {
   it('maps id and merchantId correctly', () => {
     const account = mapProviderAccountRow(BASE_PROVIDER_ACCOUNT_ROW);
     assert.equal(account.id, 'pa-xendit-sandbox-001');
-    assert.equal(account.merchantId, 'merchant-aurapos-demo');
+    assert.equal(account.merchantId, 'merchant-consumer-a-demo');
   });
 
   it('preserves credentialsRef as opaque string (not null)', () => {
@@ -235,12 +235,12 @@ describe('mapProviderAccountRow', () => {
 describe('mapIntentRow', () => {
   it('maps merchantId correctly', () => {
     const intent = mapIntentRow(BASE_INTENT_ROW);
-    assert.equal(intent.merchantId, 'merchant-aurapos-demo');
+    assert.equal(intent.merchantId, 'merchant-consumer-a-demo');
   });
 
   it('maps sourceApp correctly', () => {
     const intent = mapIntentRow(BASE_INTENT_ROW);
-    assert.equal(intent.sourceApp, 'aurapos');
+    assert.equal(intent.sourceApp, 'consumer-a');
   });
 
   it('maps externalTenantId correctly', () => {
@@ -368,10 +368,10 @@ describe('mapProviderEventRow', () => {
   it('supports non-null merchantId after resolution', () => {
     const resolvedRow: ProviderEventRow = {
       ...BASE_PROVIDER_EVENT_ROW,
-      merchantId: 'merchant-aurapos-demo',
+      merchantId: 'merchant-consumer-a-demo',
     };
     const event = mapProviderEventRow(resolvedRow);
-    assert.equal(event.merchantId, 'merchant-aurapos-demo');
+    assert.equal(event.merchantId, 'merchant-consumer-a-demo');
   });
 
   it('maps providerEventId correctly', () => {
@@ -415,7 +415,7 @@ describe('mapProviderEventRow', () => {
 describe('mapIdempotencyKeyRow', () => {
   it('maps merchantId correctly', () => {
     const key = mapIdempotencyKeyRow(BASE_IDEMPOTENCY_ROW);
-    assert.equal(key.merchantId, 'merchant-aurapos-demo');
+    assert.equal(key.merchantId, 'merchant-consumer-a-demo');
   });
 
   it('maps scope correctly', () => {
@@ -468,7 +468,7 @@ describe('mapIdempotencyKeyRow', () => {
   });
 });
 
-// ── Test 7: No mapper output includes AuraPoS tenantId field ─────────────────
+// ── Test 7: No mapper output includes legacy tenantId field ─────────────────
 
 describe('No tenantId in any mapper output', () => {
   it('merchant mapper output has no tenantId', () => {

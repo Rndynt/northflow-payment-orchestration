@@ -1,7 +1,7 @@
 /**
  * contracts — input/output contracts for payment engine use cases.
  *
- * Framework-agnostic. No Express, no React, no AuraPoS order/tenant deps.
+ * Framework-agnostic. No Express, no React, no legacy order/tenant deps.
  * These are the shapes that transport adapters (HTTP, gRPC, workers) translate
  * to and from.
  *

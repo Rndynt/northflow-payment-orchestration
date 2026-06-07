@@ -208,7 +208,7 @@ export function mapProviderAccountRow(row: ProviderAccountRow): PaymentProviderA
  * mapIntentRow — maps a po_intents row to StandalonePaymentIntentDTO.
  *
  * External references (sourceApp, externalTenantId, etc.) are preserved for callback correlation.
- * No AuraPoS tenantId in the output.
+ * No legacy tenantId in the output.
  */
 export function mapIntentRow(row: IntentRow): StandalonePaymentIntentDTO {
   return {
@@ -241,7 +241,7 @@ export function mapIntentRow(row: IntentRow): StandalonePaymentIntentDTO {
  *
  * Provider reference and action fields (url, qr) are mapped safely.
  * rawProviderResponse is passed through but callers must not leak it externally.
- * No AuraPoS tenantId in the output.
+ * No legacy tenantId in the output.
  */
 export function mapTransactionRow(row: TransactionRow): StandalonePaymentTransactionDTO {
   return {

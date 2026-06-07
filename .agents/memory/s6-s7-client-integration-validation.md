@@ -23,9 +23,9 @@ description: Validation results for Phase S6 (Client Integration Contract) and S
 
 ### Docs created (docs/integration/)
 - `client-integration-contract.md` — frozen contract covering auth model, identity mapping, scope table, error codes, idempotency rules, sourceApp enforcement
-- `aurapos-rest-integration.md` — AuraPoS REST walkthrough: merchant → PA → intent → gateway payment → status → refund/void
-- `transity-sdk-integration.md` — Transity SDK walkthrough using `PaymentOrchestrationClient` with `apiKey`
-- `kioskoin-rest-integration.md` — Kioskoin REST walkthrough: merchant → PA → intent → gateway payment → status
+- `consumer-a-rest-integration.md` — Consumer A REST walkthrough: merchant → PA → intent → gateway payment → status → refund/void
+- `consumer-b-sdk-integration.md` — Consumer B SDK walkthrough using `PaymentOrchestrationClient` with `apiKey`
+- `consumer-c-rest-integration.md` — Consumer C REST walkthrough: merchant → PA → intent → gateway payment → status
 
 ---
 
@@ -34,15 +34,15 @@ description: Validation results for Phase S6 (Client Integration Contract) and S
 File: `tests/payment-orchestration-s7-client-integration-smoke.test.ts`
 
 ### S7.1 — Seed
-- 3 API clients seeded per describe block (aurapos, transity, kioskoin) using `generateCredential` and in-memory repos
+- 3 API clients seeded per describe block (consumer-a, consumer-b, consumer-c) using `generateCredential` and in-memory repos
 - Per-client credential format: `nf.live.<credentialId>.<secret>`
 
 ### S7.2 — Positive smoke flows (15 tests)
 | Suite | Tests | Result |
 |-------|-------|--------|
-| AuraPoS REST | AP1-AP6: merchant → PA → intent → gateway payment → status → void | ✅ |
-| Transity SDK | TR1-TR5: same flow via `PaymentOrchestrationClient` with `apiKey` | ✅ |
-| Kioskoin REST | KK1-KK5: merchant → PA → intent → gateway payment → status (OTC) | ✅ |
+| Consumer A REST | AP1-AP6: merchant → PA → intent → gateway payment → status → void | ✅ |
+| Consumer B SDK | TR1-TR5: same flow via `PaymentOrchestrationClient` with `apiKey` | ✅ |
+| Consumer C REST | KK1-KK5: merchant → PA → intent → gateway payment → status (OTC) | ✅ |
 
 Key assertions:
 - `VoidPaymentTransaction` properly wired — requires_action → cancelled confirmed
@@ -52,7 +52,7 @@ Key assertions:
 | Test | Assertion |
 |------|-----------|
 | N01-N06 | Cross-app merchant access → 403 MERCHANT_ACCESS_DENIED |
-| N07-N09 | sourceApp spoof (aurapos→transity, transity→kioskoin, kioskoin→aurapos) → 403 SOURCE_APP_MISMATCH |
+| N07-N09 | sourceApp spoof (consumer-a→consumer-b, consumer-b→consumer-c, consumer-c→consumer-a) → 403 SOURCE_APP_MISMATCH |
 | N10 | Client without `payment:refund` scope → 403 SCOPE_DENIED |
 | N11 | Client without `payment:void` scope → 403 SCOPE_DENIED |
 | N12 | Client without `provider_account:create` scope → 403 SCOPE_DENIED |

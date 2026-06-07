@@ -451,7 +451,7 @@ function makeEntry(overrides: Partial<CreateAuditLogInput> = {}): CreateAuditLog
     id: randomUUID(),
     requestId: randomUUID(),
     clientId: 'client_test',
-    sourceApp: 'aurapos',
+    sourceApp: 'consumer-a',
     merchantId: 'mer_test',
     actorType: 'api_client',
     action: 'merchant.create',
@@ -516,12 +516,12 @@ describe('S8 — AuditLog repository', () => {
   });
 
   test('AL04 list() filters by clientId', async () => {
-    await repo.create(makeEntry({ clientId: 'client_aurapos' }));
-    await repo.create(makeEntry({ clientId: 'client_transity' }));
+    await repo.create(makeEntry({ clientId: 'client_consumer_a' }));
+    await repo.create(makeEntry({ clientId: 'client_consumer_b' }));
 
-    const { entries, total } = await repo.list({ clientId: 'client_transity' });
+    const { entries, total } = await repo.list({ clientId: 'client_consumer_b' });
     assert.equal(total, 1);
-    assert.equal(entries[0]!.clientId, 'client_transity');
+    assert.equal(entries[0]!.clientId, 'client_consumer_b');
   });
 
   test('AL05 list() filters by action', async () => {
@@ -614,7 +614,7 @@ describe('S8 — auditService helpers', () => {
   test('AS03 resolveActorType: normal clientId → api_client', async () => {
     const { auditSuccess } = await importAuditService();
     const repo = new InMemoryAuditLogRepository();
-    await auditSuccess(makeReq({ clientId: 'client_aurapos_prod', sourceApp: 'aurapos', scopes: ['merchant:read'] }), makeContainer(repo), { action: 'test.action', statusCode: 200 });
+    await auditSuccess(makeReq({ clientId: 'client_consumer_a_prod', sourceApp: 'consumer-a', scopes: ['merchant:read'] }), makeContainer(repo), { action: 'test.action', statusCode: 200 });
     assert.equal(repo.all()[0]?.actorType, 'api_client');
   });
 
@@ -628,7 +628,7 @@ describe('S8 — auditService helpers', () => {
   test('AS05 auditSuccess writes status=success entry', async () => {
     const { auditSuccess } = await importAuditService();
     const repo = new InMemoryAuditLogRepository();
-    await auditSuccess(makeReq({ clientId: 'client_x', sourceApp: 'aurapos', scopes: [] }), makeContainer(repo), { action: 'merchant.create', statusCode: 201 });
+    await auditSuccess(makeReq({ clientId: 'client_x', sourceApp: 'consumer-a', scopes: [] }), makeContainer(repo), { action: 'merchant.create', statusCode: 201 });
     const entry = repo.all()[0]!;
     assert.equal(entry.status, 'success');
     assert.equal(entry.statusCode, 201);
@@ -638,7 +638,7 @@ describe('S8 — auditService helpers', () => {
   test('AS06 auditDenied writes status=denied entry', async () => {
     const { auditDenied } = await importAuditService();
     const repo = new InMemoryAuditLogRepository();
-    await auditDenied(makeReq({ clientId: 'client_x', sourceApp: 'aurapos', scopes: [] }), makeContainer(repo), { action: 'merchant.read', merchantId: 'mer_123', errorCode: 'MERCHANT_ACCESS_DENIED' });
+    await auditDenied(makeReq({ clientId: 'client_x', sourceApp: 'consumer-a', scopes: [] }), makeContainer(repo), { action: 'merchant.read', merchantId: 'mer_123', errorCode: 'MERCHANT_ACCESS_DENIED' });
     const entry = repo.all()[0]!;
     assert.equal(entry.status, 'denied');
     assert.equal(entry.statusCode, 403);
@@ -649,7 +649,7 @@ describe('S8 — auditService helpers', () => {
   test('AS07 auditFailure writes status=failure entry', async () => {
     const { auditFailure } = await importAuditService();
     const repo = new InMemoryAuditLogRepository();
-    await auditFailure(makeReq({ clientId: 'client_x', sourceApp: 'aurapos', scopes: [] }), makeContainer(repo), { action: 'payment_intent.create', merchantId: 'mer_123', errorCode: 'MERCHANT_NOT_FOUND', statusCode: 404 });
+    await auditFailure(makeReq({ clientId: 'client_x', sourceApp: 'consumer-a', scopes: [] }), makeContainer(repo), { action: 'payment_intent.create', merchantId: 'mer_123', errorCode: 'MERCHANT_NOT_FOUND', statusCode: 404 });
     const entry = repo.all()[0]!;
     assert.equal(entry.status, 'failure');
     assert.equal(entry.errorCode, 'MERCHANT_NOT_FOUND');
@@ -658,7 +658,7 @@ describe('S8 — auditService helpers', () => {
   test('AS08 auditError writes status=error entry', async () => {
     const { auditError } = await importAuditService();
     const repo = new InMemoryAuditLogRepository();
-    await auditError(makeReq({ clientId: 'client_x', sourceApp: 'aurapos', scopes: [] }), makeContainer(repo), { action: 'gateway_payment.create', statusCode: 500 });
+    await auditError(makeReq({ clientId: 'client_x', sourceApp: 'consumer-a', scopes: [] }), makeContainer(repo), { action: 'gateway_payment.create', statusCode: 500 });
     const entry = repo.all()[0]!;
     assert.equal(entry.status, 'error');
     assert.equal(entry.statusCode, 500);
@@ -671,7 +671,7 @@ describe('S8 — auditService helpers', () => {
       list: async () => ({ entries: [], total: 0 }),
     };
     await assert.doesNotReject(async () => {
-      await auditSuccess(makeReq({ clientId: 'client_x', sourceApp: 'aurapos', scopes: [] }), makeContainer(failingRepo), { action: 'merchant.create', statusCode: 201 });
+      await auditSuccess(makeReq({ clientId: 'client_x', sourceApp: 'consumer-a', scopes: [] }), makeContainer(failingRepo), { action: 'merchant.create', statusCode: 201 });
     });
   });
 
@@ -679,7 +679,7 @@ describe('S8 — auditService helpers', () => {
     const { auditSuccess } = await importAuditService();
     const repo = new InMemoryAuditLogRepository();
     const meta = { provider: 'XENDIT', method: 'QRIS', amount: 50000 };
-    await auditSuccess(makeReq({ clientId: 'client_x', sourceApp: 'aurapos', scopes: [] }), makeContainer(repo), { action: 'gateway_payment.create', statusCode: 201, metadata: meta });
+    await auditSuccess(makeReq({ clientId: 'client_x', sourceApp: 'consumer-a', scopes: [] }), makeContainer(repo), { action: 'gateway_payment.create', statusCode: 201, metadata: meta });
     assert.deepEqual(repo.all()[0]!.metadata, meta);
   });
 });

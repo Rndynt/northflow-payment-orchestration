@@ -25,7 +25,7 @@
  *  - Does NOT trust merchantId from request headers.
  *  - Merchant resolved from providerReference → transaction → intent.
  *  - Does NOT require service token (webhook routes use provider-level verification).
- *  - No AuraPoS tenantId anywhere in this flow.
+ *  - No legacy tenantId anywhere in this flow.
  */
 
 import { randomUUID } from 'crypto';

@@ -8,7 +8,7 @@ You are working in the repository:
 Rndynt/northflow-payment-orchestration
 ```
 
-This repository is a standalone payment orchestration service extracted from AuraPoS. It currently contains:
+This repository is a standalone payment orchestration service extracted from the legacy monorepo. It currently contains:
 
 - `packages/core` — domain contracts, DTOs, repository/provider interfaces.
 - `packages/client-sdk` — typed HTTP client SDK.
@@ -27,10 +27,10 @@ This task merges all findings from two independent reviews. Implement all fixes 
 3. Do not remove FakeGateway dev/test support.
 4. Do not store raw provider secrets in the DB or API responses.
 5. Keep the standalone boundary clean:
-   - No AuraPoS session middleware.
-   - No AuraPoS order domain dependency.
+   - No legacy session middleware.
+   - No legacy order domain dependency.
    - No embedded payment runtime dependency.
-   - Use `merchantId`, not AuraPoS `tenantId`, as the primary payment-owner scope.
+   - Use `merchantId`, not legacy `tenantId`, as the primary payment-owner scope.
 6. Keep TypeScript strict and ESM-compatible.
 7. Prefer small reusable helpers over duplicated logic.
 8. Add tests for every changed money-moving behavior.
@@ -1043,7 +1043,7 @@ When finished, provide a final report with:
 4. New tests added.
 5. Test commands run and results.
 6. Any known limitations or follow-up tasks.
-7. Confirmation that no AuraPoS embedded payment runtime/session/order dependency was introduced.
+7. Confirmation that no legacy embedded payment runtime/session/order dependency was introduced.
 
 ---
 

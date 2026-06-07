@@ -21,7 +21,7 @@
 // ── Domain ────────────────────────────────────────────────────────────────────
 
 export type { PaymentScope } from './domain/PaymentScope';
-export { createAuraPosPaymentScope } from './domain/PaymentScope';
+export { createLegacyTenantPaymentScope } from './domain/PaymentScope';
 
 export type { PaymentMerchant, ExternalPayableRef } from './domain/PaymentMerchant';
 

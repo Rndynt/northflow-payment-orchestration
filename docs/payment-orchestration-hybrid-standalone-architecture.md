@@ -10,7 +10,7 @@
 
 ## Overview
 
-The AuraPoS payment engine began as an embedded subsystem inside `apps/api`.
+The legacy payment engine began as an embedded subsystem inside `apps/api`.
 Phases 1–7 progressively hardened it (multi-provider, partial payments, refunds,
 voiding, Phase 7A resilience hardening).
 
@@ -21,7 +21,7 @@ gradually shifts traffic to the standalone service.
 
 The standalone system is intentionally branded `@northflow/payment-orchestration-*`
 rather than `@pos/payment-engine-*` because it is designed to be reusable by
-AuraPoS, Transity, KiosKoin, photography apps, and future projects — not tied to any
+Consumer backends, photography apps, and future projects — not tied to any
 single product.
 
 ---
@@ -68,7 +68,7 @@ apps/
       app.ts                         ← Express application factory
       index.ts                       ← Entry point (port 5100)
 
-  api/                               ← Existing AuraPoS API (UNCHANGED, port 5000)
+  api/                               ← Existing legacy API (UNCHANGED, port 5000)
     src/payments/                    ← Embedded payment engine (UNCHANGED through Phase 8E)
 ```
 
@@ -94,8 +94,8 @@ legacy and have been replaced in Phase 8A hardening.
 tenantId → payment intent → transactions
 ```
 
-The embedded engine uses `tenantId` (AuraPoS-specific slug) as the primary
-payment owner identity. This couples the payment engine to AuraPoS's multi-tenant
+The embedded engine uses `tenantId` (the legacy system-specific slug) as the primary
+payment owner identity. This couples the payment engine to legacy multi-tenant
 auth model.
 
 ### Standalone (target)
@@ -107,8 +107,8 @@ The standalone engine uses `merchantId` as the primary payment owner. A merchant
 maps to a commercial entity — decoupled from any source application's auth model.
 
 ### Migration Bridge
-`createAuraPosPaymentScope()` in `payment-orchestration-core` provides
-a temporary compatibility adapter that maps AuraPoS `tenantId` → standalone
+`createLegacyTenantPaymentScope()` in `payment-orchestration-core` provides
+a temporary compatibility adapter that maps legacy `tenantId` → standalone
 `merchantId`. This bridge is used during Phases 8B–8E and removed in Phase 8F.
 
 ---
@@ -120,7 +120,7 @@ a temporary compatibility adapter that maps AuraPoS `tenantId` → standalone
 | 8A    | 100% traffic   | 0% (skeleton only) | Types + client   |
 | 8B    | 100% traffic   | Provider migration | Internal testing |
 | 8C    | 95% traffic    | 5% shadow traffic  | Validation       |
-| 8D    | 50% traffic    | 50% traffic        | AuraPoS + others |
+| 8D    | 50% traffic    | 50% traffic        | consumers + others |
 | 8E    | 0% (deprecated)| 100% traffic       | All consumers    |
 
 ---
@@ -172,17 +172,17 @@ POST /v1/payment-intents/:id/void                     → Phase 8D
 
 ### No Embedded Dependencies
 `packages/payment-orchestration-core` and `apps/payment-orchestration-service` MUST NOT import:
-- `@pos/domain` (AuraPoS order domain)
-- `@pos/application` (AuraPoS use cases)
-- `@pos/infrastructure` (AuraPoS DB repositories)
-- AuraPoS session middleware or tenant resolution
+- `@pos/domain` (legacy order domain)
+- `@pos/application` (the legacy system use cases)
+- `@pos/infrastructure` (the legacy system DB repositories)
+- legacy session middleware or tenant resolution
 
 These packages are independently versioned and standalone by design.
 
 ### Client SDK Self-Containment
 `packages/payment-orchestration-client-sdk` MUST NOT import from
 `@northflow/payment-orchestration-core`. It is independently versioned for portability
-(can be published to npm separately, used by non-AuraPoS apps without bringing in the core package).
+(can be published to npm separately, used by consumer backends without bringing in the core package).
 
 ### Port-Based Design
 Infrastructure concerns (DB, secrets, external HTTP) are behind port interfaces
@@ -190,7 +190,7 @@ Infrastructure concerns (DB, secrets, external HTTP) are behind port interfaces
 Use cases depend only on these interfaces — never on concrete implementations.
 
 ### Backwards Compatibility
-The embedded AuraPoS payment engine at `apps/api/src/payments/` is **unchanged**.
+The embedded legacy payment engine at `apps/api/src/payments/` is **unchanged**.
 All existing `/api/payment-engine/...` routes continue to work normally.
 No DB migrations are required in Phase 8A.
 
@@ -273,7 +273,7 @@ const client = new PaymentOrchestrationClient({
   baseUrl: 'http://localhost:5100',
   serviceToken: process.env.PAYMENT_ORCHESTRATION_SERVICE_TOKEN,
   merchantId: 'my-merchant-id',
-  sourceApp: 'aurapos',
+  sourceApp: 'consumer-a',
 });
 ```
 
@@ -332,7 +332,7 @@ apps/api/src/__tests__/payment-orchestration-core-contract-adapter.test.ts
 
 ### What did NOT change in Phase 8B
 
-- Runtime traffic: still 100% embedded AuraPoS API (`apps/api`)
+- Runtime traffic: still 100% embedded legacy API (`apps/api`)
 - No DB schema additions
 - `apps/payment-orchestration-service` remains a skeleton (no real use cases wired)
 - Embedded `/api/payment-engine/...` routes remain the runtime source of truth
@@ -359,7 +359,7 @@ No existing embedded payment engine tables were modified.
 |-------|---------|
 | `payment_orchestration_merchants` | Primary merchant identity (standalone, not tenant-bound) |
 | `payment_orchestration_provider_accounts` | Links merchants to payment providers (credentials by reference only) |
-| `payment_orchestration_intents` | Standalone payment intents with external AuraPoS refs |
+| `payment_orchestration_intents` | Standalone payment intents with external the legacy system refs |
 | `payment_orchestration_transactions` | Individual payment/refund/void transactions |
 | `payment_orchestration_provider_events` | Inbound provider webhooks (nullable merchantId until resolved) |
 | `payment_orchestration_idempotency_keys` | Idempotency tracking for Phase 8D use cases |
@@ -479,7 +479,7 @@ Covers all 7 acceptance criteria from the prompt:
 - Xendit sandbox adapter behavior unchanged
 - No provider-level refund/cancel implemented
 - No POS UI changes; no order adapter; no split bill; no customer ledger
-- No AuraPoS SDK consumption (Phase 8E)
+- No client SDK consumption (Phase 8E)
 
 ---
 
@@ -551,7 +551,7 @@ npx tsx --tsconfig apps/api/tsconfig.node.json --test \
 ```
 
 ### What did NOT change in Phase 8D
-- Embedded AuraPoS payment engine (`apps/api/src/payment-engine/`) — still active
+- Embedded legacy payment engine (`apps/api/src/payment-engine/`) — still active
 - Xendit/real provider wiring — Phase 8F+
 - No Drizzle migrations auto-run at startup; run manually via `psql $DATABASE_URL -f migrations/...`
 - No POS UI changes
@@ -580,9 +580,9 @@ npx tsx --tsconfig apps/api/tsconfig.node.json --test \
 - No scheduled reconciliation cron yet (Phase 8F+).
 
 **What did NOT change in Phase 8D.1 + 8E:**
-- Embedded AuraPoS payment engine — unchanged.
+- Embedded legacy payment engine — unchanged.
 - Legacy order payment flow — unchanged.
-- No AuraPoS SDK consumption yet.
+- No client SDK consumption yet.
 - No Midtrans/Stripe adapter.
 - No provider-level refund/cancel.
 - No scheduled cron/worker.
@@ -593,7 +593,7 @@ npx tsx --tsconfig apps/api/tsconfig.node.json --test \
 
 ## Phase 8F — Standalone Readiness + Parity Closure
 
-Phase 8F audits embedded AuraPoS payment-engine capabilities against the standalone Northflow Payment Orchestration runtime and closes small safe parity gaps without integrating AuraPoS with the SDK.
+Phase 8F audits embedded the legacy system payment-engine capabilities against the standalone Northflow Payment Orchestration runtime and closes small safe parity gaps without integrating the legacy system with the SDK.
 
 ### Phase 8F Artifacts
 
@@ -628,11 +628,11 @@ Phase 8F audits embedded AuraPoS payment-engine capabilities against the standal
 | 8J | SDK/API Contract Freeze + Deployment Readiness. |
 | 8K | Extraction Simulation. |
 | 8L | Extract to Standalone Repo/Package. |
-| 8M | Integrate AuraPoS/Other Apps after extraction simulation is stable. |
+| 8M | Integrate consumer backends after extraction simulation is stable. |
 
 ### Explicit Integration Warning
 
-AuraPoS SDK integration is **not performed before extraction readiness**. Phase 8F and later 8G/8H/8I work close standalone parity, provider runtime, and operations gaps first. The embedded payment runtime and legacy order payment flow remain intentionally unchanged.
+client SDK integration is **not performed before extraction readiness**. Phase 8F and later 8G/8H/8I work close standalone parity, provider runtime, and operations gaps first. The embedded payment runtime and legacy order payment flow remain intentionally unchanged.
 
 ### Phase 8F Readiness Decision
 
@@ -657,13 +657,13 @@ This historical Phase 8F decision has been superseded by the standalone-first ro
 | 8J    | SDK/API Contract Freeze + Deployment Readiness |
 | 8K    | Extraction Simulation |
 | 8L    | Extract to Standalone Repo/Package |
-| 8M    | Integrate AuraPoS/Other Apps |
+| 8M    | Integrate consumer backends |
 
 ---
 
 ## Phase 8G+8H — Boundary Purity + Provider Runtime Completion
 
-Phase 8G+8H moves the near-term target from AuraPoS integration readiness to standalone extraction readiness. The standalone-first decision labels are now:
+Phase 8G+8H moves the near-term target from consumer integration readiness to standalone extraction readiness. The standalone-first decision labels are now:
 
 ```text
 STANDALONE_BOUNDARY_AND_PROVIDER_RUNTIME_READY
@@ -674,9 +674,9 @@ NOT_READY_RUNTIME_TEST_FAILURES
 
 ### Boundary Updates
 
-- `packages/payment-orchestration-core`, `packages/payment-orchestration-client-sdk`, and `apps/payment-orchestration-service` were audited for forbidden AuraPoS runtime coupling.
+- `packages/payment-orchestration-core`, `packages/payment-orchestration-client-sdk`, and `apps/payment-orchestration-service` were audited for forbidden legacy runtime coupling.
 - Runtime source has no `@pos/*`, `apps/api`, embedded payment-provider, order, session, or frontend imports.
-- The known extraction blocker is schema ownership: the service-local schema bridge still re-exports `payment_orchestration_*` Drizzle tables from `shared/schema.ts` while the service remains inside the AuraPoS monorepo.
+- The known extraction blocker is schema ownership: the service-local schema bridge still re-exports `payment_orchestration_*` Drizzle tables from `shared/schema.ts` while the service remains inside the legacy monorepo.
 - The schema extraction plan is documented in `docs/reports/payment-orchestration-schema-extraction-plan.md`.
 
 ### Provider Runtime Updates
@@ -696,9 +696,9 @@ NOT_READY_RUNTIME_TEST_FAILURES
 | 8J | SDK/API Contract Freeze + Deployment Readiness |
 | 8K | Extraction Simulation |
 | 8L | Extract to Standalone Repo/Package |
-| 8M | Integrate AuraPoS/Other Apps |
+| 8M | Integrate consumer backends |
 
-AuraPoS SDK consumption and embedded runtime deprecation are explicitly deferred until after standalone extraction readiness is proven.
+client SDK consumption and embedded runtime deprecation are explicitly deferred until after standalone extraction readiness is proven.
 
 ## Phase 8I Update — Standalone Runtime Readiness + Operations Layer
 
@@ -710,7 +710,7 @@ Phase 8I keeps the roadmap standalone-first:
 | 8J | SDK/API Contract Freeze + Deployment Readiness |
 | 8K | Extraction Simulation |
 | 8L | Extract to Standalone Repo/Package |
-| 8M | Integrate AuraPoS/Other Apps |
+| 8M | Integrate consumer backends |
 
 Standalone extraction comes first. Source applications integrate only after the service/package boundary, provider runtime, operations, and extraction simulation are stable.
 

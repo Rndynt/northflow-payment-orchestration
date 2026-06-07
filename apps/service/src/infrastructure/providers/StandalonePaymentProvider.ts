@@ -3,10 +3,10 @@
  *
  * This contract is intentionally local to the standalone service runtime. Core exposes
  * transport/domain contracts; concrete provider HTTP/webhook/polling adapters live here
- * so they can be extracted without importing AuraPoS embedded payment providers.
+ * so they can be extracted without importing legacy embedded payment providers.
  *
  * Phase 8F (Parity): added cancelPayment / refundPayment optional methods and their
- * associated input/result types for Refund + Void operation parity with legacy AuraPoS.
+ * associated input/result types for Refund + Void operation parity with the legacy payment engine.
  */
 
 import type {

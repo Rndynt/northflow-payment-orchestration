@@ -72,7 +72,7 @@ test('PaymentOrchestrationClient.reconcilePaymentIntentTotals posts to reconcile
       baseUrl: 'http://localhost:5100/',
       serviceToken: 'service-token',
       merchantId: 'merchant-1',
-      sourceApp: 'aurapos',
+      sourceApp: 'consumer-a',
     });
 
     const result = await client.reconcilePaymentIntentTotals('intent-1');

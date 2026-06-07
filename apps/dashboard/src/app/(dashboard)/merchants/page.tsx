@@ -153,7 +153,7 @@ export default function MerchantsPage() {
           <Input label="Merchant ID" value={form.id} onChange={(e) => setForm({ ...form, id: e.target.value })} placeholder="auto-generated if empty" />
           <Input label="Name *" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Acme Corp" />
           <Input label="Legal Name" value={form.legalName} onChange={(e) => setForm({ ...form, legalName: e.target.value })} placeholder="optional" />
-          <Input label="Source App" value={form.sourceApp} onChange={(e) => setForm({ ...form, sourceApp: e.target.value })} placeholder="e.g. aurapos" />
+          <Input label="Source App" value={form.sourceApp} onChange={(e) => setForm({ ...form, sourceApp: e.target.value })} placeholder="e.g. consumer-a" />
           <Input label="External Ref" value={form.externalRef} onChange={(e) => setForm({ ...form, externalRef: e.target.value })} placeholder="external merchant reference" />
           {formError && <p className="text-xs text-red-500">{formError}</p>}
           <div className="flex gap-2 pt-1">

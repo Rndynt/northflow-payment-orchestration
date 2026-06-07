@@ -12,9 +12,9 @@ Move the service from a single shared service credential model to a per-client a
 
 Northflow must safely support these consumer applications:
 
-- AuraPoS: multi-tenant POS using direct REST API.
-- Transity: multi-tenant transport/booking system using the SDK.
-- Kioskoin: payment/OTC app using direct REST API.
+- Consumer A: multi-tenant POS using direct REST API.
+- Consumer B: multi-tenant transport/booking system using the SDK.
+- Consumer C: payment/OTC app using direct REST API.
 
 The intended model is:
 
@@ -178,9 +178,9 @@ Create merchant behavior:
 
 S3 acceptance criteria:
 
-- AuraPoS client can access AuraPoS merchants only.
-- Transity client can access Transity merchants only.
-- Kioskoin client can access Kioskoin merchants only.
+- Consumer A client can access Consumer A merchants only.
+- Consumer B client can access Consumer B merchants only.
+- Consumer C client can access Consumer C merchants only.
 - Cross-merchant access returns `403 MERCHANT_ACCESS_DENIED`.
 - Existing merchant-scoped idempotency behavior remains intact.
 
@@ -190,7 +190,7 @@ S3 acceptance criteria:
 
 Prevent caller spoofing.
 
-If authenticated client source app is `aurapos`, then request payloads that include `sourceApp` must also use `aurapos`.
+If authenticated client source app is `consumer-a`, then request payloads that include `sourceApp` must also use `consumer-a`.
 
 If a request sends a different source app, return:
 
@@ -280,18 +280,18 @@ Add or update tests for:
 - Missing sourceApp auto-fill where safe.
 - Scope allowed.
 - Scope denied.
-- AuraPoS client cannot access Transity merchant.
-- Transity client cannot access Kioskoin merchant.
-- Kioskoin client cannot access AuraPoS merchant.
+- Consumer A client cannot access Consumer B merchant.
+- Consumer B client cannot access Consumer C merchant.
+- Consumer C client cannot access Consumer A merchant.
 
 ## Expected Final State
 
 After S1-S5:
 
 ```txt
-AuraPoS credentials can access only AuraPoS merchants.
-Transity credentials can access only Transity merchants.
-Kioskoin credentials can access only Kioskoin merchant(s).
+Consumer A credentials can access only Consumer A merchants.
+Consumer B credentials can access only Consumer B merchants.
+Consumer C credentials can access only Consumer C merchant(s).
 ```
 
 Direct REST API and SDK integrations must use the same service authentication and authorization model.

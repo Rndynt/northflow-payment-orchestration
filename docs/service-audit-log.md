@@ -18,7 +18,7 @@ Table: `po_audit_logs`
 | `id` | text | no | UUID primary key |
 | `request_id` | text | no | Correlation ID from `x-request-id` or generated |
 | `client_id` | text | yes | API client identity (`req.auth.clientId`) |
-| `source_app` | text | yes | Consumer application (`aurapos`, `transity`, etc.) |
+| `source_app` | text | yes | Consumer application (e.g. `consumer-a`, `consumer-b`) |
 | `merchant_id` | text | yes | Target merchant — nullable for global actions |
 | `actor_type` | text | no | `api_client`, `legacy_client`, `internal`, `system`, `worker`, `unknown` |
 | `action` | text | no | Action name (see [Action Registry](#action-registry)) |
@@ -125,8 +125,8 @@ List audit log entries.
       {
         "id": "...",
         "requestId": "...",
-        "clientId": "client_aurapos_prod",
-        "sourceApp": "aurapos",
+        "clientId": "client_consumer_a_prod",
+        "sourceApp": "consumer-a",
         "merchantId": "mer_cafe_mawar",
         "actorType": "api_client",
         "action": "payment_intent.create",

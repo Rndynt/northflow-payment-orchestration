@@ -7,7 +7,7 @@
  * Phase S9.1: CreateCredential, ListCredentials, RevokeCredential, RotateCredential use cases.
  * Phase S9.2: InMemoryRateLimiterStore wired; rateLimiter available to app.ts and auth middleware.
  *
- * No AuraPoS session/tenant middleware.
+ * No legacy session/tenant middleware.
  * No POS order domain deps.
  */
 

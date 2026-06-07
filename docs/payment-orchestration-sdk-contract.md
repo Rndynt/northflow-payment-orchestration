@@ -12,7 +12,7 @@
 A typed, fetch-compatible HTTP client for the `@northflow/payment-orchestration-service` standalone API.
 
 - No React dependency
-- No AuraPoS tenant/session dependency
+- No legacy tenant/session dependency
 - No `@northflow/payment-orchestration-core` dependency (self-contained for portability)
 - Node 18+ / modern browsers
 
@@ -36,7 +36,7 @@ const client = new PaymentOrchestrationClient({
   baseUrl: 'http://localhost:5100',            // required
   serviceToken: process.env.PAYMENT_ORCHESTRATION_SERVICE_TOKEN, // injected as x-payment-orchestration-service-token
   merchantId: 'merchant-uuid',                 // optional — auto-injected into request bodies + headers
-  sourceApp: 'aurapos',                        // optional — injected as x-source-app
+  sourceApp: 'consumer-a',                        // optional — injected as x-source-app
 });
 ```
 

@@ -2,13 +2,13 @@
 
 **Date:** 2026-06-05  
 **Status:** COMPLETE  
-**Scope:** Legacy AuraPoS payment capability parity migration into `northflow-payment-orchestration/`
+**Scope:** Legacy the legacy system payment capability parity migration into `northflow-payment-orchestration/`
 
 ---
 
 ## Objective
 
-Migrate all legacy AuraPoS payment capabilities into the standalone `northflow-payment-orchestration/` folder, achieving feature parity for:
+Migrate all legacy the legacy system payment capabilities into the standalone `northflow-payment-orchestration/` folder, achieving feature parity for:
 
 1. **RefundPaymentTransaction** — full and partial refunds for succeeded payments
 2. **VoidPaymentTransaction** — cancellation of pending/requires_action payments
@@ -64,7 +64,7 @@ Migrate all legacy AuraPoS payment capabilities into the standalone `northflow-p
 ## Design Decisions
 
 ### 1. No-provider fallback for refunds (manual/offline)
-When a provider is not registered or does not implement `refundPayment?()`, `RefundPaymentTransaction` records the refund as succeeded immediately. This mirrors the legacy AuraPoS behavior for cash/manual payments, where refunds are offline events.
+When a provider is not registered or does not implement `refundPayment?()`, `RefundPaymentTransaction` records the refund as succeeded immediately. This mirrors the legacy the legacy system behavior for cash/manual payments, where refunds are offline events.
 
 ### 2. Provider interface: optional methods (not throw-on-call)
 `cancelPayment?` and `refundPayment?` are optional on `StandalonePaymentProvider`. The use cases check for method presence before calling. This avoids a pattern where a provider has the method but always throws a "unsupported" error — instead, absence of the method is the signal.
@@ -108,15 +108,15 @@ On void, intent totals are NOT changed. The voided transaction was never `succee
 
 ---
 
-## AuraPoS Legacy Code Status
+## the legacy system Legacy Code Status
 
-**NOT DELETED.** Per task specification, the legacy AuraPoS embedded payment code remains intact:
+**NOT DELETED.** Per task specification, the legacy the legacy system embedded payment code remains intact:
 - `packages/application/payments/RefundPaymentTransaction.ts` — unchanged
 - `packages/application/payments/VoidPaymentTransaction.ts` — unchanged
 - `packages/domain/payments/` — unchanged
 - `packages/infrastructure/payments/providers/` — unchanged
 
-The legacy code continues to serve the AuraPoS embedded POS terminal. The northflow standalone service is an independent implementation that does NOT import from AuraPoS packages.
+The legacy code continues to serve the the legacy system embedded POS terminal. The northflow standalone service is an independent implementation that does NOT import from the legacy system packages.
 
 ---
 
@@ -126,4 +126,4 @@ The extraction check (`scripts/extraction-check.ts`) verifies boundary purity. T
 - Import only from `@northflow/payment-orchestration-core` (no `@pos/*` imports) ✅
 - Import from `../infrastructure/providers/` (service-local, not monorepo packages) ✅
 - No `shared/schema` references ✅
-- No forbidden AuraPoS import patterns ✅
+- No forbidden the legacy system import patterns ✅

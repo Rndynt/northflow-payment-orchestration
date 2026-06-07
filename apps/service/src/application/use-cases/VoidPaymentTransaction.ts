@@ -7,7 +7,7 @@
  * - Manual provider may cancel offline; gateway providers must implement cancelPayment().
  * - Intent totals are not changed because voidable transactions have not succeeded.
  *
- * No AuraPoS tenantId. No embedded payment runtime. Uses merchantId throughout.
+ * No legacy tenantId. No embedded payment runtime. Uses merchantId throughout.
  */
 
 import type {

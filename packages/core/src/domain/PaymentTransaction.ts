@@ -2,7 +2,7 @@
  * PaymentTransaction — standalone transaction DTO contracts.
  *
  * Represents an individual payment attempt against a PaymentIntent.
- * Scoped by `merchantId` (not AuraPoS `tenantId`).
+ * Scoped by `merchantId` (not legacy `tenantId`).
  *
  * Phase 8A: contract-only.
  */

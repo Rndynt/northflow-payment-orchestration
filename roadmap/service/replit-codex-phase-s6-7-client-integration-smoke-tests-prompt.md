@@ -21,9 +21,9 @@ Northflow Payment Orchestration is a central payment service used by multiple ba
 Target consumers:
 
 ```txt
-AuraPoS   -> direct REST API consumer
-Transity  -> SDK consumer
-Kioskoin  -> direct REST API consumer
+Consumer A -> direct REST API consumer
+Consumer B -> SDK consumer
+Consumer C -> direct REST API consumer
 ```
 
 Identity model:
@@ -43,9 +43,9 @@ Runtime rule:
 Existing S1-S5 guarantees must remain true:
 
 ```txt
-AuraPoS credentials can access only AuraPoS merchants.
-Transity credentials can access only Transity merchants.
-Kioskoin credentials can access only Kioskoin merchants.
+Consumer A credentials can access only Consumer A merchants.
+Consumer B credentials can access only Consumer B merchants.
+Consumer C credentials can access only Consumer C merchants.
 sourceApp cannot be spoofed.
 route scopes must be enforced globally and per merchant grant.
 ```
@@ -72,9 +72,9 @@ Recommended files:
 
 ```txt
 docs/integration/client-integration-contract.md
-docs/integration/aurapos-rest-integration.md
-docs/integration/transity-sdk-integration.md
-docs/integration/kioskoin-rest-integration.md
+docs/integration/consumer-a-rest-integration.md
+docs/integration/consumer-b-sdk-integration.md
+docs/integration/consumer-c-rest-integration.md
 ```
 
 If the repo already has integration docs, update the existing structure instead of duplicating.
@@ -127,7 +127,7 @@ Rules:
 
 ## S6.2 - REST API Contract
 
-Document REST examples for AuraPoS and Kioskoin.
+Document REST examples for Consumer A and Consumer C.
 
 Required REST flows:
 
@@ -142,20 +142,20 @@ refund transaction
 void transaction
 ```
 
-For AuraPoS examples, use:
+For Consumer A examples, use:
 
 ```txt
-sourceApp = aurapos
-externalTenantId = aurapos tenant id
+sourceApp = consumer-a
+externalTenantId = consumer-a tenant id
 externalOutletId = outlet id when available
 externalPayableType = pos_order
 externalPayableId = order id
 ```
 
-For Kioskoin examples, use:
+For Consumer C examples, use:
 
 ```txt
-sourceApp = kioskoin
+sourceApp = consumer-c
 externalPayableType = otc_order
 externalPayableId = OTC order id
 ```
@@ -231,7 +231,7 @@ Do not leak credentials, provider secrets, or authorization headers in error obj
 
 ## Goal
 
-Prove that AuraPoS REST, Transity SDK, and Kioskoin REST integrations work with isolated credentials and merchants.
+Prove that Consumer A REST, Consumer B SDK, and Consumer C REST integrations work with isolated credentials and merchants.
 
 Use tests, scripts, or both. Prefer automated tests committed to the repo.
 
@@ -250,17 +250,17 @@ or extend the existing service integration test structure if more appropriate.
 Create test fixtures for:
 
 ```txt
-client_aurapos_test
-client_transity_test
-client_kioskoin_test
+client_consumer_a_test
+client_consumer_b_test
+client_consumer_c_test
 ```
 
 And merchants:
 
 ```txt
-mer_aurapos_cafe_test
-mer_transity_shuttle_test
-mer_kioskoin_main_test
+mer_consumer_a_cafe_test
+mer_consumer_b_shuttle_test
+mer_consumer_c_main_test
 ```
 
 Each client must have access only to its own merchant(s).
@@ -268,16 +268,16 @@ Each client must have access only to its own merchant(s).
 Suggested sourceApp mapping:
 
 ```txt
-client_aurapos_test  -> sourceApp aurapos
-client_transity_test -> sourceApp transity
-client_kioskoin_test -> sourceApp kioskoin
+client_consumer_a_test  -> sourceApp consumer-a
+client_consumer_b_test -> sourceApp consumer-b
+client_consumer_c_test -> sourceApp consumer-c
 ```
 
 ---
 
 ## S7.2 - Positive Smoke Flows
 
-### AuraPoS REST flow
+### Consumer A REST flow
 
 Verify direct REST can:
 
@@ -299,7 +299,7 @@ externalPayableType = pos_order
 externalPayableId
 ```
 
-### Transity SDK flow
+### Consumer B SDK flow
 
 Verify SDK can:
 
@@ -320,12 +320,12 @@ externalPayableType = booking
 externalPayableId
 ```
 
-### Kioskoin REST flow
+### Consumer C REST flow
 
 Verify direct REST can:
 
 ```txt
-use/create Kioskoin merchant
+use/create Consumer C merchant
 create provider account
 create payment intent
 create gateway payment
@@ -346,20 +346,20 @@ externalPayableId
 Required tests:
 
 ```txt
-AuraPoS credential tries to access Transity merchant -> 403 MERCHANT_ACCESS_DENIED
-AuraPoS credential tries to access Kioskoin merchant -> 403 MERCHANT_ACCESS_DENIED
-Transity credential tries to access AuraPoS merchant -> 403 MERCHANT_ACCESS_DENIED
-Transity credential tries to access Kioskoin merchant -> 403 MERCHANT_ACCESS_DENIED
-Kioskoin credential tries to access AuraPoS merchant -> 403 MERCHANT_ACCESS_DENIED
-Kioskoin credential tries to access Transity merchant -> 403 MERCHANT_ACCESS_DENIED
+Consumer A credential tries to access Consumer B merchant -> 403 MERCHANT_ACCESS_DENIED
+Consumer A credential tries to access Consumer C merchant -> 403 MERCHANT_ACCESS_DENIED
+Consumer B credential tries to access Consumer A merchant -> 403 MERCHANT_ACCESS_DENIED
+Consumer B credential tries to access Consumer C merchant -> 403 MERCHANT_ACCESS_DENIED
+Consumer C credential tries to access Consumer A merchant -> 403 MERCHANT_ACCESS_DENIED
+Consumer C credential tries to access Consumer B merchant -> 403 MERCHANT_ACCESS_DENIED
 ```
 
 Required sourceApp spoof tests:
 
 ```txt
-AuraPoS credential sends sourceApp=transity -> 403 SOURCE_APP_MISMATCH
-Transity credential sends sourceApp=kioskoin -> 403 SOURCE_APP_MISMATCH
-Kioskoin credential sends sourceApp=aurapos -> 403 SOURCE_APP_MISMATCH
+Consumer A credential sends sourceApp=consumer-b -> 403 SOURCE_APP_MISMATCH
+Consumer B credential sends sourceApp=consumer-c -> 403 SOURCE_APP_MISMATCH
+Consumer C credential sends sourceApp=consumer-a -> 403 SOURCE_APP_MISMATCH
 ```
 
 Required scope tests:
@@ -406,12 +406,12 @@ how common error codes should be handled
 Recommended idempotency key formats:
 
 ```txt
-aurapos:<tenantId>:<orderId>:create-intent
-aurapos:<tenantId>:<orderId>:gateway-payment:<method>
-transity:<tenantId>:<bookingId>:create-intent
-transity:<tenantId>:<bookingId>:gateway-payment:<method>
-kioskoin:<orderId>:create-intent
-kioskoin:<orderId>:gateway-payment:<method>
+consumer-a:<tenantId>:<orderId>:create-intent
+consumer-a:<tenantId>:<orderId>:gateway-payment:<method>
+consumer-b:<tenantId>:<bookingId>:create-intent
+consumer-b:<tenantId>:<bookingId>:gateway-payment:<method>
+consumer-c:<orderId>:create-intent
+consumer-c:<orderId>:gateway-payment:<method>
 ```
 
 These are examples only; do not hard-code these formats into service logic unless a centralized helper is intentionally added.
@@ -475,9 +475,9 @@ remaining issues
 After S6-S7:
 
 ```txt
-AuraPoS REST integration is documented and smoke-tested.
-Transity SDK integration is documented and smoke-tested.
-Kioskoin REST integration is documented and smoke-tested.
+Consumer A REST integration is documented and smoke-tested.
+Consumer B SDK integration is documented and smoke-tested.
+Consumer C REST integration is documented and smoke-tested.
 SDK and REST use the same auth and request semantics.
 Cross-app merchant access is denied.
 sourceApp spoofing is denied.

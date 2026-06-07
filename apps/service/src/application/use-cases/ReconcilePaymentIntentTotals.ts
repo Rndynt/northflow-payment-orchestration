@@ -15,7 +15,7 @@
  *   safety tool to be called explicitly (e.g., after crash recovery, or via a
  *   POST /v1/payment-intents/:id/reconcile endpoint).
  *
- * No AuraPoS tenantId. No embedded payment runtime. No provider-level ops.
+ * No legacy tenantId. No embedded payment runtime. No provider-level ops.
  * No refund implementation (Phase 8F+).
  */
 

@@ -196,6 +196,6 @@ northflow-payment-orchestration/
 
 ## Notes
 
-- The embedded AuraPoS payment engine (`apps/api/src/`, `packages/application/payments/`, `packages/domain/payments/`, `packages/infrastructure/payments/`) is **not** extracted — it remains in the AuraPoS monorepo.
-- The bridge adapter (`packages/application/payments/adapters/PaymentProviderCoreAdapter.ts`) stays in AuraPoS.
+- The embedded legacy payment engine is **not** extracted — it remains in the legacy monorepo.
+- The bridge adapter stays in the legacy monorepo.
 - The `@northflow/payment-orchestration-client-sdk` is independently versioned and can be published to npm without bringing in `@northflow/payment-orchestration-core`.

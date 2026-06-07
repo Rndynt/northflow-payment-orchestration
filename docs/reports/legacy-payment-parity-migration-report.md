@@ -29,14 +29,14 @@ Date: 2026-06-06
 4. Void route/use case accepts `idempotencyKey`, persists it on cancellation, and replays matching already-cancelled transactions.
 5. Non-manual providers without `refundPayment()` / `cancelPayment()` now return `PROVIDER_REFUND_UNSUPPORTED` / `PROVIDER_CANCEL_UNSUPPORTED` instead of silently succeeding.
 6. OpenAPI/API/SDK/error/smoke docs now describe refund/void endpoints, idempotency, error envelope, and provider fallback policy.
-7. Extraction check validates refund/void use cases, provider contract methods, SDK methods/types, OpenAPI paths, parity reports, docs unsupported behavior, and AuraPoS import purity.
+7. Extraction check validates refund/void use cases, provider contract methods, SDK methods/types, OpenAPI paths, parity reports, docs unsupported behavior, and legacy import purity.
 
 ## Remaining limitations
 
 - Full refund/void race safety relies on the existing database unique index on `(merchant_id, idempotency_key)` because the current repository port does not expose a transaction/lock primitive.
 - Xendit sandbox refund/cancel remains unsupported until a real/safe sandbox adapter method is implemented.
 - Standalone repository sync is not claimed until a commit is pushed to `https://github.com/Rndynt/northflow-payment-orchestration.git`.
-- AuraPoS payment code was intentionally not deleted in this phase.
+- Legacy payment code was intentionally not deleted in this phase.
 
 ## Validation commands and results
 
@@ -50,7 +50,7 @@ Date: 2026-06-06
 | `pnpm --filter @northflow/payment-orchestration-core type-check` | Passed | No errors. |
 | `pnpm --filter @northflow/payment-orchestration-client-sdk type-check` | Passed | No errors. |
 | `pnpm --filter @northflow/payment-orchestration-service type-check` | Passed | No errors. |
-| `npm run check` from AuraPoS root | Passed | 13/13 packages successful. |
+| `npm run check` from legacy root | Passed | 13/13 packages successful. |
 
 ## Standalone sync status
 

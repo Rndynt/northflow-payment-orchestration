@@ -511,13 +511,13 @@ describe('Phase 8D FakeGateway Flow', () => {
 
     const { merchant, created } = await uc.execute({
       name: 'Warung Nasi Padang',
-      sourceApp: 'aurapos',
+      sourceApp: 'consumer-a',
       externalRef: 'tenant-001',
     });
 
     assert.ok(merchant.id.startsWith('merchant_'), `id should start with merchant_, got: ${merchant.id}`);
     assert.equal(merchant.displayName, 'Warung Nasi Padang');
-    assert.equal(merchant.sourceApp, 'aurapos');
+    assert.equal(merchant.sourceApp, 'consumer-a');
     assert.equal(merchant.externalRef, 'tenant-001');
     assert.equal(merchant.status, 'active');
     assert.equal(created, true);
@@ -528,8 +528,8 @@ describe('Phase 8D FakeGateway Flow', () => {
     const { merchantRepo } = buildRepos();
     const uc = new CreateMerchant(merchantRepo);
 
-    const first = await uc.execute({ name: 'Kedai Kopi', sourceApp: 'aurapos', externalRef: 'tenant-002' });
-    const second = await uc.execute({ name: 'Kedai Kopi', sourceApp: 'aurapos', externalRef: 'tenant-002' });
+    const first = await uc.execute({ name: 'Kedai Kopi', sourceApp: 'consumer-a', externalRef: 'tenant-002' });
+    const second = await uc.execute({ name: 'Kedai Kopi', sourceApp: 'consumer-a', externalRef: 'tenant-002' });
 
     assert.equal(first.merchant.id, second.merchant.id);
     assert.equal(second.created, false);
@@ -555,7 +555,7 @@ describe('Phase 8D FakeGateway Flow', () => {
     const createMerchant = new CreateMerchant(merchantRepo);
     const createPa = new CreateProviderAccount(merchantRepo, providerAccountRepo);
 
-    const { merchant } = await createMerchant.execute({ name: 'Test Merchant', sourceApp: 'aurapos', externalRef: 'tm-001' });
+    const { merchant } = await createMerchant.execute({ name: 'Test Merchant', sourceApp: 'consumer-a', externalRef: 'tm-001' });
     const { providerAccount } = await createPa.execute({
       merchantId: merchant.id,
       provider: 'fake_gateway',
@@ -577,7 +577,7 @@ describe('Phase 8D FakeGateway Flow', () => {
     const createMerchant = new CreateMerchant(merchantRepo);
     const uc = new CreatePaymentIntent(merchantRepo, intentRepo, idempotencyRepo);
 
-    const { merchant } = await createMerchant.execute({ name: 'M1', sourceApp: 'aurapos', externalRef: 'r1' });
+    const { merchant } = await createMerchant.execute({ name: 'M1', sourceApp: 'consumer-a', externalRef: 'r1' });
     const { intent, created } = await uc.execute({
       merchantId: merchant.id,
       externalPayableType: 'order',
@@ -605,7 +605,7 @@ describe('Phase 8D FakeGateway Flow', () => {
     const createIntent = new CreatePaymentIntent(merchantRepo, intentRepo, idempotencyRepo);
     const uc = buildCreateGatewayPayment(repos);
 
-    const { merchant } = await createMerchant.execute({ name: 'M-QRIS', sourceApp: 'aurapos', externalRef: 'q1' });
+    const { merchant } = await createMerchant.execute({ name: 'M-QRIS', sourceApp: 'consumer-a', externalRef: 'q1' });
     const { intent } = await createIntent.execute({
       merchantId: merchant.id,
       externalPayableType: 'order',
@@ -640,7 +640,7 @@ describe('Phase 8D FakeGateway Flow', () => {
     const createIntent = new CreatePaymentIntent(merchantRepo, intentRepo, idempotencyRepo);
     const uc = buildCreateGatewayPayment(repos);
 
-    const { merchant } = await createMerchant.execute({ name: 'M-Imm', sourceApp: 'aurapos', externalRef: 'i1' });
+    const { merchant } = await createMerchant.execute({ name: 'M-Imm', sourceApp: 'consumer-a', externalRef: 'i1' });
     const { intent } = await createIntent.execute({
       merchantId: merchant.id,
       externalPayableType: 'order',
@@ -673,7 +673,7 @@ describe('Phase 8D FakeGateway Flow', () => {
     const createIntent = new CreatePaymentIntent(merchantRepo, intentRepo, idempotencyRepo);
     const uc = buildCreateGatewayPayment(repos);
 
-    const { merchant } = await createMerchant.execute({ name: 'M-Over', sourceApp: 'aurapos', externalRef: 'ov1' });
+    const { merchant } = await createMerchant.execute({ name: 'M-Over', sourceApp: 'consumer-a', externalRef: 'ov1' });
     const { intent } = await createIntent.execute({
       merchantId: merchant.id,
       externalPayableType: 'order',
@@ -708,7 +708,7 @@ describe('Phase 8D FakeGateway Flow', () => {
     const createPayment = buildCreateGatewayPayment(repos);
     const confirmUc = new ConfirmFakeGatewayPayment(transactionRepo, intentRepo, 'development');
 
-    const { merchant } = await createMerchant.execute({ name: 'M-Confirm', sourceApp: 'aurapos', externalRef: 'c1' });
+    const { merchant } = await createMerchant.execute({ name: 'M-Confirm', sourceApp: 'consumer-a', externalRef: 'c1' });
     const { intent } = await createIntent.execute({
       merchantId: merchant.id,
       externalPayableType: 'order',
@@ -750,7 +750,7 @@ describe('Phase 8D FakeGateway Flow', () => {
     const createPayment = buildCreateGatewayPayment(repos);
     const confirmUc = new ConfirmFakeGatewayPayment(transactionRepo, intentRepo, 'development');
 
-    const { merchant } = await createMerchant.execute({ name: 'M-Idem', sourceApp: 'aurapos', externalRef: 'idem1' });
+    const { merchant } = await createMerchant.execute({ name: 'M-Idem', sourceApp: 'consumer-a', externalRef: 'idem1' });
     const { intent } = await createIntent.execute({
       merchantId: merchant.id,
       externalPayableType: 'order',
@@ -786,7 +786,7 @@ describe('Phase 8D FakeGateway Flow', () => {
     const confirmUc = new ConfirmFakeGatewayPayment(transactionRepo, intentRepo, 'development');
     const statusUc = new GetPaymentIntentStatus(intentRepo, transactionRepo);
 
-    const { merchant } = await createMerchant.execute({ name: 'M-Status', sourceApp: 'aurapos', externalRef: 's1' });
+    const { merchant } = await createMerchant.execute({ name: 'M-Status', sourceApp: 'consumer-a', externalRef: 's1' });
     const { intent } = await createIntent.execute({
       merchantId: merchant.id,
       externalPayableType: 'order',
@@ -834,7 +834,7 @@ describe('Phase 8D FakeGateway Flow', () => {
     const confirmUc = new ConfirmFakeGatewayPayment(transactionRepo, intentRepo, 'development');
     const refundabilityUc = new GetRefundability(intentRepo, transactionRepo);
 
-    const { merchant } = await createMerchant.execute({ name: 'M-Refund', sourceApp: 'aurapos', externalRef: 'ref1' });
+    const { merchant } = await createMerchant.execute({ name: 'M-Refund', sourceApp: 'consumer-a', externalRef: 'ref1' });
     const { intent } = await createIntent.execute({
       merchantId: merchant.id,
       externalPayableType: 'order',
@@ -891,7 +891,7 @@ describe('Phase 8D FakeGateway Flow', () => {
     const createIntent = new CreatePaymentIntent(merchantRepo, intentRepo, idempotencyRepo);
     const uc = buildCreateGatewayPayment(repos);
 
-    const { merchant } = await createMerchant.execute({ name: 'M-Fail', sourceApp: 'aurapos', externalRef: 'f1' });
+    const { merchant } = await createMerchant.execute({ name: 'M-Fail', sourceApp: 'consumer-a', externalRef: 'f1' });
     const { intent } = await createIntent.execute({
       merchantId: merchant.id,
       externalPayableType: 'order',
@@ -926,7 +926,7 @@ describe('Phase 8D FakeGateway Flow', () => {
     const createIntent = new CreatePaymentIntent(merchantRepo, intentRepo, idempotencyRepo);
     const uc = buildCreateGatewayPayment(repos);
 
-    const { merchant } = await createMerchant.execute({ name: 'M-Idem2', sourceApp: 'aurapos', externalRef: 'idem2' });
+    const { merchant } = await createMerchant.execute({ name: 'M-Idem2', sourceApp: 'consumer-a', externalRef: 'idem2' });
     const { intent } = await createIntent.execute({
       merchantId: merchant.id,
       externalPayableType: 'order',
@@ -974,7 +974,7 @@ describe('Phase 8D FakeGateway Flow', () => {
     const createIntent = new CreatePaymentIntent(merchantRepo, intentRepo, idempotencyRepo);
     const uc = buildCreateGatewayPayment(repos);
 
-    const { merchant } = await createMerchant.execute({ name: 'M-Conflict', sourceApp: 'aurapos', externalRef: 'cfl1' });
+    const { merchant } = await createMerchant.execute({ name: 'M-Conflict', sourceApp: 'consumer-a', externalRef: 'cfl1' });
     const { intent } = await createIntent.execute({
       merchantId: merchant.id,
       externalPayableType: 'order',
@@ -1022,7 +1022,7 @@ describe('Phase 8D FakeGateway Flow', () => {
     const createIntent = new CreatePaymentIntent(merchantRepo, intentRepo, idempotencyRepo);
     const uc = buildCreateGatewayPayment(repos);
 
-    const { merchant } = await createMerchant.execute({ name: 'M-PA', sourceApp: 'aurapos', externalRef: 'pa1' });
+    const { merchant } = await createMerchant.execute({ name: 'M-PA', sourceApp: 'consumer-a', externalRef: 'pa1' });
     const { intent } = await createIntent.execute({
       merchantId: merchant.id,
       externalPayableType: 'order',
@@ -1058,7 +1058,7 @@ describe('Phase 8D FakeGateway Flow', () => {
     const createIntent = new CreatePaymentIntent(merchantRepo, intentRepo, idempotencyRepo);
     const uc = buildCreateGatewayPayment(repos);
 
-    const { merchant } = await createMerchant.execute({ name: 'M-PA2', sourceApp: 'aurapos', externalRef: 'pa2' });
+    const { merchant } = await createMerchant.execute({ name: 'M-PA2', sourceApp: 'consumer-a', externalRef: 'pa2' });
     const { providerAccount } = await createPa.execute({
       merchantId: merchant.id,
       provider: 'xendit',      // different provider
@@ -1100,7 +1100,7 @@ describe('Phase 8D FakeGateway Flow', () => {
     const createPayment = buildCreateGatewayPayment(repos);
     const confirmUc = new ConfirmFakeGatewayPayment(transactionRepo, intentRepo, 'development');
 
-    const { merchant } = await createMerchant.execute({ name: 'M-ConfirmOver', sourceApp: 'aurapos', externalRef: 'cov1' });
+    const { merchant } = await createMerchant.execute({ name: 'M-ConfirmOver', sourceApp: 'consumer-a', externalRef: 'cov1' });
     const { intent } = await createIntent.execute({
       merchantId: merchant.id,
       externalPayableType: 'order',
@@ -1155,7 +1155,7 @@ describe('Phase 8D FakeGateway Flow', () => {
     const createPayment = buildCreateGatewayPayment(repos);
     const confirmUc = new ConfirmFakeGatewayPayment(transactionRepo, intentRepo, 'development');
 
-    const { merchant } = await createMerchant.execute({ name: 'M-ConfirmFail', sourceApp: 'aurapos', externalRef: 'cfail1' });
+    const { merchant } = await createMerchant.execute({ name: 'M-ConfirmFail', sourceApp: 'consumer-a', externalRef: 'cfail1' });
     const { intent } = await createIntent.execute({
       merchantId: merchant.id,
       externalPayableType: 'order',

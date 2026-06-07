@@ -8,7 +8,7 @@
  * - Manual provider may refund offline; gateway providers must implement refundPayment().
  * - Race safety relies on the existing unique (merchant_id, idempotency_key) transaction index.
  *
- * No AuraPoS tenantId. No embedded payment runtime. Uses merchantId throughout.
+ * No legacy tenantId. No embedded payment runtime. Uses merchantId throughout.
  */
 
 import { randomUUID } from 'crypto';

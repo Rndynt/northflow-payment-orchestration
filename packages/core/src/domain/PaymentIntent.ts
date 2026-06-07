@@ -1,9 +1,9 @@
 /**
  * PaymentIntent — standalone payment intent DTO contracts.
  *
- * Uses `merchantId` as the primary owner identity (not AuraPoS `tenantId`).
+ * Uses `merchantId` as the primary owner identity (not legacy `tenantId`).
  * Tracks the external payable reference via `externalPayableType` / `externalPayableId`
- * instead of coupling to AuraPoS order domain.
+ * instead of coupling to legacy order domain.
  *
  * Standalone extraction first. Source applications integrate only after service/package
  * boundary, provider runtime, operations, and extraction simulation are stable.
@@ -12,7 +12,7 @@
 /**
  * Status of a standalone payment intent.
  *
- * Matches the embedded AuraPoS statuses but uses explicit string union
+ * Matches the legacy embedded statuses but uses explicit string union
  * rather than importing from @pos/domain/payments/status.
  */
 export type StandaloneIntentStatus =
@@ -30,7 +30,7 @@ export type StandaloneIntentStatus =
  * StandalonePaymentIntentDTO — the read model returned to callers.
  *
  * Carries merchant-scoped identity (`merchantId`) and external payable references
- * (`externalPayableType`, `externalPayableId`) rather than AuraPoS-specific fields.
+ * (`externalPayableType`, `externalPayableId`) rather than legacy-specific fields.
  */
 export interface StandalonePaymentIntentDTO {
   id: string;

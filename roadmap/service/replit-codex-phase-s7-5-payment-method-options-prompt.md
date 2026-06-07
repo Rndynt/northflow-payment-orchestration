@@ -454,7 +454,7 @@ how provider sync works when available
 how manual enable/disable works
 how consumer apps get options
 how gateway payment validates selected method
-how AuraPoS/Transity/Kioskoin should use payment options
+how consumer backends should use payment options
 ```
 
 Update existing integration docs to mention the new flow:
@@ -581,7 +581,7 @@ Provider adapters expose method capabilities.
 Provider method sync exists and works for fake gateway.
 Consumer apps can request payment options for a payment intent.
 Gateway payment creation validates selected method before provider call.
-AuraPoS, Transity, and Kioskoin docs include get-options-before-pay flow.
+Consumer integration docs include get-options-before-pay flow.
 SDK supports payment method/options APIs.
 Tests prove filtering, security, method validation, and SDK behavior.
 ```

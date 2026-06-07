@@ -94,8 +94,8 @@ docker run -p 5100:5100 \
 
 ## Project History
 
-This service was extracted from the [AuraPoS](https://github.com/Rndynt/AuraPoS) monorepo (Phase 8L).
-The AuraPoS source areas remain intact as a fallback until the standalone service is fully production-ready.
+This service was extracted from the legacy monorepo (Phase 8L).
+The legacy source areas remain intact as a fallback until the standalone service is fully production-ready.
 
 ## Version
 
