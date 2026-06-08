@@ -105,4 +105,4 @@ Render options returned by Northflow. Do not hardcode unsupported payment method
 
 ## Webhooks
 
-Provider webhooks update Northflow. Merchant outbound webhook/callback delivery is a future phase and is not part of S10.2.
+Provider webhooks update Northflow. Merchant outbound webhook/callback delivery is available in S10.3 for backend-to-backend event delivery; polling remains supported.

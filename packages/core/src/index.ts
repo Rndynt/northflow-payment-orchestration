@@ -176,6 +176,12 @@ export type {
   CreateClientSigningKeyInput,
   RequestNonceRepository,
   ConsumeNonceInput,
+  MerchantWebhookEndpointRepository,
+  CreateMerchantWebhookEndpointInput,
+  MerchantWebhookEventRepository,
+  CreateMerchantWebhookEventInput,
+  MerchantWebhookDeliveryRepository,
+  CreateMerchantWebhookDeliveryInput,
 } from './application/repositories';
 
 export {
@@ -188,3 +194,5 @@ export {
   CANONICAL_ALGORITHM,
   EMPTY_BODY_HASH,
 } from './security/canonicalRequest';
+
+export * from './domain/MerchantWebhook';

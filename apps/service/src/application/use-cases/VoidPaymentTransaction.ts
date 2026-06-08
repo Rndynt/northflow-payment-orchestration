@@ -18,6 +18,7 @@ import type {
   PaymentIntentDTO,
 } from '@northflow/payment-orchestration-core';
 import type { ProviderRegistry } from '../../infrastructure/providers/providerRegistry.ts';
+import type { MerchantWebhookOutbox } from '../merchant-webhooks/events.ts';
 
 const VOIDABLE_STATUSES = new Set(['pending', 'requires_action']);
 const OFFLINE_CANCEL_PROVIDERS = new Set(['manual']);
@@ -64,6 +65,7 @@ export class VoidPaymentTransaction {
     private readonly intentRepo: PaymentIntentRepository,
     private readonly providerAccountRepo: PaymentProviderAccountRepository,
     private readonly providerRegistry: ProviderRegistry,
+    private readonly merchantWebhookOutbox?: MerchantWebhookOutbox,
   ) {}
 
   async execute(input: VoidPaymentTransactionInput): Promise<VoidPaymentTransactionOutput> {
@@ -175,9 +177,12 @@ export class VoidPaymentTransaction {
       rawProviderResponse: cancelRawResponse,
     });
 
+    const updatedIntent = await this.loadIntent(tx, merchantId);
+    await this.merchantWebhookOutbox?.emitTransactionStatus({ transaction: cancelledTx, intent: updatedIntent, dedupeSuffix: `void:${cancelledTx.id}` });
+    if (updatedIntent) await this.merchantWebhookOutbox?.emitIntentStatus({ intent: updatedIntent, transaction: cancelledTx, dedupeSuffix: `void:${cancelledTx.id}` });
     return {
       transaction: cancelledTx,
-      intent: await this.loadIntent(tx, merchantId),
+      intent: updatedIntent,
       providerCancelled,
       idempotentReplay: false,
     };

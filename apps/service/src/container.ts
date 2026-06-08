@@ -48,6 +48,20 @@ import { CreateCredential } from './application/use-cases/CreateCredential.ts';
 import { ListCredentials } from './application/use-cases/ListCredentials.ts';
 import { RevokeCredential } from './application/use-cases/RevokeCredential.ts';
 import { RotateCredential } from './application/use-cases/RotateCredential.ts';
+
+import { DrizzleMerchantWebhookEndpointRepository } from './infrastructure/repositories/DrizzleMerchantWebhookEndpointRepository.ts';
+import { DrizzleMerchantWebhookEventRepository } from './infrastructure/repositories/DrizzleMerchantWebhookEventRepository.ts';
+import { DrizzleMerchantWebhookDeliveryRepository } from './infrastructure/repositories/DrizzleMerchantWebhookDeliveryRepository.ts';
+import { MerchantWebhookOutbox } from './application/merchant-webhooks/events.ts';
+import { DeliverMerchantWebhooks } from './application/merchant-webhooks/worker.ts';
+import {
+  CreateMerchantWebhookEndpoint,
+  ListMerchantWebhookEndpoints,
+  DisableMerchantWebhookEndpoint,
+  RotateMerchantWebhookEndpointSecret,
+  ListMerchantWebhookDeliveries,
+  ReplayMerchantWebhookDeliveryOrEvent,
+} from './application/merchant-webhooks/useCases.ts';
 import { InMemoryRateLimiterStore } from './rate-limit/rateLimiter.ts';
 import type { RateLimiterStore } from './rate-limit/rateLimiter.ts';
 import type { CreateMerchantInput, CreateMerchantOutput } from './application/use-cases/CreateMerchant.ts';
@@ -63,6 +77,7 @@ import type { PaymentIdempotencyRepository } from '@northflow/payment-orchestrat
 import type { ApiClientRepository } from '@northflow/payment-orchestration-core';
 import type { ClientCredentialRepository } from '@northflow/payment-orchestration-core';
 import type { ClientMerchantAccessRepository } from '@northflow/payment-orchestration-core';
+import type { MerchantWebhookEndpointRepository, MerchantWebhookEventRepository, MerchantWebhookDeliveryRepository } from '@northflow/payment-orchestration-core';
 
 export interface ServiceRepos {
   merchantRepo: PaymentMerchantRepository;
@@ -71,6 +86,9 @@ export interface ServiceRepos {
   transactionRepo: PaymentTransactionRepository;
   providerEventRepo: PaymentProviderEventRepository;
   idempotencyRepo: PaymentIdempotencyRepository;
+  merchantWebhookEndpointRepo?: MerchantWebhookEndpointRepository;
+  merchantWebhookEventRepo?: MerchantWebhookEventRepository;
+  merchantWebhookDeliveryRepo?: MerchantWebhookDeliveryRepository;
 }
 
 /** S1: Auth repos — optional so in-memory test containers remain backward-compatible. */
@@ -100,6 +118,14 @@ export interface ServiceUseCases {
   listCredentials?: ListCredentials;
   revokeCredential?: RevokeCredential;
   rotateCredential?: RotateCredential;
+  merchantWebhookOutbox?: MerchantWebhookOutbox;
+  deliverMerchantWebhooks?: DeliverMerchantWebhooks;
+  createMerchantWebhookEndpoint?: CreateMerchantWebhookEndpoint;
+  listMerchantWebhookEndpoints?: ListMerchantWebhookEndpoints;
+  disableMerchantWebhookEndpoint?: DisableMerchantWebhookEndpoint;
+  rotateMerchantWebhookEndpointSecret?: RotateMerchantWebhookEndpointSecret;
+  listMerchantWebhookDeliveries?: ListMerchantWebhookDeliveries;
+  replayMerchantWebhook?: ReplayMerchantWebhookDeliveryOrEvent;
 }
 
 export interface ServiceContainer {
@@ -135,6 +161,9 @@ export function createContainer(config: PaymentOrchestrationServiceConfig): Serv
   const transactionRepo = new DrizzlePaymentTransactionRepository(db);
   const providerEventRepo = new DrizzlePaymentProviderEventRepository(db);
   const idempotencyRepo = new DrizzlePaymentIdempotencyRepository(db);
+  const merchantWebhookEndpointRepo = new DrizzleMerchantWebhookEndpointRepository(db);
+  const merchantWebhookEventRepo = new DrizzleMerchantWebhookEventRepository(db);
+  const merchantWebhookDeliveryRepo = new DrizzleMerchantWebhookDeliveryRepository(db);
 
   const repos: ServiceRepos = {
     merchantRepo,
@@ -143,6 +172,9 @@ export function createContainer(config: PaymentOrchestrationServiceConfig): Serv
     transactionRepo,
     providerEventRepo,
     idempotencyRepo,
+    merchantWebhookEndpointRepo,
+    merchantWebhookEventRepo,
+    merchantWebhookDeliveryRepo,
   };
 
   // ── S1: API Client auth repos ──────────────────────────────────────────────
@@ -171,6 +203,8 @@ export function createContainer(config: PaymentOrchestrationServiceConfig): Serv
     nodeEnv: config.nodeEnv,
   });
 
+  const merchantWebhookOutbox = new MerchantWebhookOutbox(merchantWebhookEndpointRepo, merchantWebhookEventRepo, merchantWebhookDeliveryRepo, { enabled: config.outboundWebhooksEnabled, maxAttempts: config.outboundWebhookMaxAttempts });
+
   const useCases: ServiceUseCases = {
     createMerchant: new CreateMerchant(merchantRepo),
     createProviderAccount: new CreateProviderAccount(merchantRepo, providerAccountRepo),
@@ -189,6 +223,7 @@ export function createContainer(config: PaymentOrchestrationServiceConfig): Serv
       transactionRepo,
       intentRepo,
       config.nodeEnv,
+      merchantWebhookOutbox,
     ),
     getPaymentIntentStatus: new GetPaymentIntentStatus(intentRepo, transactionRepo),
     getRefundability: new GetRefundability(intentRepo, transactionRepo),
@@ -198,6 +233,7 @@ export function createContainer(config: PaymentOrchestrationServiceConfig): Serv
       providerEventRepo,
       fakeGatewayWebhookHandler,
       providerRegistry,
+      merchantWebhookOutbox,
     ),
     reconcilePaymentIntentTotals: new ReconcilePaymentIntentTotals(
       intentRepo,
@@ -214,18 +250,28 @@ export function createContainer(config: PaymentOrchestrationServiceConfig): Serv
       intentRepo,
       providerAccountRepo,
       providerRegistry,
+      merchantWebhookOutbox,
     ),
     voidPaymentTransaction: new VoidPaymentTransaction(
       transactionRepo,
       intentRepo,
       providerAccountRepo,
       providerRegistry,
+      merchantWebhookOutbox,
     ),
     expireStalePaymentTransactions: new ExpireStalePaymentTransactions(
       intentRepo,
       transactionRepo,
     ),
     reprocessProviderEvents: new ReprocessProviderEvents(providerEventRepo, transactionRepo, intentRepo),
+    merchantWebhookOutbox,
+    deliverMerchantWebhooks: new DeliverMerchantWebhooks(merchantWebhookEndpointRepo, merchantWebhookEventRepo, merchantWebhookDeliveryRepo, { timeoutMs: config.outboundWebhookTimeoutMs, responseBodyLimit: config.outboundWebhookResponseBodyLimit }),
+    createMerchantWebhookEndpoint: new CreateMerchantWebhookEndpoint(merchantWebhookEndpointRepo),
+    listMerchantWebhookEndpoints: new ListMerchantWebhookEndpoints(merchantWebhookEndpointRepo),
+    disableMerchantWebhookEndpoint: new DisableMerchantWebhookEndpoint(merchantWebhookEndpointRepo),
+    rotateMerchantWebhookEndpointSecret: new RotateMerchantWebhookEndpointSecret(merchantWebhookEndpointRepo),
+    listMerchantWebhookDeliveries: new ListMerchantWebhookDeliveries(merchantWebhookDeliveryRepo),
+    replayMerchantWebhook: new ReplayMerchantWebhookDeliveryOrEvent(merchantWebhookEventRepo, merchantWebhookEndpointRepo, merchantWebhookDeliveryRepo, config.outboundWebhookMaxAttempts),
     // S9.1: Credential lifecycle use cases
     createCredential: new CreateCredential(apiClientRepo, clientCredentialRepo),
     listCredentials: new ListCredentials(clientCredentialRepo),

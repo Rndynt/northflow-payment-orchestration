@@ -26,6 +26,7 @@ import type {
   PaymentTransactionDTO,
 } from '@northflow/payment-orchestration-core';
 import { computeIntentStatus } from './intentStatusHelper.ts';
+import type { MerchantWebhookOutbox } from '../merchant-webhooks/events.ts';
 
 export interface ConfirmFakeGatewayPaymentInput {
   merchantId: string;
@@ -43,6 +44,7 @@ export class ConfirmFakeGatewayPayment {
     private readonly transactionRepo: PaymentTransactionRepository,
     private readonly intentRepo: PaymentIntentRepository,
     private readonly nodeEnv: string,
+    private readonly merchantWebhookOutbox?: MerchantWebhookOutbox,
   ) {}
 
   async execute(
@@ -106,6 +108,10 @@ export class ConfirmFakeGatewayPayment {
         intentId: tx.intentId,
         amount: tx.amount,
       });
+      if (!applied.alreadySucceeded) {
+        await this.merchantWebhookOutbox?.emitTransactionStatus({ transaction: applied.transaction, intent: applied.intent, dedupeSuffix: 'fake_gateway_confirm' });
+        await this.merchantWebhookOutbox?.emitIntentStatus({ intent: applied.intent, transaction: applied.transaction, dedupeSuffix: 'fake_gateway_confirm' });
+      }
       return {
         transaction: applied.transaction,
         intent: applied.intent,
@@ -174,9 +180,12 @@ export class ConfirmFakeGatewayPayment {
       status: newStatus,
     });
 
+    const finalIntent = { ...updatedTotals, status: updatedIntent.status };
+    await this.merchantWebhookOutbox?.emitTransactionStatus({ transaction: confirmedTx!, intent: finalIntent, dedupeSuffix: 'fake_gateway_confirm' });
+    await this.merchantWebhookOutbox?.emitIntentStatus({ intent: finalIntent, transaction: confirmedTx!, dedupeSuffix: 'fake_gateway_confirm' });
     return {
       transaction: confirmedTx!,
-      intent: { ...updatedTotals, status: updatedIntent.status },
+      intent: finalIntent,
       alreadyConfirmed: false,
     };
   }

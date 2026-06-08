@@ -21,6 +21,7 @@ import type {
 } from '@northflow/payment-orchestration-core';
 import type { ProviderRegistry } from '../../infrastructure/providers/providerRegistry.ts';
 import { computeIntentStatusAfterRefund } from './intentStatusHelper.ts';
+import type { MerchantWebhookOutbox } from '../merchant-webhooks/events.ts';
 
 const REFUNDABLE_TYPES = new Set(['payment', 'deposit', 'settlement']);
 const OFFLINE_REFUND_PROVIDERS = new Set(['manual']);
@@ -64,6 +65,7 @@ export class RefundPaymentTransaction {
     private readonly intentRepo: PaymentIntentRepository,
     private readonly providerAccountRepo: PaymentProviderAccountRepository,
     private readonly providerRegistry: ProviderRegistry,
+    private readonly merchantWebhookOutbox?: MerchantWebhookOutbox,
   ) {}
 
   async execute(input: RefundPaymentTransactionInput): Promise<RefundPaymentTransactionOutput> {
@@ -265,6 +267,9 @@ export class RefundPaymentTransaction {
         }
       }
     }
+
+    await this.merchantWebhookOutbox?.emitTransactionStatus({ transaction: refundTx, intent: updatedIntent, dedupeSuffix: `refund:${refundTx.id}` });
+    await this.merchantWebhookOutbox?.emitIntentStatus({ intent: updatedIntent, transaction: refundTx, dedupeSuffix: `refund:${refundTx.id}` });
 
     return {
       refundTransaction: refundTx,
