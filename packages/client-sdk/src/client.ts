@@ -282,36 +282,52 @@ export class PaymentOrchestrationClient {
     );
   }
 
-  async listProviderAccountMethods(providerAccountId: string, merchantId?: string): Promise<ListProviderAccountMethodsResponse> {
-    return this.request<ListProviderAccountMethodsResponse>('GET', `/v1/provider-accounts/${encodeURIComponent(providerAccountId)}/methods`, undefined, this.merchantHeader(merchantId));
+  async listProviderAccountMethods(merchantId: string, providerAccountId: string): Promise<ListProviderAccountMethodsResponse>;
+  async listProviderAccountMethods(providerAccountId: string, merchantId?: string): Promise<ListProviderAccountMethodsResponse>;
+  async listProviderAccountMethods(first: string, second?: string): Promise<ListProviderAccountMethodsResponse> {
+    const { merchantId, providerAccountId } = this.resolveMerchantProviderAccountArgs(first, second);
+    return this.request<ListProviderAccountMethodsResponse>('GET', `/v1/merchants/${encodeURIComponent(merchantId)}/provider-accounts/${encodeURIComponent(providerAccountId)}/methods`, undefined, this.merchantHeader(merchantId));
   }
 
-  async upsertProviderAccountMethod(providerAccountId: string, input: UpsertProviderAccountMethodRequest): Promise<UpsertProviderAccountMethodResponse> {
-    return this.request<UpsertProviderAccountMethodResponse>('PUT', `/v1/provider-accounts/${encodeURIComponent(providerAccountId)}/methods/${encodeURIComponent(input.method)}`, this.withMerchantId(input));
+  async upsertProviderAccountMethod(merchantId: string, providerAccountId: string, input: UpsertProviderAccountMethodRequest): Promise<UpsertProviderAccountMethodResponse>;
+  async upsertProviderAccountMethod(providerAccountId: string, input: UpsertProviderAccountMethodRequest): Promise<UpsertProviderAccountMethodResponse>;
+  async upsertProviderAccountMethod(first: string, second: string | UpsertProviderAccountMethodRequest, third?: UpsertProviderAccountMethodRequest): Promise<UpsertProviderAccountMethodResponse> {
+    const merchantId = typeof second === 'string' ? first : this.requireConfigMerchantId('upsertProviderAccountMethod');
+    const providerAccountId = typeof second === 'string' ? second : first;
+    const input = typeof second === 'string' ? third! : second;
+    return this.request<UpsertProviderAccountMethodResponse>('PUT', `/v1/merchants/${encodeURIComponent(merchantId)}/provider-accounts/${encodeURIComponent(providerAccountId)}/methods/${encodeURIComponent(input.method)}`, input, this.merchantHeader(merchantId));
   }
 
-  async deleteProviderAccountMethod(providerAccountId: string, method: string, merchantId?: string): Promise<{ ok: true }> {
-    return this.request<{ ok: true }>('DELETE', `/v1/provider-accounts/${encodeURIComponent(providerAccountId)}/methods/${encodeURIComponent(method)}`, undefined, this.merchantHeader(merchantId));
+  async deleteProviderAccountMethod(merchantId: string, providerAccountId: string, method: string): Promise<{ ok: true }>;
+  async deleteProviderAccountMethod(providerAccountId: string, method: string, merchantId?: string): Promise<{ ok: true }>;
+  async deleteProviderAccountMethod(first: string, second: string, third?: string): Promise<{ ok: true }> {
+    const merchantId = third ? first : this.requireConfigMerchantId('deleteProviderAccountMethod');
+    const providerAccountId = third ? second : first;
+    const method = third ?? second;
+    return this.request<{ ok: true }>('DELETE', `/v1/merchants/${encodeURIComponent(merchantId)}/provider-accounts/${encodeURIComponent(providerAccountId)}/methods/${encodeURIComponent(method)}`, undefined, this.merchantHeader(merchantId));
   }
 
-  async syncProviderAccountMethods(providerAccountId: string, merchantId?: string): Promise<SyncProviderAccountMethodsResponse> {
-    return this.request<SyncProviderAccountMethodsResponse>('POST', `/v1/provider-accounts/${encodeURIComponent(providerAccountId)}/methods/sync`, undefined, this.merchantHeader(merchantId));
+  async syncProviderAccountMethods(merchantId: string, providerAccountId: string): Promise<SyncProviderAccountMethodsResponse>;
+  async syncProviderAccountMethods(providerAccountId: string, merchantId?: string): Promise<SyncProviderAccountMethodsResponse>;
+  async syncProviderAccountMethods(first: string, second?: string): Promise<SyncProviderAccountMethodsResponse> {
+    const { merchantId, providerAccountId } = this.resolveMerchantProviderAccountArgs(first, second);
+    return this.request<SyncProviderAccountMethodsResponse>('POST', `/v1/merchants/${encodeURIComponent(merchantId)}/provider-accounts/${encodeURIComponent(providerAccountId)}/methods/sync`, undefined, this.merchantHeader(merchantId));
   }
 
-  async createSigningKey(input: CreateSigningKeyRequest): Promise<CreateSigningKeyResponse> {
-    return this.request<CreateSigningKeyResponse>('POST', '/v1/signing-keys', input);
+  async createSigningKey(clientId: string, input?: CreateSigningKeyRequest): Promise<CreateSigningKeyResponse> {
+    return this.request<CreateSigningKeyResponse>('POST', `/v1/api-clients/${encodeURIComponent(clientId)}/signing-keys`, input ?? {});
   }
 
   async listSigningKeys(clientId: string): Promise<ListSigningKeysResponse> {
-    return this.request<ListSigningKeysResponse>('GET', `/v1/signing-keys?clientId=${encodeURIComponent(clientId)}`);
+    return this.request<ListSigningKeysResponse>('GET', `/v1/api-clients/${encodeURIComponent(clientId)}/signing-keys`);
   }
 
-  async rotateSigningKey(keyId: string, input: RotateSigningKeyRequest): Promise<RotateSigningKeyResponse> {
-    return this.request<RotateSigningKeyResponse>('POST', `/v1/signing-keys/${encodeURIComponent(keyId)}/rotate`, input);
+  async rotateSigningKey(clientId: string, input: RotateSigningKeyRequest): Promise<RotateSigningKeyResponse> {
+    return this.request<RotateSigningKeyResponse>('POST', `/v1/api-clients/${encodeURIComponent(clientId)}/signing-keys/rotate`, input);
   }
 
-  async revokeSigningKey(keyId: string): Promise<ClientSigningKeyResponse> {
-    return this.request<ClientSigningKeyResponse>('POST', `/v1/signing-keys/${encodeURIComponent(keyId)}/revoke`);
+  async revokeSigningKey(clientId: string, signingKeyId: string): Promise<ClientSigningKeyResponse> {
+    return this.request<ClientSigningKeyResponse>('POST', `/v1/api-clients/${encodeURIComponent(clientId)}/signing-keys/${encodeURIComponent(signingKeyId)}/revoke`);
   }
 
   async confirmFakeGatewayPayment(input: ConfirmFakeGatewayPaymentRequest): Promise<ConfirmFakeGatewayPaymentResponse> {
@@ -337,6 +353,20 @@ export class PaymentOrchestrationClient {
     if (!arg) return undefined;
     if (typeof arg === 'string') return arg;
     return arg.merchantId;
+  }
+
+  private requireConfigMerchantId(methodName: string): string {
+    if (!this.configMerchantId) {
+      throw new Error(`${methodName} requires merchantId or client config.merchantId`);
+    }
+    return this.configMerchantId;
+  }
+
+  private resolveMerchantProviderAccountArgs(first: string, second?: string): { merchantId: string; providerAccountId: string } {
+    if (second) {
+      return { merchantId: first, providerAccountId: second };
+    }
+    return { merchantId: this.requireConfigMerchantId('provider account method operation'), providerAccountId: first };
   }
 
 }
