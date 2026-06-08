@@ -1,37 +1,8 @@
-/**
- * client — typed HTTP client for payment-orchestration-service.
- *
- * Targets `/v1/...` paths for the standalone payment-orchestration-service.
- * Supports custom headers: Authorization: Bearer, x-nf-api-key, x-payment-merchant-id, x-source-app.
- *
- * Fetch-compatible; uses the global `fetch` API (Node 18+ / modern browsers).
- * No React dependency. No external tenant dependency.
- *
- * Phase 8A: methods implemented as real HTTP wrappers.
- * Phase 8B: class renamed to PaymentOrchestrationClient. PaymentEngineClient is a deprecated alias.
- * Phase 8D Hardening:
- *   - merchantId injected into POST bodies from config when not provided in input.
- *   - GET status/refundability: merchantId from config used via x-payment-merchant-id header.
- *   - Response types updated to rich service shapes.
- *   - confirmFakeGatewayPayment: merchantId optional, falls back to config.
- * Phase 8K:
- *   - Added refreshProviderStatus() and getReadiness() methods.
- *   - Error parsing updated for frozen nested error envelope:
- *     { ok: false, error: { code, message, details } }
- *   - PaymentOrchestrationClientError now carries `details` field.
- * Phase S6:
- *   - Added `apiKey` config field (nf.<env>.<credentialId>.<secret>).
- *   - apiKey is sent as `Authorization: Bearer <apiKey>` (primary S1-S5 auth method).
- *   - Legacy `serviceToken` still supported via x-payment-orchestration-service-token.
- *   - Auth priority: apiKey > serviceToken (legacy).
- */
-
 import {
   hashBody,
   buildCanonicalString,
   computeSignature,
   SIGNATURE_VERSION,
-  CANONICAL_ALGORITHM,
 } from '@northflow/payment-orchestration-core';
 import { PaymentOrchestrationClientError, PaymentOrchestrationNetworkError } from './errors.ts';
 import type {
@@ -58,7 +29,6 @@ import type {
   RefreshProviderStatusRequest,
   RefreshProviderStatusResponse,
   ReadinessResponse,
-  ProviderAccountMethodResponse,
   UpsertProviderAccountMethodRequest,
   UpsertProviderAccountMethodResponse,
   SyncProviderAccountMethodsResponse,
@@ -71,11 +41,6 @@ import type {
   RotateSigningKeyResponse,
   ClientSigningKeyResponse,
 } from './types.ts';
-
-// ── S9.4: HMAC signing helpers ────────────────────────────────────────────────
-// Canonical string construction and signing are delegated to
-// @northflow/payment-orchestration-core to ensure service and client use
-// identical algorithms. No local reimplementation of HMAC or body hashing.
 
 interface SigningHeaders {
   'x-nf-client-id': string;
@@ -134,27 +99,17 @@ export class PaymentOrchestrationClient {
   constructor(config: PaymentOrchestrationClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, '');
     this.configMerchantId = config.merchantId;
-    this.signing = (config.signing && config.signing.enabled !== false) ? config.signing : null;
-    this.defaultHeaders = {
-      'Content-Type': 'application/json',
-    };
-    // Auth priority: apiKey (S1-S5 per-client credential) > serviceToken (legacy).
+    this.signing = config.signing && config.signing.enabled !== false ? config.signing : null;
+    this.defaultHeaders = { 'Content-Type': 'application/json' };
+
     if (config.apiKey) {
-      // Primary S1-S5 auth: Authorization: Bearer <nf.env.credentialId.secret>
       this.defaultHeaders['authorization'] = `Bearer ${config.apiKey}`;
     } else if (config.serviceToken) {
-      // Legacy fallback — only when no apiKey is provided.
       this.defaultHeaders['x-payment-orchestration-service-token'] = config.serviceToken;
     }
-    if (config.merchantId) {
-      this.defaultHeaders['x-payment-merchant-id'] = config.merchantId;
-    }
-    if (config.sourceApp) {
-      this.defaultHeaders['x-source-app'] = config.sourceApp;
-    }
+    if (config.merchantId) this.defaultHeaders['x-payment-merchant-id'] = config.merchantId;
+    if (config.sourceApp) this.defaultHeaders['x-source-app'] = config.sourceApp;
   }
-
-  // ── Internal helpers ────────────────────────────────────────────────────────
 
   private async request<T>(
     method: string,
@@ -162,12 +117,9 @@ export class PaymentOrchestrationClient {
     body?: unknown,
     extraHeaders?: Record<string, string>,
   ): Promise<T> {
-    const pathWithQuery = path;
     const questionMark = path.indexOf('?');
     const purePathStr = questionMark >= 0 ? path.slice(0, questionMark) : path;
     const queryStr = questionMark >= 0 ? path.slice(questionMark) : '';
-
-    const url = `${this.baseUrl}${pathWithQuery}`;
     const headers: Record<string, string> = { ...this.defaultHeaders, ...extraHeaders };
 
     let bodyBytes: Uint8Array | null = null;
@@ -177,25 +129,16 @@ export class PaymentOrchestrationClient {
       bodyBytes = new TextEncoder().encode(bodyString);
     }
 
-    // S9.4: Attach HMAC signing headers when signing is configured.
     if (this.signing) {
-      const sigHeaders = await buildSigningHeaders(
-        this.signing,
-        method,
-        purePathStr,
-        queryStr,
-        bodyBytes,
+      Object.assign(
+        headers,
+        await buildSigningHeaders(this.signing, method, purePathStr, queryStr, bodyBytes),
       );
-      Object.assign(headers, sigHeaders);
     }
 
     let response: Response;
     try {
-      response = await fetch(url, {
-        method,
-        headers,
-        body: bodyString,
-      });
+      response = await fetch(`${this.baseUrl}${path}`, { method, headers, body: bodyString });
     } catch (err: unknown) {
       throw new PaymentOrchestrationNetworkError(
         `Network error calling payment-orchestration-service: ${String(err)}`,
@@ -204,10 +147,7 @@ export class PaymentOrchestrationClient {
     }
 
     const data = await response.json().catch(() => null);
-
     if (!response.ok) {
-      // Phase 8K frozen error envelope: { ok: false, error: { code, message, details } }
-      // Also handles legacy flat format: { ok: false, error: 'CODE', message: '...' }
       const errorObj = data != null && typeof data === 'object' && 'error' in data
         ? (data as Record<string, unknown>)['error']
         : null;
@@ -219,14 +159,12 @@ export class PaymentOrchestrationClient {
       if (errorObj != null && typeof errorObj === 'object') {
         const eo = errorObj as Record<string, unknown>;
         code = typeof eo['code'] === 'string' ? eo['code'] : undefined;
-        message = typeof eo['message'] === 'string'
-          ? eo['message'] as string
-          : `HTTP ${response.status}`;
+        message = typeof eo['message'] === 'string' ? eo['message'] : `HTTP ${response.status}`;
         details = eo['details'] ?? null;
       } else {
         code = typeof errorObj === 'string' ? errorObj : undefined;
         message = data != null && typeof data === 'object' && 'message' in data
-          ? String((data as any).message)
+          ? String((data as Record<string, unknown>)['message'])
           : `HTTP ${response.status}`;
       }
 
@@ -240,8 +178,6 @@ export class PaymentOrchestrationClient {
 
     return data as T;
   }
-
-  // ── Payment Intent ──────────────────────────────────────────────────────────
 
   async createPaymentIntent(input: CreatePaymentIntentRequest): Promise<PaymentIntentResponse> {
     return this.request<PaymentIntentResponse>('POST', '/v1/payment-intents', this.withMerchantId(input));
@@ -267,8 +203,6 @@ export class PaymentOrchestrationClient {
     return this.request<PaymentIntentPaymentOptionsResponse>('GET', `/v1/payment-intents/${encodeURIComponent(intentId)}/payment-options`, undefined, this.merchantHeader(merchantId));
   }
 
-  // ── Payment Operations ──────────────────────────────────────────────────────
-
   async refundTransaction(intentId: string, transactionId: string, input: RefundPaymentTransactionRequest): Promise<RefundPaymentTransactionResponse> {
     return this.request<RefundPaymentTransactionResponse>('POST', `/v1/payment-intents/${encodeURIComponent(intentId)}/transactions/${encodeURIComponent(transactionId)}/refund`, this.withMerchantId(input));
   }
@@ -280,8 +214,6 @@ export class PaymentOrchestrationClient {
   async reconcilePaymentIntentTotals(intentId: string, input: ReconcilePaymentIntentTotalsRequest): Promise<ReconcilePaymentIntentTotalsResponse> {
     return this.request<ReconcilePaymentIntentTotalsResponse>('POST', `/v1/payment-intents/${encodeURIComponent(intentId)}/reconcile-totals`, this.withMerchantId(input));
   }
-
-  // ── Merchant / Provider Admin ───────────────────────────────────────────────
 
   async createMerchant(input: CreateMerchantRequest): Promise<MerchantResponse> {
     return this.request<MerchantResponse>('POST', '/v1/merchants', input);
@@ -307,8 +239,6 @@ export class PaymentOrchestrationClient {
     return this.request<SyncProviderAccountMethodsResponse>('POST', `/v1/provider-accounts/${encodeURIComponent(providerAccountId)}/methods/sync`, undefined, this.merchantHeader(merchantId));
   }
 
-  // ── Signing Key Admin ───────────────────────────────────────────────────────
-
   async createSigningKey(input: CreateSigningKeyRequest): Promise<CreateSigningKeyResponse> {
     return this.request<CreateSigningKeyResponse>('POST', '/v1/signing-keys', input);
   }
@@ -325,8 +255,6 @@ export class PaymentOrchestrationClient {
     return this.request<ClientSigningKeyResponse>('POST', `/v1/signing-keys/${encodeURIComponent(keyId)}/revoke`);
   }
 
-  // ── Dev/Test ────────────────────────────────────────────────────────────────
-
   async confirmFakeGatewayPayment(input: ConfirmFakeGatewayPaymentRequest): Promise<ConfirmFakeGatewayPaymentResponse> {
     return this.request<ConfirmFakeGatewayPaymentResponse>('POST', '/v1/dev/fake-gateway/confirm', this.withMerchantId(input));
   }
@@ -335,11 +263,10 @@ export class PaymentOrchestrationClient {
     return this.request<ReadinessResponse>('GET', '/ready');
   }
 
-  // ── Helpers ─────────────────────────────────────────────────────────────────
-
-  private withMerchantId<T extends Record<string, unknown>>(input: T): T {
-    if (input['merchantId'] || !this.configMerchantId) return input;
-    return { ...input, merchantId: this.configMerchantId };
+  private withMerchantId<T extends object>(input: T): T {
+    const currentMerchantId = (input as { merchantId?: unknown }).merchantId;
+    if (currentMerchantId || !this.configMerchantId) return input;
+    return { ...input, merchantId: this.configMerchantId } as T;
   }
 
   private merchantHeader(merchantId?: string): Record<string, string> | undefined {
