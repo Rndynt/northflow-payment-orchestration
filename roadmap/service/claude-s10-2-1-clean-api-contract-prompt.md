@@ -37,6 +37,8 @@ Northflow is not live yet. Remove redundant pre-launch compatibility APIs and ke
 
 10. Create .agents/memory/s10-2-1-clean-api-contract-validation.md with files changed, removed aliases, final SDK method list, commands run, type-check/test results, provider codes unchanged, and no route/db/schema change confirmation.
 
+11. Current docs/examples/tests must not present old aliases or providerAccountId-first calls as usable API.
+
 ## Required validation
 
 Run:
