@@ -26,30 +26,28 @@ Out of scope for the current service-security work:
 - Public provider webhook hardening.
 - Provider expansion unrelated to service auth/integration tests.
 
-## Consumer Integration Model
+## Merchant Integration Model
 
-Northflow is a central payment orchestration service used by backend applications.
+Northflow is a central payment orchestration service used by merchant backend applications.
 
-Target consumers:
+Target integrators:
 
-- Consumer A — multi-tenant POS, direct REST API integration.
-- Consumer B — multi-tenant transport/booking system, SDK integration.
-- Consumer C — payment/OTC application, direct REST API integration.
+- REST consumer backend.
+- SDK consumer backend.
+- Checkout, POS, and billing backend integrations.
 
 ```txt
-Consumer A backend  ───────┐
-Consumer B backend ───────┼──> Northflow Payment Orchestration
-Consumer C backend ───────┘
+merchant backend ──> Northflow Payment Orchestration ──> provider
 ```
 
-Frontend clients, tenant users, cashier terminals, and customers must not call the internal service API directly. Consumer backends call Northflow on behalf of their own business tenants/orders/bookings/payment flows.
+Frontend clients, tenant users, cashier terminals, and customers must not call the Northflow service API directly. Merchant backends call Northflow on behalf of their own business tenants, orders, invoices, bookings, and payment flows.
 
 ## Identity Model
 
 Northflow separates caller identity from payment ownership.
 
 ```txt
-API Client        = consumer backend application using Northflow
+API Client        = merchant backend application using Northflow
 ClientCredential  = API credential owned by an API client
 Merchant          = business/tenant/payment owner in Northflow
 ProviderAccount   = payment provider account for a merchant
@@ -62,22 +60,22 @@ AuditLog          = immutable service activity trail
 Rule:
 
 ```txt
-1 consumer application environment = 1 API client identity
+1 merchant backend environment = 1 API client identity
 1 API client may have multiple credentials for rotation
-1 tenant/business/payment owner    = 1 merchant in Northflow
+1 tenant/business/payment owner = 1 merchant in Northflow
 ```
 
 Examples:
 
 ```txt
-API Client: client_consumer-a_prod
-Merchant:   mer_cafe_mawar
+API Client: client_checkout_backend_prod
+Merchant:   mer_cafe_example
 
-API Client: client_consumer-b_prod
-Merchant:   mer_nusa_shuttle
+API Client: client_billing_backend_prod
+Merchant:   mer_subscription_business
 
-API Client: client_consumer-c_prod
-Merchant:   mer_consumer-c
+API Client: client_pos_backend_prod
+Merchant:   mer_retail_outlet
 ```
 
 ## Security Direction
@@ -167,16 +165,16 @@ Freeze the service security model before implementation changes.
 ## Key Decisions
 
 ```txt
-API Client = consumer backend application
+API Client = merchant backend application
 Merchant   = business/tenant/payment owner
 ```
 
-Official `sourceApp` values:
+Example `sourceApp` values:
 
 ```txt
-consumer-a
-consumer-b
-consumer-c
+checkout-backend
+billing-backend
+pos-backend
 internal
 ```
 
@@ -194,7 +192,7 @@ internal
 
 ## Goal
 
-Add persistent API client identity so Northflow can identify the consumer backend application calling the service.
+Add persistent API client identity so Northflow can identify the merchant backend application calling the service.
 
 ## Implemented Data Model
 
@@ -239,8 +237,8 @@ The auth middleware attaches:
 
 ```ts
 req.auth = {
-  clientId: "client_consumer-a_prod",
-  sourceApp: "consumer-a",
+  clientId: "client_checkout_backend_prod",
+  sourceApp: "checkout-backend",
   environment: "production",
   credentialId: "...",
   scopes: [...]
@@ -255,7 +253,7 @@ Legacy global token remains compatibility mode only and is disabled by default i
 
 ## Goal
 
-Prevent one consumer application from accessing another application's merchants.
+Prevent one merchant application from accessing another application's merchants.
 
 ## Rule
 
@@ -285,7 +283,7 @@ Create-merchant rule:
 
 Prevent caller spoofing by requiring payload `sourceApp` to match authenticated client `sourceApp`.
 
-If the authenticated client source app is `consumer-a`, accepted payload source app must also be `consumer-a`.
+If the authenticated client source app is `checkout-backend`, accepted payload source app must also be `checkout-backend`.
 
 Mismatched source app returns:
 
@@ -331,14 +329,7 @@ Scope rejection returns:
 
 Make direct REST API and SDK integrations use the same service contract.
 
-REST consumers:
-
-- Consumer A.
-- Consumer C.
-
-SDK consumer:
-
-- Consumer B.
+REST consumers and SDK consumers are both supported merchant backend integration paths.
 
 Required request properties:
 
@@ -369,9 +360,9 @@ Prove multi-app integration works and isolation does not leak.
 Tested flows:
 
 ```txt
-Consumer A REST positive flow
-Consumer B SDK positive flow
-Consumer C REST positive flow
+REST consumer positive flow
+SDK consumer positive flow
+additional merchant backend positive flow
 cross-app merchant denial
 sourceApp spoofing denial
 missing-scope denial
@@ -386,7 +377,7 @@ REST vs SDK parity
 
 Allow API clients to discover which payment methods are available for a merchant/provider account, and validate that a selected payment method is enabled before creating a gateway payment.
 
-Payment methods originate from provider capabilities. Northflow stores enabled/allowed methods for each merchant provider account and consumer apps must request payment options instead of hard-coding provider method availability.
+Payment methods originate from provider capabilities. Northflow stores enabled/allowed methods for each merchant provider account and merchant applications must request payment options instead of hard-coding provider method availability.
 
 ## Implemented Data Model
 
@@ -784,12 +775,32 @@ docs/security/signed-requests-hmac.md
 
 ---
 
+## S10.2 — Integration Contract & Merchant Onboarding Guide ✅
+
+Status: completed.
+
+Deliverables:
+
+- Merchant integration guide and backend-only secret handling documentation.
+- SDK and REST quickstarts with idempotency, signed requests, payment options, polling, refund, and void guidance.
+- Merchant backend sample artifacts under `examples/merchant-backend/`.
+- SDK/REST route parity audit and smoke tests for the public integration contract.
+- Validation report at `.agents/memory/s10-2-integration-contract-merchant-onboarding-validation.md`.
+
+Scope guardrails preserved:
+
+- No dashboard implementation.
+- No merchant outbound webhook/callback delivery implementation.
+- No new provider integration.
+
+---
+
 ## S9.5 — mTLS / Private Network
 
 Advanced future options:
 
 ```txt
-mTLS between consumer backends and Northflow
+mTLS between merchant backends and Northflow
 private service network
 VPN/Tailscale/internal gateway
 API gateway in front of Northflow
@@ -803,7 +814,7 @@ Cloudflare mTLS / Zero Trust integration
 Completed service phases:
 
 ```txt
-S1 -> S2 -> S3 -> S4 -> S5 -> S6 -> S7 -> S7.5 -> S8 -> S9.1 -> S9.2 -> S9.3 -> S9.4 -> S10
+S1 -> S2 -> S3 -> S4 -> S5 -> S6 -> S7 -> S7.5 -> S8 -> S9.1 -> S9.2 -> S9.3 -> S9.4 -> S10 -> S10.2
 ```
 
 Next recommended service protection phases:
@@ -820,4 +831,5 @@ S9.2 rate limit                ✅
 S9.3 network-level protection  ✅
 S9.4 signed requests / HMAC    ✅
 S10  admin bootstrap runtime   ✅
+S10.2 integration contract     ✅
 ```
