@@ -38,6 +38,7 @@ import {
 import { createAuditLogsRouter } from './routes/auditLogs.ts';
 import { createApiClientCredentialsRouter } from './routes/apiClientCredentials.ts';
 import { createSigningKeysRouter } from './routes/signingKeys.ts';
+import { createMerchantWebhooksRouter } from './routes/merchantWebhooks.ts';
 import { createAuthMiddleware } from './middleware/auth.ts';
 import { createRateLimitMiddleware } from './middleware/rateLimit.ts';
 import { errorHandler } from './middleware/errors.ts';
@@ -133,6 +134,12 @@ export function createApp(container: ServiceContainer): express.Application {
   app.use(
     '/v1/merchants/:merchantId/provider-accounts/:providerAccountId',
     createProviderAccountMethodsSubRouter(container),
+  );
+
+  // ── S10.3: Merchant outbound webhook endpoints/deliveries ───────────────
+  app.use(
+    '/v1/merchants/:merchantId/webhooks',
+    createMerchantWebhooksRouter(container),
   );
 
   // ── S7.5: Merchant-level payment methods (active methods across all PA) ────

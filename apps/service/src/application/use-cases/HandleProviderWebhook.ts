@@ -42,6 +42,7 @@ import type {
 import type { FakeGatewayWebhookHandler } from '../../infrastructure/providers/FakeGatewayWebhookHandler.ts';
 import type { ProviderRegistry } from '../../infrastructure/providers/providerRegistry.ts';
 import { computeIntentStatus } from './intentStatusHelper.ts';
+import type { MerchantWebhookOutbox } from '../merchant-webhooks/events.ts';
 import { redactSensitiveRecord } from '../payment-state/redaction.ts';
 
 const TERMINAL_STATUSES = new Set(['succeeded', 'failed', 'cancelled', 'expired', 'reversed']);
@@ -70,6 +71,7 @@ export class HandleProviderWebhook {
     private readonly providerEventRepo: PaymentProviderEventRepository,
     private readonly fakeGatewayHandler: FakeGatewayWebhookHandler,
     private readonly providerRegistry?: ProviderRegistry,
+    private readonly merchantWebhookOutbox?: MerchantWebhookOutbox,
   ) {}
 
   async execute(input: HandleProviderWebhookInput): Promise<HandleProviderWebhookOutput> {
@@ -269,11 +271,14 @@ export class HandleProviderWebhook {
 
       await this.providerEventRepo.markProcessed(eventRow.id);
 
+      if (tx) await this.merchantWebhookOutbox?.emitTransactionStatus({ transaction: tx, intent, dedupeSuffix: `provider:${eventRow.id}` });
+
       // Reload intent for final state.
       if (tx) {
         const freshIntent = await this.intentRepo.findById(tx.intentId, tx.merchantId);
         if (freshIntent) intent = freshIntent;
       }
+      if (intent) await this.merchantWebhookOutbox?.emitIntentStatus({ intent, transaction: tx, dedupeSuffix: `provider:${eventRow.id}` });
 
       return {
         eventId: eventRow.id,

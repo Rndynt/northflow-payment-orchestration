@@ -94,7 +94,7 @@ Payment methods are not a global catalog. Northflow returns methods enabled on t
 
 ## Status polling
 
-The merchant backend polls Northflow. The merchant frontend polls the merchant backend. Merchant outbound webhook/callback delivery is a future phase and is not part of S10.2.
+The merchant backend polls Northflow. The merchant frontend polls the merchant backend. Merchant outbound webhook/callback delivery is available in S10.3 for backend-to-backend event delivery; polling remains supported.
 
 ## Refund/void
 

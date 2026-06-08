@@ -9,7 +9,7 @@ import { loadEnv } from '../config/env.ts';
 import { createContainer } from '../container.ts';
 import type { ServiceContainer } from '../container.ts';
 
-export type WorkerOperation = 'expire-stale' | 'reconcile-intent' | 'reprocess-provider-events' | 'all-safe';
+export type WorkerOperation = 'expire-stale' | 'reconcile-intent' | 'reprocess-provider-events' | 'deliver-merchant-webhooks' | 'all-safe';
 
 export interface WorkerDispatchInput {
   operation: WorkerOperation;
@@ -42,6 +42,16 @@ export async function dispatchWorkerOperation(
     });
   }
 
+  if (input.operation === 'deliver-merchant-webhooks' || input.operation === 'all-safe') {
+    if (!container.useCases.deliverMerchantWebhooks) {
+      throw new Error('Deliver merchant webhooks use case is not wired.');
+    }
+    results['deliverMerchantWebhooks'] = await container.useCases.deliverMerchantWebhooks.execute({
+      now: input.now,
+      limit: input.limit,
+    });
+  }
+
   if (input.operation === 'reprocess-provider-events' || input.operation === 'all-safe') {
     if (!container.useCases.reprocessProviderEvents) {
       throw new Error('Reprocess provider events use case is not wired.');
@@ -68,8 +78,8 @@ export async function dispatchWorkerOperation(
 function parseArgs(argv: string[]): WorkerDispatchInput {
   const [operationRaw, ...rest] = argv;
   const operation = operationRaw as WorkerOperation | undefined;
-  if (!operation || !['expire-stale', 'reconcile-intent', 'reprocess-provider-events', 'all-safe'].includes(operation)) {
-    throw new Error('Usage: run.ts <expire-stale|reconcile-intent|reprocess-provider-events|all-safe> [--merchant-id id] [--intent-id id] [--limit n] [--older-than-minutes n] [--now iso]');
+  if (!operation || !['expire-stale', 'reconcile-intent', 'reprocess-provider-events', 'deliver-merchant-webhooks', 'all-safe'].includes(operation)) {
+    throw new Error('Usage: run.ts <expire-stale|reconcile-intent|reprocess-provider-events|deliver-merchant-webhooks|all-safe> [--merchant-id id] [--intent-id id] [--limit n] [--older-than-minutes n] [--now iso]');
   }
 
   const input: WorkerDispatchInput = { operation };

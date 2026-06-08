@@ -38,8 +38,8 @@ test('S10.2 REST quickstart includes required auth, merchant, source app, and co
   }
 });
 
-test('S10.2 docs document merchant outbound webhook as future, not current', () => {
+test('S10.3 docs document merchant outbound webhook as current backend-to-backend option', () => {
   const text = integrationDocsText();
-  assert.match(text, /Merchant outbound webhook\/callback delivery is a future phase and is not part of S10\.2\./);
-  assert.doesNotMatch(text, /merchant outbound webhook is implemented|callback delivery is implemented/i);
+  assert.match(text, /Merchant outbound webhook\/callback delivery is available in S10\.3/);
+  assert.doesNotMatch(text, /Merchant outbound webhook\/callback delivery is a future phase/i);
 });

@@ -305,3 +305,58 @@ export const poClientMerchantAccess = pgTable('po_client_merchant_access', {
   merchantIdx: index('po_client_merchant_access_merchant_idx').on(table.merchantId),
   statusIdx: index('po_client_merchant_access_status_idx').on(table.status),
 }));
+
+export const poMerchantWebhookEndpoints = pgTable('po_merchant_webhook_endpoints', {
+  id: text('id').primaryKey(),
+  merchantId: text('merchant_id').notNull().references(() => poMerchants.id, { onDelete: 'cascade' }),
+  url: text('url').notNull(),
+  status: text('status').notNull().default('active'),
+  subscribedEvents: jsonb('subscribed_events').notNull().default([]),
+  secretHash: text('secret_hash').notNull(),
+  secretPrefix: text('secret_prefix').notNull(),
+  metadata: jsonb('metadata').notNull().default({}),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  disabledAt: timestamp('disabled_at'),
+}, (table) => ({
+  merchantIdx: index('po_mwe_merchant_idx').on(table.merchantId),
+  statusIdx: index('po_mwe_status_idx').on(table.status),
+}));
+
+export const poMerchantWebhookEvents = pgTable('po_merchant_webhook_events', {
+  id: text('id').primaryKey(),
+  merchantId: text('merchant_id').notNull().references(() => poMerchants.id, { onDelete: 'cascade' }),
+  eventType: text('event_type').notNull(),
+  resourceType: text('resource_type').notNull(),
+  resourceId: text('resource_id').notNull(),
+  payload: jsonb('payload').notNull(),
+  dedupeKey: text('dedupe_key').notNull(),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+  merchantIdx: index('po_mwv_events_merchant_idx').on(table.merchantId),
+  resourceIdx: index('po_mwv_events_resource_idx').on(table.resourceType, table.resourceId),
+  dedupeUnique: uniqueIndex('po_mwv_events_dedupe_unique').on(table.merchantId, table.dedupeKey),
+}));
+
+export const poMerchantWebhookDeliveries = pgTable('po_merchant_webhook_deliveries', {
+  id: text('id').primaryKey(),
+  eventId: text('event_id').notNull().references(() => poMerchantWebhookEvents.id, { onDelete: 'cascade' }),
+  endpointId: text('endpoint_id').notNull().references(() => poMerchantWebhookEndpoints.id, { onDelete: 'cascade' }),
+  merchantId: text('merchant_id').notNull().references(() => poMerchants.id, { onDelete: 'cascade' }),
+  status: text('status').notNull().default('queued'),
+  attemptCount: integer('attempt_count').notNull().default(0),
+  maxAttempts: integer('max_attempts').notNull().default(5),
+  nextAttemptAt: timestamp('next_attempt_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  lastAttemptAt: timestamp('last_attempt_at'),
+  lastResponseStatus: integer('last_response_status'),
+  lastResponseBodyTruncated: text('last_response_body_truncated'),
+  lastError: text('last_error'),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  deliveredAt: timestamp('delivered_at'),
+}, (table) => ({
+  dueIdx: index('po_mwv_deliveries_due_idx').on(table.status, table.nextAttemptAt),
+  merchantIdx: index('po_mwv_deliveries_merchant_idx').on(table.merchantId),
+  endpointIdx: index('po_mwv_deliveries_endpoint_idx').on(table.endpointId),
+  eventEndpointUnique: uniqueIndex('po_mwv_deliveries_event_endpoint_unique').on(table.eventId, table.endpointId),
+}));

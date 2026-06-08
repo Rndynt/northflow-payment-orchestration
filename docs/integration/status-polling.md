@@ -15,4 +15,8 @@ The merchant backend polls Northflow. The frontend polls the merchant backend an
 - Stop when the intent reaches a terminal local outcome.
 - Handle customer return pages and background jobs with the same backend status endpoint.
 
-Merchant outbound webhook/callback delivery is a future phase and is not part of S10.2.
+Merchant outbound webhook/callback delivery is available in S10.3 for backend-to-backend event delivery; polling remains supported.
+
+## Relationship to merchant outbound webhooks
+
+Status polling remains supported for SDK and REST consumers. Merchant outbound webhooks are also available for event-driven payment lifecycle updates; use polling as a fallback, reconciliation tool, or for backends that cannot receive callbacks. Webhook receivers should handle events idempotently by event id and resource id.

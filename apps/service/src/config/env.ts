@@ -50,6 +50,10 @@ export interface PaymentOrchestrationServiceConfig {
   signedRequestsMode: 'disabled' | 'optional' | 'required';
   signedRequestMaxSkewSeconds: number;
   signedRequestNonceTtlSeconds: number;
+  outboundWebhooksEnabled: boolean;
+  outboundWebhookTimeoutMs: number;
+  outboundWebhookMaxAttempts: number;
+  outboundWebhookResponseBodyLimit: number;
 }
 
 export function loadEnv(): PaymentOrchestrationServiceConfig {
@@ -142,6 +146,11 @@ export function loadEnv(): PaymentOrchestrationServiceConfig {
     signedRequestMaxSkewSeconds,
   );
 
+  const outboundWebhooksEnabled = (process.env['PAYMENT_ORCHESTRATION_OUTBOUND_WEBHOOKS_ENABLED'] ?? 'true').trim() === 'true';
+  const outboundWebhookTimeoutMs = parseInt(process.env['PAYMENT_ORCHESTRATION_OUTBOUND_WEBHOOK_TIMEOUT_MS'] ?? '10000', 10);
+  const outboundWebhookMaxAttempts = parseInt(process.env['PAYMENT_ORCHESTRATION_OUTBOUND_WEBHOOK_MAX_ATTEMPTS'] ?? '5', 10);
+  const outboundWebhookResponseBodyLimit = parseInt(process.env['PAYMENT_ORCHESTRATION_OUTBOUND_WEBHOOK_RESPONSE_BODY_LIMIT'] ?? '2048', 10);
+
   return {
     port,
     nodeEnv,
@@ -165,5 +174,9 @@ export function loadEnv(): PaymentOrchestrationServiceConfig {
     signedRequestsMode,
     signedRequestMaxSkewSeconds,
     signedRequestNonceTtlSeconds,
+    outboundWebhooksEnabled,
+    outboundWebhookTimeoutMs,
+    outboundWebhookMaxAttempts,
+    outboundWebhookResponseBodyLimit,
   };
 }

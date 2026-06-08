@@ -33,6 +33,16 @@ import type {
   MarkIdempotencyFailedInput,
 } from '../domain/PaymentIdempotencyKey';
 import type { AuditLog, AuditActorType, AuditStatus } from '../domain/AuditLog';
+import type {
+  MerchantWebhookEndpointDTO,
+  MerchantWebhookEndpointStatus,
+  MerchantWebhookEventDTO,
+  MerchantWebhookEventType,
+  MerchantWebhookResourceType,
+  MerchantWebhookPayloadEnvelope,
+  MerchantWebhookDeliveryDTO,
+  MerchantWebhookDeliveryStatus,
+} from '../domain/MerchantWebhook';
 
 // ── Merchant ──────────────────────────────────────────────────────────────────
 
@@ -497,4 +507,62 @@ export interface PaymentIdempotencyRepository {
   find(input: FindIdempotencyKeyInput): Promise<PaymentIdempotencyKeyDTO | null>;
   markCompleted(input: MarkIdempotencyCompletedInput): Promise<void>;
   markFailed(input: MarkIdempotencyFailedInput): Promise<void>;
+}
+
+
+// ── Merchant Outbound Webhooks ───────────────────────────────────────────────
+
+export interface CreateMerchantWebhookEndpointInput {
+  id: string;
+  merchantId: string;
+  url: string;
+  subscribedEvents: MerchantWebhookEventType[];
+  secretHash: string;
+  secretPrefix: string;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface MerchantWebhookEndpointRepository {
+  create(input: CreateMerchantWebhookEndpointInput): Promise<MerchantWebhookEndpointDTO>;
+  findById(id: string, merchantId: string): Promise<MerchantWebhookEndpointDTO | null>;
+  listByMerchant(merchantId: string): Promise<MerchantWebhookEndpointDTO[]>;
+  listActiveByMerchantAndEvent(merchantId: string, eventType: MerchantWebhookEventType): Promise<MerchantWebhookEndpointDTO[]>;
+  updateSecret(input: { id: string; merchantId: string; secretHash: string; secretPrefix: string }): Promise<MerchantWebhookEndpointDTO>;
+  updateStatus(input: { id: string; merchantId: string; status: MerchantWebhookEndpointStatus; disabledAt?: Date | null }): Promise<MerchantWebhookEndpointDTO>;
+}
+
+export interface CreateMerchantWebhookEventInput {
+  id: string;
+  merchantId: string;
+  eventType: MerchantWebhookEventType;
+  resourceType: MerchantWebhookResourceType;
+  resourceId: string;
+  payload: MerchantWebhookPayloadEnvelope;
+  dedupeKey: string;
+}
+
+export interface MerchantWebhookEventRepository {
+  createOrGet(input: CreateMerchantWebhookEventInput): Promise<{ event: MerchantWebhookEventDTO; created: boolean }>;
+  findById(id: string, merchantId: string): Promise<MerchantWebhookEventDTO | null>;
+}
+
+export interface CreateMerchantWebhookDeliveryInput {
+  id: string;
+  eventId: string;
+  endpointId: string;
+  merchantId: string;
+  maxAttempts: number;
+  nextAttemptAt?: Date;
+}
+
+export interface MerchantWebhookDeliveryRepository {
+  create(input: CreateMerchantWebhookDeliveryInput): Promise<MerchantWebhookDeliveryDTO>;
+  findById(id: string, merchantId: string): Promise<MerchantWebhookDeliveryDTO | null>;
+  listByMerchant(input: { merchantId: string; endpointId?: string | null; limit?: number }): Promise<MerchantWebhookDeliveryDTO[]>;
+  findByEventAndEndpoint(eventId: string, endpointId: string): Promise<MerchantWebhookDeliveryDTO | null>;
+  claimDue(input: { now: Date; limit: number }): Promise<MerchantWebhookDeliveryDTO[]>;
+  markSucceeded(input: { id: string; merchantId: string; responseStatus: number; responseBodyTruncated: string | null; now: Date }): Promise<MerchantWebhookDeliveryDTO>;
+  markFailed(input: { id: string; merchantId: string; responseStatus?: number | null; responseBodyTruncated?: string | null; error?: string | null; nextAttemptAt: Date; now: Date }): Promise<MerchantWebhookDeliveryDTO>;
+  markDead(input: { id: string; merchantId: string; responseStatus?: number | null; responseBodyTruncated?: string | null; error?: string | null; now: Date }): Promise<MerchantWebhookDeliveryDTO>;
+  requeue(input: { id: string; merchantId: string; nextAttemptAt?: Date }): Promise<MerchantWebhookDeliveryDTO>;
 }
