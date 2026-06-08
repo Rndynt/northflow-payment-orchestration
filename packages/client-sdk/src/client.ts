@@ -176,9 +176,6 @@ export class PaymentOrchestrationClient {
       });
     }
 
-    // Unwrap the service's standard { ok: true, data: {...} } response envelope.
-    // All service routes return this shape for success; the typed response interfaces
-    // describe the inner `data` content, not the outer envelope.
     const envelope = data as { ok?: unknown; data?: unknown } | null;
     const unwrapped =
       envelope != null &&
@@ -283,7 +280,7 @@ export class PaymentOrchestrationClient {
   }
 
   async listProviderAccountMethods(merchantId: string, providerAccountId: string): Promise<ListProviderAccountMethodsResponse>;
-  async listProviderAccountMethods(providerAccountId: string, merchantId?: string): Promise<ListProviderAccountMethodsResponse>;
+  async listProviderAccountMethods(providerAccountId: string): Promise<ListProviderAccountMethodsResponse>;
   async listProviderAccountMethods(first: string, second?: string): Promise<ListProviderAccountMethodsResponse> {
     const { merchantId, providerAccountId } = this.resolveMerchantProviderAccountArgs(first, second);
     return this.request<ListProviderAccountMethodsResponse>('GET', `/v1/merchants/${encodeURIComponent(merchantId)}/provider-accounts/${encodeURIComponent(providerAccountId)}/methods`, undefined, this.merchantHeader(merchantId));
@@ -299,16 +296,14 @@ export class PaymentOrchestrationClient {
   }
 
   async deleteProviderAccountMethod(merchantId: string, providerAccountId: string, method: string): Promise<{ ok: true }>;
-  async deleteProviderAccountMethod(providerAccountId: string, method: string, merchantId?: string): Promise<{ ok: true }>;
+  async deleteProviderAccountMethod(providerAccountId: string, method: string): Promise<{ ok: true }>;
   async deleteProviderAccountMethod(first: string, second: string, third?: string): Promise<{ ok: true }> {
-    const merchantId = third ? first : this.requireConfigMerchantId('deleteProviderAccountMethod');
-    const providerAccountId = third ? second : first;
-    const method = third ?? second;
+    const { merchantId, providerAccountId, method } = this.resolveDeleteProviderAccountMethodArgs(first, second, third);
     return this.request<{ ok: true }>('DELETE', `/v1/merchants/${encodeURIComponent(merchantId)}/provider-accounts/${encodeURIComponent(providerAccountId)}/methods/${encodeURIComponent(method)}`, undefined, this.merchantHeader(merchantId));
   }
 
   async syncProviderAccountMethods(merchantId: string, providerAccountId: string): Promise<SyncProviderAccountMethodsResponse>;
-  async syncProviderAccountMethods(providerAccountId: string, merchantId?: string): Promise<SyncProviderAccountMethodsResponse>;
+  async syncProviderAccountMethods(providerAccountId: string): Promise<SyncProviderAccountMethodsResponse>;
   async syncProviderAccountMethods(first: string, second?: string): Promise<SyncProviderAccountMethodsResponse> {
     const { merchantId, providerAccountId } = this.resolveMerchantProviderAccountArgs(first, second);
     return this.request<SyncProviderAccountMethodsResponse>('POST', `/v1/merchants/${encodeURIComponent(merchantId)}/provider-accounts/${encodeURIComponent(providerAccountId)}/methods/sync`, undefined, this.merchantHeader(merchantId));
@@ -348,7 +343,7 @@ export class PaymentOrchestrationClient {
     const id = merchantId ?? this.configMerchantId;
     return id ? { 'x-payment-merchant-id': id } : undefined;
   }
-  /** Resolve merchantId from either a bare string or an options object { merchantId? }. */
+
   private resolveMerchantId(arg?: string | { merchantId?: string }): string | undefined {
     if (!arg) return undefined;
     if (typeof arg === 'string') return arg;
@@ -363,12 +358,36 @@ export class PaymentOrchestrationClient {
   }
 
   private resolveMerchantProviderAccountArgs(first: string, second?: string): { merchantId: string; providerAccountId: string } {
-    if (second) {
-      return { merchantId: first, providerAccountId: second };
+    if (!second) {
+      return { merchantId: this.requireConfigMerchantId('provider account method operation'), providerAccountId: first };
     }
-    return { merchantId: this.requireConfigMerchantId('provider account method operation'), providerAccountId: first };
+
+    if (this.isLikelyProviderAccountId(first) && this.isLikelyMerchantId(second)) {
+      return { merchantId: second, providerAccountId: first };
+    }
+
+    return { merchantId: first, providerAccountId: second };
   }
 
+  private resolveDeleteProviderAccountMethodArgs(first: string, second: string, third?: string): { merchantId: string; providerAccountId: string; method: string } {
+    if (!third) {
+      return { merchantId: this.requireConfigMerchantId('deleteProviderAccountMethod'), providerAccountId: first, method: second };
+    }
+
+    if (this.isLikelyProviderAccountId(first) && this.isLikelyMerchantId(third)) {
+      return { merchantId: third, providerAccountId: first, method: second };
+    }
+
+    return { merchantId: first, providerAccountId: second, method: third };
+  }
+
+  private isLikelyMerchantId(value: string): boolean {
+    return value === this.configMerchantId || value.startsWith('mer_') || value.startsWith('merchant_');
+  }
+
+  private isLikelyProviderAccountId(value: string): boolean {
+    return value.startsWith('pa_') || value.startsWith('provider_account_');
+  }
 }
 
 /** @deprecated Use PaymentOrchestrationClient instead. */
