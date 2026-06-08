@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { signMerchantWebhook, verifyMerchantWebhookSignature } from '../apps/service/src/application/merchant-webhooks/signing.ts';
 import { MerchantWebhookOutbox } from '../apps/service/src/application/merchant-webhooks/events.ts';
 import { DeliverMerchantWebhooks } from '../apps/service/src/application/merchant-webhooks/worker.ts';
+import { DrizzleMerchantWebhookDeliveryRepository } from '../apps/service/src/infrastructure/repositories/DrizzleMerchantWebhookDeliveryRepository.ts';
 import type { MerchantWebhookDeliveryDTO, MerchantWebhookEndpointDTO, MerchantWebhookEventDTO } from '@northflow/payment-orchestration-core';
 
 process.env['PAYMENT_ORCHESTRATION_SIGNING_KEY_ENCRYPTION_SECRET'] = '12345678901234567890123456789012';
@@ -79,8 +80,51 @@ test('delivery worker succeeds, retries non-2xx, marks dead, and truncates respo
   assert.equal((await deliveries.findById('del_dead', 'mer_1'))!.status, 'dead');
 });
 
+
+test('Drizzle delivery claim limits the database update to selected due rows', async () => {
+  const now = new Date('2026-06-08T00:00:00.000Z');
+  const earlier = new Date('2026-06-07T23:59:00.000Z');
+  const later = new Date('2026-06-08T00:01:00.000Z');
+  const source = readFileSync('apps/service/src/infrastructure/repositories/DrizzleMerchantWebhookDeliveryRepository.ts', 'utf8');
+  assert.match(source, /WITH\s+due\s+AS/i, 'claimDue should select due IDs before updating deliveries');
+  assert.match(source, /LIMIT\s+\$\{limit\}/, 'claimDue should bind the SQL LIMIT before the update');
+  assert.match(source, /FOR\s+UPDATE\s+SKIP\s+LOCKED/i, 'claimDue should lock selected due rows for concurrent workers');
+  assert.doesNotMatch(source, /rows\.slice\(0,\s*input\.limit\)/, 'claimDue must not slice after mass-updating due rows');
+
+  const rows: MerchantWebhookDeliveryDTO[] = [
+    { id: 'del_1', eventId: 'evt_1', endpointId: 'mwe_1', merchantId: 'mer_1', status: 'queued', attemptCount: 0, maxAttempts: 5, nextAttemptAt: earlier, lastAttemptAt: null, lastResponseStatus: null, lastResponseBodyTruncated: null, lastError: null, createdAt: earlier, updatedAt: earlier, deliveredAt: null },
+    { id: 'del_2', eventId: 'evt_2', endpointId: 'mwe_1', merchantId: 'mer_1', status: 'queued', attemptCount: 0, maxAttempts: 5, nextAttemptAt: now, lastAttemptAt: null, lastResponseStatus: null, lastResponseBodyTruncated: null, lastError: null, createdAt: now, updatedAt: now, deliveredAt: null },
+    { id: 'del_3', eventId: 'evt_3', endpointId: 'mwe_1', merchantId: 'mer_1', status: 'failed', attemptCount: 2, maxAttempts: 5, nextAttemptAt: now, lastAttemptAt: null, lastResponseStatus: 500, lastResponseBodyTruncated: 'err', lastError: 'server error', createdAt: later, updatedAt: later, deliveredAt: null },
+  ];
+  const fakeDb = {
+    execute: async () => {
+      return rows
+        .filter((r) => ['queued', 'failed'].includes(r.status) && r.nextAttemptAt <= now)
+        .sort((a, b) => a.nextAttemptAt.getTime() - b.nextAttemptAt.getTime() || a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id))
+        .slice(0, 1)
+        .map((r) => Object.assign(r, { status: 'delivering' as const, attemptCount: r.attemptCount + 1, lastAttemptAt: now, updatedAt: now }));
+    },
+  };
+
+  const claimed = await new DrizzleMerchantWebhookDeliveryRepository(fakeDb as any).claimDue({ now, limit: 1 });
+  assert.equal(claimed.length, 1);
+  assert.equal(claimed[0]!.id, 'del_1');
+  assert.equal(claimed[0]!.status, 'delivering');
+  assert.equal(claimed[0]!.attemptCount, 1);
+
+  const delivering = rows.filter((r) => r.status === 'delivering');
+  assert.equal(delivering.length, 1, 'only the selected row should become delivering');
+  assert.equal(rows.find((r) => r.id === 'del_2')!.status, 'queued');
+  assert.equal(rows.find((r) => r.id === 'del_2')!.attemptCount, 0);
+  assert.equal(rows.find((r) => r.id === 'del_3')!.status, 'failed');
+  assert.equal(rows.find((r) => r.id === 'del_3')!.attemptCount, 2);
+});
+
 test('docs do not instruct frontend/public env secret usage and provider codes remain unchanged', () => {
   const docs = readFileSync('docs/integration/merchant-outbound-webhooks.md', 'utf8') + readFileSync('docs/integration/webhook-signature-verification.md', 'utf8');
+  assert.match(docs, /webhook:manage/);
+  assert.match(docs, /webhook:read/);
+  assert.match(docs, /merchant access for the target `merchantId`/i);
   assert.doesNotMatch(docs, /NEXT_PUBLIC_.*WEBHOOK|VITE_.*WEBHOOK|frontend.*PAYMENT_ORCHESTRATION.*SECRET/i);
   const providers = readFileSync('apps/service/src/infrastructure/providers/providerRegistry.ts', 'utf8');
   assert.match(providers, /manual/);

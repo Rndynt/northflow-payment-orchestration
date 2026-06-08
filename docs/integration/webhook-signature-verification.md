@@ -19,6 +19,10 @@ Merchant outbound webhook signing is separate from provider webhook verification
 
 The signature is lowercase hex HMAC-SHA256 using the endpoint secret returned once on create or rotate.
 
+## Endpoint administration authorization
+
+Webhook endpoint administration is a backend/admin API operation. The API client must have merchant access for the target `merchantId` plus `webhook:manage` to create endpoints, disable endpoints, rotate endpoint secrets, or replay deliveries/events. Use `webhook:read` to list endpoints or delivery logs.
+
 ## TypeScript verification example
 
 ```ts
