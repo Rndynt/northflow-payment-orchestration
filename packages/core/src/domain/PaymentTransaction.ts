@@ -2,7 +2,7 @@
  * PaymentTransaction — payment transaction DTO contracts.
  *
  * Represents an individual payment attempt against a PaymentIntent.
- * Scoped by `merchantId` (not legacy `tenantId`).
+ * Scoped by `merchantId` as owner identity.
  */
 
 /**

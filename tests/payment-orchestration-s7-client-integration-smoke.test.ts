@@ -993,7 +993,7 @@ describe('S7.4 REST vs SDK parity', () => {
     }
   });
 
-  test('P02: SDK legacy serviceToken uses x-payment-orchestration-service-token', () => {
+  test('P02: SDK without apiKey does not inject service-token auth fallback', () => {
     const calls: Array<{ url: string; init: RequestInit }> = [];
     const savedFetch = globalThis.fetch;
 
@@ -1008,14 +1008,14 @@ describe('S7.4 REST vs SDK parity', () => {
     try {
       const client = new PaymentOrchestrationClient({
         baseUrl: 'http://localhost:3001',
-        serviceToken: 'legacy-token-here',
       });
       client.createMerchant({ name: 'Test' }).catch(() => {});
       assert.equal(calls.length, 1);
       const headers = calls[0]!.init.headers as Record<string, string>;
-      assert.equal(headers['x-payment-orchestration-service-token'], 'legacy-token-here');
+      assert.equal(headers['x-payment-orchestration-service-token'], undefined,
+        'SDK must not expose a service-token auth fallback');
       assert.equal(headers['authorization'], undefined,
-        'legacy mode must NOT set Authorization header');
+        'SDK without apiKey must not synthesize bearer auth');
     } finally {
       globalThis.fetch = savedFetch;
     }

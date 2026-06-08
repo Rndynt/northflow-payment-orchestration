@@ -70,7 +70,7 @@ test('PaymentOrchestrationClient.reconcilePaymentIntentTotals posts to reconcile
   try {
     const client = new PaymentOrchestrationClient({
       baseUrl: 'http://localhost:5100/',
-      serviceToken: 'service-token',
+      apiKey: 'nf.test.credential.secret',
       merchantId: 'merchant-1',
       sourceApp: 'consumer-a',
     });
@@ -82,7 +82,8 @@ test('PaymentOrchestrationClient.reconcilePaymentIntentTotals posts to reconcile
     assert.equal(calls.length, 1);
     assert.equal(calls[0]!.url, 'http://localhost:5100/v1/payment-intents/intent-1/reconcile');
     assert.equal(calls[0]!.init.method, 'POST');
-    assert.equal((calls[0]!.init.headers as Record<string, string>)['x-payment-orchestration-service-token'], 'service-token');
+    assert.equal((calls[0]!.init.headers as Record<string, string>)['authorization'], 'Bearer nf.test.credential.secret');
+    assert.equal((calls[0]!.init.headers as Record<string, string>)['x-payment-orchestration-service-token'], undefined);
     assert.equal((calls[0]!.init.headers as Record<string, string>)['x-payment-merchant-id'], 'merchant-1');
     assert.equal(calls[0]!.init.body, JSON.stringify({ merchantId: 'merchant-1' }));
   } finally {

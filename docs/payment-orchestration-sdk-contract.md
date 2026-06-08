@@ -12,8 +12,8 @@
 A typed, fetch-compatible HTTP client for the `@northflow/payment-orchestration-service` standalone API.
 
 - No React dependency
-- No legacy tenant/session dependency
-- No `@northflow/payment-orchestration-core` dependency (self-contained for portability)
+- No external tenant/session dependency
+- Uses `@northflow/payment-orchestration-core` canonical request helpers for HMAC request signing
 - Node 18+ / modern browsers
 
 ---
@@ -36,7 +36,7 @@ const client = new PaymentOrchestrationClient({
   baseUrl: 'https://payments.example.com',       // required
   apiKey: process.env.NORTHFLOW_API_KEY,          // injected as Authorization: Bearer <apiKey>
   merchantId: 'merchant-uuid',                    // optional — auto-injected into request bodies + headers
-  sourceApp: 'consumer-a',                        // optional — injected as x-source-app
+  sourceApp: 'checkout-backend',                 // optional — injected as x-source-app
   signing: { clientId, keyId, secret },           // optional — adds Northflow HMAC headers
 });
 ```
@@ -47,7 +47,6 @@ const client = new PaymentOrchestrationClient({
 |-------|------|----------|-------------|
 | `baseUrl` | `string` | Yes | Base URL of the payment-orchestration-service (no trailing slash). |
 | `apiKey` | `string` | No | Public merchant API key. Injected as `Authorization: Bearer <apiKey>`. |
-| `serviceToken` | `string` | No | Internal/legacy callers only. Injected as `x-payment-orchestration-service-token`. |
 | `signing` | `PaymentOrchestrationSigningConfig` | No | Optional Northflow HMAC request signing configuration. |
 | `merchantId` | `string` | No | Default merchant ID. Auto-injected into POST bodies and `x-payment-merchant-id` header when not explicitly provided. |
 | `sourceApp` | `string` | No | Injected as `x-source-app` header. |
@@ -59,7 +58,7 @@ const client = new PaymentOrchestrationClient({
 ### `createMerchant(input)`
 
 **Route:** `POST /v1/merchants`  
-**Auth:** service token required
+**Auth:** API key required
 
 ```ts
 async createMerchant(input: CreateMerchantRequest): Promise<MerchantResponse>
@@ -72,7 +71,7 @@ Creates or returns an existing merchant (idempotent by `sourceApp + externalRef`
 ### `createProviderAccount(merchantId, input)`
 
 **Route:** `POST /v1/merchants/:merchantId/provider-accounts`  
-**Auth:** service token required
+**Auth:** API key required
 
 ```ts
 async createProviderAccount(merchantId: string, input: CreateProviderAccountRequest): Promise<ProviderAccountResponse>
@@ -85,7 +84,7 @@ Creates a payment provider account for a merchant. `credentialsRef` is accepted 
 ### `createPaymentIntent(input)`
 
 **Route:** `POST /v1/payment-intents`  
-**Auth:** service token required
+**Auth:** API key required
 
 ```ts
 async createPaymentIntent(input: CreatePaymentIntentRequest): Promise<PaymentIntentResponse>
@@ -98,7 +97,7 @@ Creates a new payment intent. `merchantId` from input or falls back to `config.m
 ### `getPaymentIntentStatus(intentId, options?)`
 
 **Route:** `GET /v1/payment-intents/:intentId/status`  
-**Auth:** service token required
+**Auth:** API key required
 
 ```ts
 async getPaymentIntentStatus(intentId: string, options?: { merchantId?: string }): Promise<PaymentIntentStatusResponse>
@@ -111,7 +110,7 @@ Returns the current status of a payment intent, including computed fields (`isTe
 ### `createGatewayPayment(intentId, input)`
 
 **Route:** `POST /v1/payment-intents/:intentId/gateway-payments`  
-**Auth:** service token required
+**Auth:** API key required
 
 ```ts
 async createGatewayPayment(intentId: string, input: CreateGatewayPaymentRequest): Promise<GatewayPaymentResponse>
@@ -124,7 +123,7 @@ Initiates a gateway payment for an existing intent. Supports idempotency key. Re
 ### `getRefundability(intentId, options?)`
 
 **Route:** `GET /v1/payment-intents/:intentId/refundability`  
-**Auth:** service token required
+**Auth:** API key required
 
 ```ts
 async getRefundability(intentId: string, options?: { merchantId?: string }): Promise<RefundabilityResponse>
@@ -137,7 +136,7 @@ Returns the total refundable amount and per-transaction breakdown.
 ### `reconcilePaymentIntentTotals(intentId, input?)`
 
 **Route:** `POST /v1/payment-intents/:intentId/reconcile`  
-**Auth:** service token required
+**Auth:** API key required
 
 ```ts
 async reconcilePaymentIntentTotals(intentId: string, input?: ReconcilePaymentIntentTotalsRequest): Promise<ReconcilePaymentIntentTotalsResponse>
@@ -150,7 +149,7 @@ Crash-recovery endpoint. Recomputes intent totals from actual transaction state.
 ### `refreshProviderStatus(transactionId, input?)`
 
 **Route:** `POST /v1/payment-transactions/:transactionId/refresh-provider-status`  
-**Auth:** service token required
+**Auth:** API key required
 
 ```ts
 async refreshProviderStatus(transactionId: string, input?: RefreshProviderStatusRequest): Promise<RefreshProviderStatusResponse>
@@ -215,7 +214,6 @@ The SDK exports only `PaymentOrchestration*` public names. Pre-launch compatibil
 |--------|-------|--------|
 | `Content-Type` | `application/json` | Always |
 | `Authorization` | `Bearer ${config.apiKey}` | Public merchant integrations |
-| `x-payment-orchestration-service-token` | `config.serviceToken` | Internal/legacy service-token callers only |
 | `x-payment-merchant-id` | `config.merchantId` | When configured |
 | `x-source-app` | `config.sourceApp` | When configured |
 
@@ -231,7 +229,7 @@ The SDK exports only `PaymentOrchestration*` public names. Pre-launch compatibil
 
 The SDK follows the same `@northflow/payment-orchestration-*` version line. Phase 8K freezes the public method/type contract; no breaking changes will be made without a major version bump.
 
-## Legacy parity hardening: refund/void SDK methods
+## Refund/void SDK methods
 
 ### `refundPaymentTransaction(transactionId, input)`
 

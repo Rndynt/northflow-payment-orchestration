@@ -25,11 +25,10 @@
   ],
   "components": {
     "securitySchemes": {
-      "serviceToken": {
-        "type": "apiKey",
-        "in": "header",
-        "name": "x-payment-orchestration-service-token",
-        "description": "Service-to-service authentication token. Required for all /v1/... routes except /v1/webhooks."
+      "apiKey": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Public merchant API key. Required for protected /v1/... routes except /v1/webhooks."
       }
     },
     "schemas": {
@@ -128,7 +127,7 @@
         "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
       },
       "401": {
-        "description": "Unauthorized — missing or invalid service token (for protected routes) or invalid webhook signature.",
+        "description": "Unauthorized — missing or invalid API key (for protected routes) or invalid webhook signature.",
         "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
       },
       "404": {
@@ -149,7 +148,7 @@
       }
     }
   },
-  "security": [{ "serviceToken": [] }],
+  "security": [{ "apiKey": [] }],
   "paths": {
     "/health": {
       "get": {
@@ -612,7 +611,7 @@
         "tags": ["Payment Transactions"],
         "summary": "Refund a payment transaction",
         "description": "Initiate a full or partial refund for a succeeded payment transaction. Creates an outgoing refund transaction and calls the provider's refund API if supported, manual provider records an offline refund; gateway/sandbox providers without refund support return PROVIDER_REFUND_UNSUPPORTED.",
-        "security": [{ "serviceToken": [] }],
+        "security": [{ "apiKey": [] }],
         "parameters": [
           { "name": "transactionId", "in": "path", "required": true, "description": "ID of the original payment transaction to refund", "schema": { "type": "string" } },
           { "$ref": "#/components/parameters/merchantIdHeader" }
@@ -677,7 +676,7 @@
         "tags": ["Payment Transactions"],
         "summary": "Void (cancel) a payment transaction",
         "description": "Cancel a pending or requires_action payment transaction. Calls the provider's cancel API if supported, manual provider voids directly; gateway/sandbox providers without cancel support return PROVIDER_CANCEL_UNSUPPORTED. Intent totals are not changed (the transaction was never succeeded).",
-        "security": [{ "serviceToken": [] }],
+        "security": [{ "apiKey": [] }],
         "parameters": [
           { "name": "transactionId", "in": "path", "required": true, "description": "ID of the payment transaction to void", "schema": { "type": "string" } },
           { "$ref": "#/components/parameters/merchantIdHeader" }

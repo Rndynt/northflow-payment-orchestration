@@ -1,16 +1,15 @@
 /**
  * PaymentIntent — payment intent DTO contracts.
  *
- * Uses `merchantId` as the primary owner identity (not legacy `tenantId`).
+ * Uses `merchantId` as the primary owner identity.
  * Tracks the external payable reference via `externalPayableType` / `externalPayableId`
- * instead of coupling to legacy order domain.
+ * instead of coupling to a source application's payable domain.
  */
 
 /**
  * Status of a payment intent.
  *
- * Matches the legacy embedded statuses but uses explicit string union
- * rather than importing from a legacy payments domain.
+ * Defines the Northflow-owned status union as explicit string literals.
  */
 export type PaymentIntentStatus =
   | 'requires_payment'
@@ -27,7 +26,7 @@ export type PaymentIntentStatus =
  * PaymentIntentDTO — the read model returned to callers.
  *
  * Carries merchant-scoped identity (`merchantId`) and external payable references
- * (`externalPayableType`, `externalPayableId`) rather than legacy-specific fields.
+ * (`externalPayableType`, `externalPayableId`) plus consumer application fields.
  */
 export interface PaymentIntentDTO {
   id: string;

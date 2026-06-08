@@ -25,11 +25,10 @@
   ],
   "components": {
     "securitySchemes": {
-      "serviceToken": {
-        "type": "apiKey",
-        "in": "header",
-        "name": "x-payment-orchestration-service-token",
-        "description": "Service-to-service authentication token. Required for all /v1/... routes except /v1/webhooks."
+      "apiKey": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Public merchant API key. Required for protected /v1/... routes except /v1/webhooks."
       }
     },
     "schemas": {
@@ -128,7 +127,7 @@
         "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
       },
       "401": {
-        "description": "Unauthorized — missing or invalid service token (for protected routes) or invalid webhook signature.",
+        "description": "Unauthorized — missing or invalid API key (for protected routes) or invalid webhook signature.",
         "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
       },
       "404": {
@@ -149,7 +148,7 @@
       }
     }
   },
-  "security": [{ "serviceToken": [] }],
+  "security": [{ "apiKey": [] }],
   "paths": {
     "/health": {
       "get": {

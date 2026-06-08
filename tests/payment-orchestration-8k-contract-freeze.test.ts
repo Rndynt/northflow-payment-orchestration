@@ -243,7 +243,7 @@ describe('PaymentOrchestrationClient method contract (Phase 8K)', () => {
   it('has all required methods', () => {
     const client = new PaymentOrchestrationClient({
       baseUrl: 'http://localhost:5100',
-      serviceToken: 'test-token',
+      apiKey: 'nf.test.credential.secret',
     });
     const requiredMethods = [
       'createMerchant',
@@ -286,7 +286,7 @@ describe('SDK error parsing for nested error envelope (Phase 8K)', () => {
     });
 
     const { url, server } = await startTestServer(app);
-    const client = new PaymentOrchestrationClient({ baseUrl: url, serviceToken: 'dev' });
+    const client = new PaymentOrchestrationClient({ baseUrl: url, apiKey: 'nf.test.credential.secret' });
     try {
       await client.getPaymentIntentStatus('test-id', { merchantId: 'merch-1' });
       assert.fail('Should have thrown');
@@ -313,7 +313,7 @@ describe('SDK error parsing for nested error envelope (Phase 8K)', () => {
     });
 
     const { url, server } = await startTestServer(app);
-    const client = new PaymentOrchestrationClient({ baseUrl: url, serviceToken: 'dev' });
+    const client = new PaymentOrchestrationClient({ baseUrl: url, apiKey: 'nf.test.credential.secret' });
     try {
       await client.getMerchant('legacy-id');
       assert.fail('Should have thrown');
@@ -356,7 +356,8 @@ describe('SDK error parsing for nested error envelope (Phase 8K)', () => {
     const app = express();
     app.use(express.json());
     app.post('/v1/payment-transactions/:id/refresh-provider-status', (req: Request, res: Response) => {
-      assert.ok(req.headers['x-payment-orchestration-service-token'] === 'dev');
+      assert.strictEqual(req.headers['authorization'], 'Bearer nf.test.credential.secret');
+      assert.strictEqual(req.headers['x-payment-orchestration-service-token'], undefined);
       res.json({
         ok: true,
         data: {
@@ -384,7 +385,7 @@ describe('SDK error parsing for nested error envelope (Phase 8K)', () => {
     });
 
     const { url, server } = await startTestServer(app);
-    const client = new PaymentOrchestrationClient({ baseUrl: url, serviceToken: 'dev', merchantId: 'merch_1' });
+    const client = new PaymentOrchestrationClient({ baseUrl: url, apiKey: 'nf.test.credential.secret', merchantId: 'merch_1' });
     try {
       const result = await client.refreshProviderStatus('tx_abc_123');
       assert.strictEqual(result.transaction.id, 'tx_abc_123');

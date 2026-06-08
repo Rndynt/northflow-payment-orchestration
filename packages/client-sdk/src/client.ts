@@ -104,8 +104,6 @@ export class PaymentOrchestrationClient {
 
     if (config.apiKey) {
       this.defaultHeaders['authorization'] = `Bearer ${config.apiKey}`;
-    } else if (config.serviceToken) {
-      this.defaultHeaders['x-payment-orchestration-service-token'] = config.serviceToken;
     }
     if (config.merchantId) this.defaultHeaders['x-payment-merchant-id'] = config.merchantId;
     if (config.sourceApp) this.defaultHeaders['x-source-app'] = config.sourceApp;

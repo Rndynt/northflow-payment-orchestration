@@ -4,7 +4,7 @@
  * Full set of repository contracts for the standalone payment orchestration service.
  * Concrete implementations live in apps/payment-orchestration-service/src/infrastructure/repositories/.
  *
- * Naming: use merchantId as primary owner identity (NOT legacy tenantId).
+ * Naming: use merchantId as primary owner identity.
  *
  * Phase 8C: interfaces defined; skeletons in service package.
  * Phase 8D: implementations wired to real Postgres DB.

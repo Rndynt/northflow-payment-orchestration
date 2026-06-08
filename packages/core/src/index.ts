@@ -72,7 +72,7 @@ export type {
   CreatePaymentIntentInput,
 } from './application/contracts';
 
-// ── Port Interfaces (Phase 8A legacy — superseded by repositories.ts) ─────────
+// ── Port Interfaces (Phase 8A — superseded by repositories.ts) ────────────────
 
 export type {
   IPaymentMerchantRepository,
