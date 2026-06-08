@@ -167,7 +167,7 @@ export async function runBootstrapBundle(
     merchantId = merchant.id;
     steps['merchant'] = {
       merchantId: merchant.id,
-      displayName: merchant.displayName,
+      name: merchant.displayName,
       status: merchant.status,
       created,
     };
@@ -176,7 +176,7 @@ export async function runBootstrapBundle(
       merchantId: merchant.id,
       resourceType: 'merchant',
       resourceId: merchant.id,
-      metadata: { merchantId: merchant.id, displayName: merchant.displayName, created, via: 'bootstrap-bundle' },
+      metadata: { merchantId: merchant.id, name: merchant.displayName, created, via: 'bootstrap-bundle' },
     });
   } catch (err: any) {
     return fail(op, 'ADMIN_OPERATION_FAILED', `Step 3 (create-merchant) failed: ${err.message}`, steps);

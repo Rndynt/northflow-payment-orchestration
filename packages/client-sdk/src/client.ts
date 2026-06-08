@@ -176,51 +176,110 @@ export class PaymentOrchestrationClient {
       });
     }
 
-    return data as T;
+    // Unwrap the service's standard { ok: true, data: {...} } response envelope.
+    // All service routes return this shape for success; the typed response interfaces
+    // describe the inner `data` content, not the outer envelope.
+    const envelope = data as { ok?: unknown; data?: unknown } | null;
+    const unwrapped =
+      envelope != null &&
+      typeof envelope === 'object' &&
+      envelope.ok === true &&
+      'data' in envelope
+        ? envelope.data
+        : data;
+    return unwrapped as T;
   }
 
   async createPaymentIntent(input: CreatePaymentIntentRequest): Promise<PaymentIntentResponse> {
     return this.request<PaymentIntentResponse>('POST', '/v1/payment-intents', this.withMerchantId(input));
   }
 
-  async getPaymentIntentStatus(intentId: string, merchantId?: string): Promise<PaymentIntentStatusResponse> {
-    return this.request<PaymentIntentStatusResponse>('GET', `/v1/payment-intents/${encodeURIComponent(intentId)}/status`, undefined, this.merchantHeader(merchantId));
+  async getPaymentIntentStatus(intentId: string, merchantIdOrOpts?: string | { merchantId?: string }): Promise<PaymentIntentStatusResponse> {
+    return this.request<PaymentIntentStatusResponse>('GET', `/v1/payment-intents/${encodeURIComponent(intentId)}/status`, undefined, this.merchantHeader(this.resolveMerchantId(merchantIdOrOpts)));
   }
 
-  async getRefundability(intentId: string, merchantId?: string): Promise<RefundabilityResponse> {
-    return this.request<RefundabilityResponse>('GET', `/v1/payment-intents/${encodeURIComponent(intentId)}/refundability`, undefined, this.merchantHeader(merchantId));
+  async getRefundability(intentId: string, merchantIdOrOpts?: string | { merchantId?: string }): Promise<RefundabilityResponse> {
+    return this.request<RefundabilityResponse>('GET', `/v1/payment-intents/${encodeURIComponent(intentId)}/refundability`, undefined, this.merchantHeader(this.resolveMerchantId(merchantIdOrOpts)));
   }
 
   async createGatewayPayment(intentId: string, input: CreateGatewayPaymentRequest): Promise<GatewayPaymentResponse> {
     return this.request<GatewayPaymentResponse>('POST', `/v1/payment-intents/${encodeURIComponent(intentId)}/gateway-payments`, this.withMerchantId(input));
   }
 
-  async refreshProviderStatus(intentId: string, transactionId: string, input: RefreshProviderStatusRequest): Promise<RefreshProviderStatusResponse> {
-    return this.request<RefreshProviderStatusResponse>('POST', `/v1/payment-intents/${encodeURIComponent(intentId)}/transactions/${encodeURIComponent(transactionId)}/refresh-status`, this.withMerchantId(input));
+  async refreshProviderStatus(transactionId: string, input?: RefreshProviderStatusRequest): Promise<RefreshProviderStatusResponse> {
+    return this.request<RefreshProviderStatusResponse>(
+      'POST',
+      `/v1/payment-transactions/${encodeURIComponent(transactionId)}/refresh-provider-status`,
+      this.withMerchantId(input ?? {}),
+    );
   }
 
-  async getPaymentOptions(intentId: string, merchantId?: string): Promise<PaymentIntentPaymentOptionsResponse> {
-    return this.request<PaymentIntentPaymentOptionsResponse>('GET', `/v1/payment-intents/${encodeURIComponent(intentId)}/payment-options`, undefined, this.merchantHeader(merchantId));
+  async getPaymentOptions(intentId: string, merchantIdOrOpts?: string | { merchantId?: string }): Promise<PaymentIntentPaymentOptionsResponse> {
+    return this.request<PaymentIntentPaymentOptionsResponse>('GET', `/v1/payment-intents/${encodeURIComponent(intentId)}/payment-options`, undefined, this.merchantHeader(this.resolveMerchantId(merchantIdOrOpts)));
   }
 
-  async refundTransaction(intentId: string, transactionId: string, input: RefundPaymentTransactionRequest): Promise<RefundPaymentTransactionResponse> {
-    return this.request<RefundPaymentTransactionResponse>('POST', `/v1/payment-intents/${encodeURIComponent(intentId)}/transactions/${encodeURIComponent(transactionId)}/refund`, this.withMerchantId(input));
+  /** @deprecated Use refundPaymentTransaction() instead. */
+  async refundTransaction(transactionId: string, input: RefundPaymentTransactionRequest): Promise<RefundPaymentTransactionResponse> {
+    return this.refundPaymentTransaction(transactionId, input);
   }
 
-  async voidTransaction(intentId: string, transactionId: string, input: VoidPaymentTransactionRequest): Promise<VoidPaymentTransactionResponse> {
-    return this.request<VoidPaymentTransactionResponse>('POST', `/v1/payment-intents/${encodeURIComponent(intentId)}/transactions/${encodeURIComponent(transactionId)}/void`, this.withMerchantId(input));
+  async refundPaymentTransaction(transactionId: string, input: RefundPaymentTransactionRequest): Promise<RefundPaymentTransactionResponse> {
+    return this.request<RefundPaymentTransactionResponse>(
+      'POST',
+      `/v1/payment-transactions/${encodeURIComponent(transactionId)}/refund`,
+      this.withMerchantId(input),
+    );
   }
 
-  async reconcilePaymentIntentTotals(intentId: string, input: ReconcilePaymentIntentTotalsRequest): Promise<ReconcilePaymentIntentTotalsResponse> {
-    return this.request<ReconcilePaymentIntentTotalsResponse>('POST', `/v1/payment-intents/${encodeURIComponent(intentId)}/reconcile-totals`, this.withMerchantId(input));
+  /** @deprecated Use voidPaymentTransaction() instead. */
+  async voidTransaction(transactionId: string, input: VoidPaymentTransactionRequest): Promise<VoidPaymentTransactionResponse> {
+    return this.voidPaymentTransaction(transactionId, input);
+  }
+
+  async voidPaymentTransaction(transactionId: string, input: VoidPaymentTransactionRequest): Promise<VoidPaymentTransactionResponse> {
+    return this.request<VoidPaymentTransactionResponse>(
+      'POST',
+      `/v1/payment-transactions/${encodeURIComponent(transactionId)}/void`,
+      this.withMerchantId(input),
+    );
+  }
+
+  async reconcilePaymentIntentTotals(intentId: string, input?: ReconcilePaymentIntentTotalsRequest): Promise<ReconcilePaymentIntentTotalsResponse> {
+    return this.request<ReconcilePaymentIntentTotalsResponse>(
+      'POST',
+      `/v1/payment-intents/${encodeURIComponent(intentId)}/reconcile`,
+      this.withMerchantId(input ?? {}),
+    );
   }
 
   async createMerchant(input: CreateMerchantRequest): Promise<MerchantResponse> {
     return this.request<MerchantResponse>('POST', '/v1/merchants', input);
   }
 
-  async createProviderAccount(input: CreateProviderAccountRequest): Promise<ProviderAccountResponse> {
-    return this.request<ProviderAccountResponse>('POST', '/v1/provider-accounts', this.withMerchantId(input));
+  async getMerchant(merchantId: string, merchantIdHeader?: string): Promise<MerchantResponse> {
+    return this.request<MerchantResponse>(
+      'GET',
+      `/v1/merchants/${encodeURIComponent(merchantId)}`,
+      undefined,
+      this.merchantHeader(merchantIdHeader),
+    );
+  }
+
+  async getProviderAccount(merchantId: string, providerAccountId: string, merchantIdHeader?: string): Promise<ProviderAccountResponse> {
+    return this.request<ProviderAccountResponse>(
+      'GET',
+      `/v1/merchants/${encodeURIComponent(merchantId)}/provider-accounts/${encodeURIComponent(providerAccountId)}`,
+      undefined,
+      this.merchantHeader(merchantIdHeader),
+    );
+  }
+
+  async createProviderAccount(merchantId: string, input: CreateProviderAccountRequest): Promise<ProviderAccountResponse> {
+    return this.request<ProviderAccountResponse>(
+      'POST',
+      `/v1/merchants/${encodeURIComponent(merchantId)}/provider-accounts`,
+      { ...input, merchantId },
+    );
   }
 
   async listProviderAccountMethods(providerAccountId: string, merchantId?: string): Promise<ListProviderAccountMethodsResponse> {
@@ -273,6 +332,13 @@ export class PaymentOrchestrationClient {
     const id = merchantId ?? this.configMerchantId;
     return id ? { 'x-payment-merchant-id': id } : undefined;
   }
+  /** Resolve merchantId from either a bare string or an options object { merchantId? }. */
+  private resolveMerchantId(arg?: string | { merchantId?: string }): string | undefined {
+    if (!arg) return undefined;
+    if (typeof arg === 'string') return arg;
+    return arg.merchantId;
+  }
+
 }
 
 /** @deprecated Use PaymentOrchestrationClient instead. */
