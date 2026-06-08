@@ -166,7 +166,7 @@ check('docs/openapi/payment-orchestration.openapi.json', exists('docs/openapi/pa
 console.log('\nSection 7B: Legacy payment parity hardening');
 const refundUseCase = readText('apps/service/src/application/use-cases/RefundPaymentTransaction.ts');
 const voidUseCase = readText('apps/service/src/application/use-cases/VoidPaymentTransaction.ts');
-const providerContract = readText('apps/service/src/infrastructure/providers/StandalonePaymentProvider.ts');
+const providerContract = readText('apps/service/src/infrastructure/providers/PaymentProviderAdapter.ts');
 const sdkClient = readText('packages/client-sdk/src/client.ts');
 const sdkTypes = readText('packages/client-sdk/src/types.ts');
 const openApi = readText('docs/openapi/payment-orchestration.openapi.json');
@@ -176,7 +176,10 @@ const errorDoc = readText('docs/payment-orchestration-error-codes.md');
 
 check('RefundPaymentTransaction.ts exists', exists('apps/service/src/application/use-cases/RefundPaymentTransaction.ts'));
 check('VoidPaymentTransaction.ts exists', exists('apps/service/src/application/use-cases/VoidPaymentTransaction.ts'));
-check('StandaloneManualProvider.ts exists', exists('apps/service/src/infrastructure/providers/StandaloneManualProvider.ts'));
+check('Standalone provider shim files removed', !exists('apps/service/src/infrastructure/providers/StandaloneManualProvider.ts') && !exists('apps/service/src/infrastructure/providers/StandaloneFakeGatewayProvider.ts') && !exists('apps/service/src/infrastructure/providers/StandalonePaymentProvider.ts'));
+check('ManualProvider.ts exists', exists('apps/service/src/infrastructure/providers/ManualProvider.ts'));
+check('FakeGatewayProvider.ts exists', exists('apps/service/src/infrastructure/providers/FakeGatewayProvider.ts'));
+check('PaymentProviderAdapter.ts exists', exists('apps/service/src/infrastructure/providers/PaymentProviderAdapter.ts'));
 check('provider contract exposes cancelPayment', providerContract.includes('cancelPayment?'));
 check('provider contract exposes refundPayment', providerContract.includes('refundPayment?'));
 check('SDK client exposes refundPaymentTransaction', sdkClient.includes('refundPaymentTransaction('));

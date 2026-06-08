@@ -64,8 +64,8 @@ void:<transactionId>
 - `createGatewayPayment`
 - `refreshProviderStatus`
 - `getPaymentOptions`
-- `refundPaymentTransaction` (`refundTransaction` remains a deprecated alias)
-- `voidPaymentTransaction` (`voidTransaction` remains a deprecated alias)
+- `refundPaymentTransaction`
+- `voidPaymentTransaction`
 - `reconcilePaymentIntentTotals`
 - `createMerchant`
 - `getMerchant`

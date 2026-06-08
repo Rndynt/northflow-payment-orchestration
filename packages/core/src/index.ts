@@ -35,18 +35,11 @@ export type {
   PaymentIntentDTO,
   PaymentIntentStatus,
   CreatePaymentIntentRecordInput,
-  // @deprecated aliases — use the names above
-  StandalonePaymentIntentDTO,
-  CreateStandalonePaymentIntentInput,
-  StandaloneIntentStatus,
 } from './domain/PaymentIntent';
 
 export type {
   PaymentTransactionDTO,
   PaymentTransactionStatus,
-  // @deprecated aliases — use the names above
-  StandalonePaymentTransactionDTO,
-  StandaloneTransactionStatus,
 } from './domain/PaymentTransaction';
 
 export type {
@@ -85,9 +78,6 @@ export type {
   IPaymentMerchantRepository,
   PaymentIntentRepositoryPort,
   PaymentTransactionRepositoryPort,
-  // @deprecated aliases — use PaymentIntentRepositoryPort / PaymentTransactionRepositoryPort
-  IStandalonePaymentIntentRepository,
-  IStandalonePaymentTransactionRepository,
   IPaymentProviderAccountRepository,
 } from './application/ports';
 

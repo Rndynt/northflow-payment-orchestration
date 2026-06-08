@@ -26,9 +26,6 @@ export type PaymentTransactionStatus =
   | 'reversed'
   | 'ignored';
 
-/** @deprecated Use PaymentTransactionStatus instead. */
-export type StandaloneTransactionStatus = PaymentTransactionStatus;
-
 /**
  * PaymentTransactionDTO — the read model for a payment transaction.
  */
@@ -57,6 +54,3 @@ export interface PaymentTransactionDTO {
   createdAt: Date;
   updatedAt: Date;
 }
-
-/** @deprecated Use PaymentTransactionDTO instead. */
-export type StandalonePaymentTransactionDTO = PaymentTransactionDTO;

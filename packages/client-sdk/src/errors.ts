@@ -48,8 +48,3 @@ export class PaymentOrchestrationNetworkError extends Error {
     this.cause = cause;
   }
 }
-
-/** @deprecated Use PaymentOrchestrationClientError instead. */
-export const PaymentEngineClientError = PaymentOrchestrationClientError;
-/** @deprecated Use PaymentOrchestrationNetworkError instead. */
-export const PaymentEngineNetworkError = PaymentOrchestrationNetworkError;

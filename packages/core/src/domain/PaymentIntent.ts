@@ -23,9 +23,6 @@ export type PaymentIntentStatus =
   | 'cancelled'
   | 'failed';
 
-/** @deprecated Use PaymentIntentStatus instead. */
-export type StandaloneIntentStatus = PaymentIntentStatus;
-
 /**
  * PaymentIntentDTO — the read model returned to callers.
  *
@@ -56,9 +53,6 @@ export interface PaymentIntentDTO {
   updatedAt: Date;
 }
 
-/** @deprecated Use PaymentIntentDTO instead. */
-export type StandalonePaymentIntentDTO = PaymentIntentDTO;
-
 /**
  * CreatePaymentIntentRecordInput — input for creating a new payment intent record.
  *
@@ -80,6 +74,3 @@ export interface CreatePaymentIntentRecordInput {
   metadata?: Record<string, unknown> | null;
   idempotencyKey?: string | null;
 }
-
-/** @deprecated Use CreatePaymentIntentRecordInput instead. */
-export type CreateStandalonePaymentIntentInput = CreatePaymentIntentRecordInput;

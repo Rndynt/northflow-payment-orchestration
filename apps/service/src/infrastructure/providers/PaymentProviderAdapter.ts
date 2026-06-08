@@ -22,9 +22,6 @@ export type ProviderPaymentStatus =
   | 'cancelled'
   | 'expired';
 
-/** @deprecated Use ProviderPaymentStatus instead. */
-export type StandaloneProviderStatus = ProviderPaymentStatus;
-
 export interface ProviderCreatePaymentInput {
   intentId: string;
   amount: number;
@@ -33,9 +30,6 @@ export interface ProviderCreatePaymentInput {
   providerAccount: PaymentProviderAccount | null;
   metadata?: Record<string, unknown> | null;
 }
-
-/** @deprecated Use ProviderCreatePaymentInput instead. */
-export type StandaloneCreatePaymentInput = ProviderCreatePaymentInput;
 
 export interface ProviderPaymentResult {
   status: ProviderPaymentStatus;
@@ -47,16 +41,10 @@ export interface ProviderPaymentResult {
   expiresAt: Date | null;
 }
 
-/** @deprecated Use ProviderPaymentResult instead. */
-export type StandaloneProviderResult = ProviderPaymentResult;
-
 export interface ProviderWebhookInput {
   headers: Record<string, string | string[] | undefined>;
   rawBody: Buffer | Record<string, unknown>;
 }
-
-/** @deprecated Use ProviderWebhookInput instead. */
-export type StandaloneProviderWebhookInput = ProviderWebhookInput;
 
 export interface ParsedProviderWebhook {
   providerEventId: string;
@@ -66,9 +54,6 @@ export interface ParsedProviderWebhook {
   rawPayload: Record<string, unknown>;
 }
 
-/** @deprecated Use ParsedProviderWebhook instead. */
-export type StandaloneParsedProviderWebhook = ParsedProviderWebhook;
-
 export interface ProviderStatusInput {
   transactionId: string;
   providerReference: string | null;
@@ -77,18 +62,12 @@ export interface ProviderStatusInput {
   metadata?: Record<string, unknown> | null;
 }
 
-/** @deprecated Use ProviderStatusInput instead. */
-export type StandaloneProviderStatusInput = ProviderStatusInput;
-
 export interface ProviderStatusResult {
   status: ProviderPaymentStatus | 'ignored';
   providerReference: string | null;
   rawProviderResponse: Record<string, unknown>;
   failureReason: string | null;
 }
-
-/** @deprecated Use ProviderStatusResult instead. */
-export type StandaloneProviderStatusResult = ProviderStatusResult;
 
 // ── Cancel (Void) contract ────────────────────────────────────────────────────
 
@@ -100,18 +79,12 @@ export interface ProviderCancelPaymentInput {
   metadata?: Record<string, unknown> | null;
 }
 
-/** @deprecated Use ProviderCancelPaymentInput instead. */
-export type StandaloneProviderCancelInput = ProviderCancelPaymentInput;
-
 export interface ProviderCancelPaymentResult {
   status: 'cancelled' | 'failed';
   providerReference: string | null;
   rawProviderResponse: Record<string, unknown>;
   failureReason: string | null;
 }
-
-/** @deprecated Use ProviderCancelPaymentResult instead. */
-export type StandaloneProviderCancelResult = ProviderCancelPaymentResult;
 
 // ── Refund contract ───────────────────────────────────────────────────────────
 
@@ -125,18 +98,12 @@ export interface ProviderRefundPaymentInput {
   metadata?: Record<string, unknown> | null;
 }
 
-/** @deprecated Use ProviderRefundPaymentInput instead. */
-export type StandaloneProviderRefundInput = ProviderRefundPaymentInput;
-
 export interface ProviderRefundPaymentResult {
   status: 'succeeded' | 'failed' | 'pending';
   providerReference: string | null;
   rawProviderResponse: Record<string, unknown>;
   failureReason: string | null;
 }
-
-/** @deprecated Use ProviderRefundPaymentResult instead. */
-export type StandaloneProviderRefundResult = ProviderRefundPaymentResult;
 
 // ── S7.5: Payment method capability contract ──────────────────────────────────
 
@@ -175,6 +142,3 @@ export interface PaymentProviderAdapter {
    */
   syncProviderAccountMethods?(providerAccount: PaymentProviderAccount): Promise<ProviderPaymentMethodCapability[]>;
 }
-
-/** @deprecated Use PaymentProviderAdapter instead. */
-export type StandalonePaymentProvider = PaymentProviderAdapter;

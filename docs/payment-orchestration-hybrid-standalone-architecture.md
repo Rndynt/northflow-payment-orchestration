@@ -49,9 +49,9 @@ packages/
 
   payment-orchestration-client-sdk/  ← Typed HTTP client (NEW, Phase 8A)
     src/
-      client.ts                      ← PaymentEngineClient (fetch-compatible)
+      client.ts                      ← PaymentOrchestrationClient (fetch-compatible)
       types.ts                       ← Request/response shapes (self-contained)
-      errors.ts                      ← PaymentEngineClientError, PaymentEngineNetworkError
+      errors.ts                      ← PaymentOrchestrationClientError, PaymentOrchestrationNetworkError
       index.ts                       ← Public API surface
 
 apps/
@@ -186,7 +186,7 @@ These packages are independently versioned and standalone by design.
 
 ### Port-Based Design
 Infrastructure concerns (DB, secrets, external HTTP) are behind port interfaces
-(`IPaymentMerchantRepository`, `IStandalonePaymentIntentRepository`, etc.).
+(`IPaymentMerchantRepository`, `PaymentIntentRepositoryPort`, etc.).
 Use cases depend only on these interfaces — never on concrete implementations.
 
 ### Backwards Compatibility
@@ -253,16 +253,9 @@ pnpm --filter @northflow/payment-orchestration-service type-check
 **SDK rename (Task 1)**
 
 The primary public class and error names in `@northflow/payment-orchestration-client-sdk`
-were renamed from `PaymentEngine*` to `PaymentOrchestration*`:
+use `PaymentOrchestration*` names only:
 
-| Before (deprecated) | After (primary) |
-|---------------------|-----------------|
-| `PaymentEngineClient` | `PaymentOrchestrationClient` |
-| `PaymentEngineClientError` | `PaymentOrchestrationClientError` |
-| `PaymentEngineNetworkError` | `PaymentOrchestrationNetworkError` |
-| `PaymentEngineClientConfig` | `PaymentOrchestrationClientConfig` |
-
-Deprecated aliases remain exported for backward compatibility and are marked `@deprecated`.
+The SDK exports `PaymentOrchestrationClient`, `PaymentOrchestrationClientError`, `PaymentOrchestrationNetworkError`, and `PaymentOrchestrationClientConfig`. Pre-launch compatibility exports are removed.
 
 **Correct SDK usage (Phase 8B+):**
 
@@ -270,8 +263,8 @@ Deprecated aliases remain exported for backward compatibility and are marked `@d
 import { PaymentOrchestrationClient } from '@northflow/payment-orchestration-client-sdk';
 
 const client = new PaymentOrchestrationClient({
-  baseUrl: 'http://localhost:5100',
-  serviceToken: process.env.PAYMENT_ORCHESTRATION_SERVICE_TOKEN,
+  baseUrl: 'https://payments.example.com',
+  apiKey: process.env.NORTHFLOW_API_KEY,
   merchantId: 'my-merchant-id',
   sourceApp: 'consumer-a',
 });
