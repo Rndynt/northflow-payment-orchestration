@@ -36,7 +36,7 @@ export async function createCheckoutPayment(order: LocalOrder, selectedMethod = 
     });
 
     const options = await northflow.getPaymentOptions(intent.id);
-    const selected = options.data.options.find((option) => option.method === selectedMethod);
+    const selected = options.options.find((option) => option.method === selectedMethod);
     if (!selected) throw new Error(`Payment method is not available: ${selectedMethod}`);
 
     const payment = await northflow.createGatewayPayment(intent.id, {
