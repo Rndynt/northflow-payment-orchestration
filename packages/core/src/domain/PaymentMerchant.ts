@@ -1,8 +1,7 @@
 /**
  * PaymentMerchant — the commercial entity that owns payment accounts and intents.
  *
- * In the standalone model, `merchantId` replaces legacy `tenantId` as the primary
- * payment identity. A merchant maps to a business that processes payments through
+ * In the standalone model, `merchantId` is the primary owner identity. A merchant maps to a business that processes payments through
  * the payment engine, regardless of which source application created the payment.
  *
  * Phase 8A: contract-only. No DB migration.
@@ -29,7 +28,7 @@ export interface PaymentMerchant {
  * correlation and callback but does not validate their semantics.
  *
  * Fields:
- *   sourceApp           — identifies the application that owns the payable (e.g. 'consumer-a', 'consumer-b')
+ *   sourceApp           — identifies the application that owns the payable (e.g. 'checkout-backend')
  *   externalTenantId    — tenant/org ID in the source app (nullable for single-tenant apps)
  *   externalOutletId    — outlet/location ID in the source app
  *   externalLocationId  — alias for externalOutletId

@@ -12,7 +12,7 @@
  *   with `details` field for structured validation errors (Phase 8K)
  * - No React dependency
  * - No external tenant/session dependency
- * - No @northflow/payment-orchestration-core dependency (self-contained)
+ * - Uses @northflow/payment-orchestration-core canonical request helpers for request signing
  *
  * Usage (S1-S5 per-client credential — recommended):
  * ```ts
@@ -25,12 +25,12 @@
  *
  * const intent = await client.createPaymentIntent({
  *   merchantId: 'mer_abc123',
- *   sourceApp: 'consumer-b',
- *   externalPayableType: 'booking',
- *   externalPayableId: 'booking-456',
+ *   sourceApp: 'checkout-backend',
+ *   externalPayableType: 'order',
+ *   externalPayableId: 'order_456',
  *   currency: 'IDR',
  *   amountDue: 100000,
- *   idempotencyKey: 'consumer-b:tenant-1:booking-456:create-intent',
+ *   idempotencyKey: 'order:order_456:create-intent',
  * });
  * ```
  *

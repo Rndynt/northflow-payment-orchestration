@@ -34,16 +34,9 @@ export interface PaymentOrchestrationClientConfig {
   baseUrl: string;
   /**
    * S1-S5 per-client API credential in `nf.<env>.<credentialId>.<secret>` format.
-   * Sent as `Authorization: Bearer <apiKey>` (primary auth method).
-   * Use this instead of `serviceToken` for all new integrations.
+   * Sent as `Authorization: Bearer <apiKey>` (public SDK auth method).
    */
   apiKey?: string;
-  /**
-   * @deprecated Legacy shared service token.
-   * Use `apiKey` (per-client credential) for new integrations.
-   * Sent as `x-payment-orchestration-service-token` when no `apiKey` is present.
-   */
-  serviceToken?: string;
   /** Default merchantId injected into request bodies and headers when not explicitly provided. */
   merchantId?: string;
   sourceApp?: string;
@@ -461,9 +454,9 @@ export interface PaymentIntentPaymentOptionsResponse {
   };
 }
 
-// ── Legacy / deprecated ───────────────────────────────────────────────────────
+// ── Compatibility response aliases ───────────────────────────────────────────
 
-/** @deprecated Not used by the service — use GatewayPaymentResponse instead. */
+/** Compatibility shape for provider actions returned by older integrations. */
 export interface ProviderActionResponse {
   type: string;
   descriptor: string;
