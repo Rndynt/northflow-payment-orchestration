@@ -410,6 +410,7 @@ export interface ProviderAccountMethodResponse {
 }
 
 export interface UpsertProviderAccountMethodRequest {
+  method: string;
   methodType?: PaymentMethodType;
   providerMethodCode?: string | null;
   displayName?: string;

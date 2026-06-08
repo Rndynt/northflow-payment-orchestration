@@ -266,7 +266,7 @@ class InMemoryMerchantRepository implements PaymentMerchantRepository {
     const now = new Date();
     const m: PaymentMerchant = {
       id: input.id,
-      name: input.name,
+      displayName: input.name,        // CreatePaymentMerchantInput.name maps to PaymentMerchant.displayName
       legalName: input.legalName ?? null,
       sourceApp: input.sourceApp ?? null,
       externalRef: input.externalRef ?? null,
