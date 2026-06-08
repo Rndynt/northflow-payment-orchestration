@@ -10,6 +10,11 @@ Create an endpoint from a backend/admin context only:
 POST /v1/merchants/{merchantId}/webhooks/endpoints
 ```
 
+The API client must have merchant access for the target `merchantId` and the required webhook scope for the operation:
+
+- `webhook:manage` for creating an endpoint, disabling an endpoint, rotating an endpoint secret, and replaying a delivery or event.
+- `webhook:read` for listing endpoints and listing delivery logs.
+
 The response returns `rawSecret` once. Store it in a backend secret manager. List responses, delivery logs, and rotations expose only `secretPrefix` metadata and never the raw secret.
 
 ## Payload envelope
