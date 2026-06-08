@@ -1,44 +1,44 @@
-/**
- * errors — typed error classes for payment-orchestration-client-sdk.
- *
- * Thrown by client methods on non-2xx HTTP responses or transport failures.
- * No dependency on @northflow/payment-orchestration-core — self-contained for portability.
- *
- * Phase 8B: primary names are now PaymentOrchestration*. PaymentEngine* aliases are
- * deprecated and will be removed in a future major version.
- * Phase 8K: added `details` field to PaymentOrchestrationClientError for frozen error envelope.
- */
+export interface PaymentOrchestrationClientErrorOptions {
+  status: number;
+  code?: string;
+  details?: unknown;
+  serviceError?: unknown;
+  responseBody?: unknown;
+}
 
-/**
- * PaymentOrchestrationClientError — thrown when the service returns a non-2xx response.
- *
- * Carries:
- * - `status`       — HTTP status code (e.g. 422, 404, 500)
- * - `code`         — machine-readable error code from the service (if available)
- * - `details`      — structured details from the service error envelope (e.g. validation fields), or null
- * - `serviceError` — raw error body from the service (safe to log, no secrets)
- */
 export class PaymentOrchestrationClientError extends Error {
   public readonly status: number;
   public readonly code: string | undefined;
   public readonly details: unknown;
   public readonly serviceError: unknown;
 
-  constructor(message: string, status: number, code?: string, details?: unknown, serviceError?: unknown) {
+  constructor(message: string, options: PaymentOrchestrationClientErrorOptions);
+  constructor(message: string, status: number, code?: string, details?: unknown, serviceError?: unknown);
+  constructor(
+    message: string,
+    statusOrOptions: number | PaymentOrchestrationClientErrorOptions,
+    code?: string,
+    details?: unknown,
+    serviceError?: unknown,
+  ) {
     super(message);
     this.name = 'PaymentOrchestrationClientError';
-    this.status = status;
-    this.code = code;
-    this.details = details ?? null;
-    this.serviceError = serviceError;
+
+    if (typeof statusOrOptions === 'number') {
+      this.status = statusOrOptions;
+      this.code = code;
+      this.details = details ?? null;
+      this.serviceError = serviceError;
+      return;
+    }
+
+    this.status = statusOrOptions.status;
+    this.code = statusOrOptions.code;
+    this.details = statusOrOptions.details ?? null;
+    this.serviceError = statusOrOptions.serviceError ?? statusOrOptions.responseBody;
   }
 }
 
-/**
- * PaymentOrchestrationNetworkError — thrown when the HTTP request fails at network level.
- *
- * Examples: DNS failure, connection refused, timeout.
- */
 export class PaymentOrchestrationNetworkError extends Error {
   public readonly cause: unknown;
 
@@ -48,8 +48,6 @@ export class PaymentOrchestrationNetworkError extends Error {
     this.cause = cause;
   }
 }
-
-// ── Deprecated aliases — Phase 8B ─────────────────────────────────────────────
 
 /** @deprecated Use PaymentOrchestrationClientError instead. */
 export const PaymentEngineClientError = PaymentOrchestrationClientError;
