@@ -34,9 +34,6 @@ export interface PaymentIntentRepositoryPort {
   ): Promise<PaymentIntentDTO | null>;
 }
 
-/** @deprecated Use PaymentIntentRepositoryPort instead. */
-export type IStandalonePaymentIntentRepository = PaymentIntentRepositoryPort;
-
 // ── Transaction ───────────────────────────────────────────────────────────────
 
 export interface PaymentTransactionRepositoryPort {
@@ -49,9 +46,6 @@ export interface PaymentTransactionRepositoryPort {
     key: string,
   ): Promise<PaymentTransactionDTO | null>;
 }
-
-/** @deprecated Use PaymentTransactionRepositoryPort instead. */
-export type IStandalonePaymentTransactionRepository = PaymentTransactionRepositoryPort;
 
 // ── Provider Account ──────────────────────────────────────────────────────────
 

@@ -6,7 +6,7 @@
  * Features:
  * - Fetch-compatible (Node 18+ / modern browsers)
  * - Typed request/response shapes aligned to service API contracts
- * - Custom header injection (service token, merchant ID, source app)
+ * - Custom header injection (API key, merchant ID, source app)
  * - merchantId auto-injection from config into POST bodies
  * - Typed error classes (PaymentOrchestrationClientError, PaymentOrchestrationNetworkError)
  *   with `details` field for structured validation errors (Phase 8K)
@@ -34,11 +34,12 @@
  * });
  * ```
  *
- * Legacy usage (serviceToken — deprecated, dev-only):
+ * Optional request signing:
  * ```ts
  * const client = new PaymentOrchestrationClient({
- *   baseUrl: 'http://localhost:3001',
- *   serviceToken: process.env.PAYMENT_ORCHESTRATION_SERVICE_TOKEN,
+ *   baseUrl: process.env.NORTHFLOW_BASE_URL,
+ *   apiKey: process.env.NORTHFLOW_API_KEY,
+ *   signing: { clientId, keyId, secret },
  * });
  * ```
  */
@@ -85,14 +86,3 @@ export type {
   PaymentOptionItem,
   PaymentIntentPaymentOptionsResponse,
 } from './types.ts';
-
-// ── Deprecated aliases (Phase 8B) — will be removed in a future major version ──
-
-/** @deprecated Use PaymentOrchestrationClient instead. */
-export { PaymentOrchestrationClient as PaymentEngineClient } from './client.ts';
-/** @deprecated Use PaymentOrchestrationClientError instead. */
-export { PaymentOrchestrationClientError as PaymentEngineClientError } from './errors.ts';
-/** @deprecated Use PaymentOrchestrationNetworkError instead. */
-export { PaymentOrchestrationNetworkError as PaymentEngineNetworkError } from './errors.ts';
-/** @deprecated Use PaymentOrchestrationClientConfig instead. */
-export type { PaymentOrchestrationClientConfig as PaymentEngineClientConfig } from './types.ts';

@@ -302,6 +302,3 @@ export class FakeGatewayProvider implements PaymentProviderAdapter {
     ];
   }
 }
-
-/** @deprecated Use FakeGatewayProvider instead. */
-export const StandaloneFakeGatewayProvider = FakeGatewayProvider;

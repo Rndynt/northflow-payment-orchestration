@@ -16,7 +16,7 @@ function jsonResponse(data: unknown, status = 200) {
   });
 }
 
-test('S10.2 SDK exposes official integration methods and compatibility aliases', () => {
+test('S10.2 SDK exposes official integration methods only', () => {
   const client = new PaymentOrchestrationClient({ baseUrl: 'http://northflow.test' });
   for (const method of [
     'createPaymentIntent',
@@ -26,9 +26,7 @@ test('S10.2 SDK exposes official integration methods and compatibility aliases',
     'refreshProviderStatus',
     'getPaymentOptions',
     'refundPaymentTransaction',
-    'refundTransaction',
     'voidPaymentTransaction',
-    'voidTransaction',
     'reconcilePaymentIntentTotals',
     'createMerchant',
     'getMerchant',
@@ -46,6 +44,10 @@ test('S10.2 SDK exposes official integration methods and compatibility aliases',
     'getReadiness',
   ]) {
     assert.equal(typeof (client as unknown as Record<string, unknown>)[method], 'function', method);
+  }
+
+  for (const removed of ['refundTransaction', 'voidTransaction']) {
+    assert.equal((client as unknown as Record<string, unknown>)[removed], undefined, removed);
   }
 });
 

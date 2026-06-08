@@ -92,9 +92,6 @@ export interface RotateSigningKeyResponse {
   revokedSigningKey: ClientSigningKeyResponse | null;
 }
 
-/** @deprecated Use PaymentOrchestrationClientConfig instead. */
-export type PaymentEngineClientConfig = PaymentOrchestrationClientConfig;
-
 // ── Shared sub-types ──────────────────────────────────────────────────────────
 
 /**

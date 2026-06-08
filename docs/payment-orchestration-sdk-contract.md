@@ -33,10 +33,11 @@ pnpm add @northflow/payment-orchestration-client-sdk
 import { PaymentOrchestrationClient } from '@northflow/payment-orchestration-client-sdk';
 
 const client = new PaymentOrchestrationClient({
-  baseUrl: 'http://localhost:5100',            // required
-  serviceToken: process.env.PAYMENT_ORCHESTRATION_SERVICE_TOKEN, // injected as x-payment-orchestration-service-token
-  merchantId: 'merchant-uuid',                 // optional — auto-injected into request bodies + headers
+  baseUrl: 'https://payments.example.com',       // required
+  apiKey: process.env.NORTHFLOW_API_KEY,          // injected as Authorization: Bearer <apiKey>
+  merchantId: 'merchant-uuid',                    // optional — auto-injected into request bodies + headers
   sourceApp: 'consumer-a',                        // optional — injected as x-source-app
+  signing: { clientId, keyId, secret },           // optional — adds Northflow HMAC headers
 });
 ```
 
@@ -45,7 +46,9 @@ const client = new PaymentOrchestrationClient({
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `baseUrl` | `string` | Yes | Base URL of the payment-orchestration-service (no trailing slash). |
-| `serviceToken` | `string` | No | Injected as `x-payment-orchestration-service-token` header. Required for all `/v1/...` routes except webhooks. |
+| `apiKey` | `string` | No | Public merchant API key. Injected as `Authorization: Bearer <apiKey>`. |
+| `serviceToken` | `string` | No | Internal/legacy callers only. Injected as `x-payment-orchestration-service-token`. |
+| `signing` | `PaymentOrchestrationSigningConfig` | No | Optional Northflow HMAC request signing configuration. |
 | `merchantId` | `string` | No | Default merchant ID. Auto-injected into POST bodies and `x-payment-merchant-id` header when not explicitly provided. |
 | `sourceApp` | `string` | No | Injected as `x-source-app` header. |
 
@@ -200,14 +203,9 @@ try {
 | `PaymentOrchestrationClientError` | Service returned a non-2xx response. Has `status`, `code`, `details`, `serviceError`. |
 | `PaymentOrchestrationNetworkError` | HTTP request failed at transport level. Has `cause`. |
 
-### Deprecated aliases (Phase 8B, removal planned)
+### Strict public SDK names
 
-| Deprecated | Use instead |
-|------------|-------------|
-| `PaymentEngineClient` | `PaymentOrchestrationClient` |
-| `PaymentEngineClientError` | `PaymentOrchestrationClientError` |
-| `PaymentEngineNetworkError` | `PaymentOrchestrationNetworkError` |
-| `PaymentEngineClientConfig` | `PaymentOrchestrationClientConfig` |
+The SDK exports only `PaymentOrchestration*` public names. Pre-launch compatibility aliases are intentionally not exported.
 
 ---
 
@@ -216,7 +214,8 @@ try {
 | Header | Value | Set by |
 |--------|-------|--------|
 | `Content-Type` | `application/json` | Always |
-| `x-payment-orchestration-service-token` | `config.serviceToken` | When configured |
+| `Authorization` | `Bearer ${config.apiKey}` | Public merchant integrations |
+| `x-payment-orchestration-service-token` | `config.serviceToken` | Internal/legacy service-token callers only |
 | `x-payment-merchant-id` | `config.merchantId` | When configured |
 | `x-source-app` | `config.sourceApp` | When configured |
 

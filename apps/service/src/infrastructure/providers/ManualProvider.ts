@@ -141,6 +141,3 @@ export class ManualProvider implements PaymentProviderAdapter {
     ];
   }
 }
-
-/** @deprecated Use ManualProvider instead. */
-export const StandaloneManualProvider = ManualProvider;
