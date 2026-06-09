@@ -46,13 +46,18 @@ Requests missing the scope receive `403 SCOPE_DENIED`.
 
 ## Payment Methods
 
-| Method | Path                                                                              | Required Scope          |
-|--------|-----------------------------------------------------------------------------------|-------------------------|
-| GET    | /v1/merchants/{merchantId}/provider-accounts/{providerAccountId}/methods         | `payment_method:read`   |
-| PUT    | /v1/merchants/{merchantId}/provider-accounts/{providerAccountId}/methods/{method} | `payment_method:write`  |
-| POST   | /v1/merchants/{merchantId}/provider-accounts/{providerAccountId}/methods/sync    | `payment_method:sync`   |
-| GET    | /v1/merchants/{merchantId}/payment-methods                                        | `payment_method:read`   |
-| GET    | /v1/payment-intents/{intentId}/payment-options                                    | `payment_method:read`   |
+| Method | Path                                                                              | Required Scope (one-of)                                           |
+|--------|-----------------------------------------------------------------------------------|-------------------------------------------------------------------|
+| GET    | /v1/merchants/{merchantId}/provider-accounts/{providerAccountId}/methods         | `payment_method:read` **OR** `provider_account:read`              |
+| PUT    | /v1/merchants/{merchantId}/provider-accounts/{providerAccountId}/methods/{method} | `payment_method:write` **OR** `provider_account:create`           |
+| POST   | /v1/merchants/{merchantId}/provider-accounts/{providerAccountId}/methods/sync    | `payment_method:sync` **OR** `provider_account:create`            |
+| GET    | /v1/merchants/{merchantId}/payment-methods                                        | `payment_method:read` **OR** `provider_account:read` **OR** `intent:read` |
+| GET    | /v1/payment-intents/{intentId}/payment-options                                    | `payment_method:read` **OR** `intent:read`                        |
+
+> **Note:** Routes marked "one-of" use `requireAnyScope` middleware in `apps/service/src/routes/paymentMethods.ts`.
+> A credential holding **any one** of the listed scopes satisfies the guard.
+> This allows operator, merchant, and checkout credentials to all access
+> payment method data without requiring a dedicated `payment_method:read` scope.
 
 ---
 
