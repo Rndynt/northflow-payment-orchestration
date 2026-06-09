@@ -34,20 +34,25 @@ test('S10.2 SDK exposes official integration methods only', () => {
     'getProviderAccount',
     'listProviderAccountMethods',
     'upsertProviderAccountMethod',
-    'deleteProviderAccountMethod',
     'syncProviderAccountMethods',
     'createSigningKey',
     'listSigningKeys',
     'rotateSigningKey',
     'revokeSigningKey',
+    'createMerchantWebhookEndpoint',
+    'listMerchantWebhookEndpoints',
+    'disableMerchantWebhookEndpoint',
+    'rotateMerchantWebhookEndpointSecret',
+    'listMerchantWebhookDeliveries',
+    'replayMerchantWebhook',
     'confirmFakeGatewayPayment',
     'getReadiness',
   ]) {
     assert.equal(typeof (client as unknown as Record<string, unknown>)[method], 'function', method);
   }
 
-  for (const removed of ['refundTransaction', 'voidTransaction']) {
-    assert.equal((client as unknown as Record<string, unknown>)[removed], undefined, removed);
+  for (const removed of ['refundTransaction', 'voidTransaction', 'deleteProviderAccountMethod']) {
+    assert.equal((client as unknown as Record<string, unknown>)[removed], undefined, `${removed} should not exist on SDK client`);
   }
 });
 

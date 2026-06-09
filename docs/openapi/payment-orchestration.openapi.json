@@ -1,9 +1,9 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Payment Orchestration Service API",
-    "description": "Standalone payment orchestration service (northflow). Manages payment merchants, provider accounts, payment intents, gateway payments, and webhooks. Phase 8K — frozen API contract.",
-    "version": "0.3.0",
+    "title": "Northflow Payment Orchestration Service API",
+    "description": "Backend-to-backend REST API for Northflow Payment Orchestration. All /v1/* routes require API key bearer auth. CORS is disabled by default; browser clients must not call this API directly.",
+    "version": "0.4.0",
     "contact": {
       "name": "Northflow Engineering"
     }
@@ -15,13 +15,50 @@
     }
   ],
   "tags": [
-    { "name": "Health", "description": "Service health and readiness endpoints (no auth)." },
-    { "name": "Merchants", "description": "Merchant management." },
-    { "name": "Provider Accounts", "description": "Payment provider account management (nested under merchants)." },
-    { "name": "Payment Intents", "description": "Payment intent lifecycle." },
-    { "name": "Payment Transactions", "description": "Payment transaction operations." },
-    { "name": "Webhooks", "description": "Provider webhook ingestion (no auth — provider signature verification only)." },
-    { "name": "Dev", "description": "Development/test only endpoints. Not available in production." }
+    {
+      "name": "Health",
+      "description": "Service health, version, and readiness"
+    },
+    {
+      "name": "Merchants",
+      "description": "Merchant create/read"
+    },
+    {
+      "name": "Provider Accounts",
+      "description": "Provider account create/read"
+    },
+    {
+      "name": "Payment Methods",
+      "description": "Provider account payment method management and merchant payment options"
+    },
+    {
+      "name": "Payment Intents",
+      "description": "Payment intent lifecycle"
+    },
+    {
+      "name": "Payment Transactions",
+      "description": "Transaction operations: refresh, refund, void"
+    },
+    {
+      "name": "Audit Logs",
+      "description": "Immutable service audit trail"
+    },
+    {
+      "name": "API Clients",
+      "description": "API client credential and signing key lifecycle"
+    },
+    {
+      "name": "Merchant Webhooks",
+      "description": "Merchant outbound webhook endpoints, deliveries, and replay"
+    },
+    {
+      "name": "Provider Webhooks",
+      "description": "Provider inbound webhook ingress"
+    },
+    {
+      "name": "Dev",
+      "description": "Development/test utilities (non-production only)"
+    }
   ],
   "components": {
     "securitySchemes": {
@@ -34,18 +71,33 @@
     "schemas": {
       "ErrorEnvelope": {
         "type": "object",
-        "required": ["ok", "error"],
+        "required": [
+          "ok",
+          "error"
+        ],
         "properties": {
-          "ok": { "type": "boolean", "enum": [false] },
+          "ok": {
+            "type": "boolean",
+            "example": false
+          },
           "error": {
             "type": "object",
-            "required": ["code", "message", "details"],
+            "required": [
+              "code",
+              "message",
+              "details"
+            ],
             "properties": {
-              "code": { "type": "string", "example": "VALIDATION_ERROR" },
-              "message": { "type": "string", "example": "name is required and must be a string" },
+              "code": {
+                "type": "string",
+                "example": "SCOPE_DENIED"
+              },
+              "message": {
+                "type": "string"
+              },
               "details": {
                 "nullable": true,
-                "description": "Structured error details (e.g. field-level validation errors). null when not applicable."
+                "example": null
               }
             }
           }
@@ -54,62 +106,651 @@
       "PaymentIntent": {
         "type": "object",
         "properties": {
-          "id": { "type": "string" },
-          "merchantId": { "type": "string" },
-          "externalPayableType": { "type": "string" },
-          "externalPayableId": { "type": "string" },
-          "currency": { "type": "string", "example": "IDR" },
-          "amountDue": { "type": "integer" },
-          "amountPaid": { "type": "integer" },
-          "amountRefunded": { "type": "integer" },
-          "amountRemaining": { "type": "integer" },
-          "status": { "type": "string", "enum": ["requires_payment", "requires_action", "processing", "paid", "partial", "overpaid", "expired", "cancelled"] },
-          "allowPartial": { "type": "boolean" },
-          "expiresAt": { "type": "string", "format": "date-time", "nullable": true },
-          "createdAt": { "type": "string", "format": "date-time" },
-          "updatedAt": { "type": "string", "format": "date-time" }
+          "id": {
+            "type": "string"
+          },
+          "merchantId": {
+            "type": "string"
+          },
+          "externalPayableType": {
+            "type": "string"
+          },
+          "externalPayableId": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string",
+            "example": "IDR"
+          },
+          "amountDue": {
+            "type": "integer"
+          },
+          "amountPaid": {
+            "type": "integer"
+          },
+          "amountRefunded": {
+            "type": "integer"
+          },
+          "amountRemaining": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "requires_payment",
+              "requires_action",
+              "processing",
+              "paid",
+              "partial",
+              "overpaid",
+              "expired",
+              "cancelled"
+            ]
+          },
+          "allowPartial": {
+            "type": "boolean"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "PaymentTransaction": {
         "type": "object",
         "properties": {
-          "id": { "type": "string" },
-          "intentId": { "type": "string" },
-          "merchantId": { "type": "string" },
-          "provider": { "type": "string", "example": "fake_gateway" },
-          "method": { "type": "string", "example": "qris" },
-          "status": { "type": "string", "enum": ["pending", "requires_action", "processing", "succeeded", "failed", "cancelled", "refunded", "partially_refunded", "expired"] },
-          "amount": { "type": "integer" },
-          "currency": { "type": "string", "example": "IDR" },
-          "providerReference": { "type": "string", "nullable": true },
-          "providerPaymentUrl": { "type": "string", "nullable": true },
-          "providerQrString": { "type": "string", "nullable": true },
-          "failureReason": { "type": "string", "nullable": true },
-          "createdAt": { "type": "string", "format": "date-time" },
-          "updatedAt": { "type": "string", "format": "date-time" }
+          "id": {
+            "type": "string"
+          },
+          "intentId": {
+            "type": "string"
+          },
+          "merchantId": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string",
+            "example": "fake_gateway"
+          },
+          "method": {
+            "type": "string",
+            "example": "qris"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "requires_action",
+              "processing",
+              "succeeded",
+              "failed",
+              "cancelled",
+              "refunded",
+              "partially_refunded",
+              "expired"
+            ]
+          },
+          "amount": {
+            "type": "integer"
+          },
+          "currency": {
+            "type": "string",
+            "example": "IDR"
+          },
+          "providerReference": {
+            "type": "string",
+            "nullable": true
+          },
+          "providerPaymentUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "providerQrString": {
+            "type": "string",
+            "nullable": true
+          },
+          "failureReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "Merchant": {
         "type": "object",
         "properties": {
-          "id": { "type": "string" },
-          "name": { "type": "string" },
-          "legalName": { "type": "string", "nullable": true },
-          "status": { "type": "string", "enum": ["active", "suspended", "closed"] },
-          "metadata": { "type": "object" }
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "legalName": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "suspended",
+              "closed"
+            ]
+          },
+          "metadata": {
+            "type": "object"
+          }
         }
       },
       "ProviderAccount": {
         "type": "object",
         "properties": {
-          "id": { "type": "string" },
-          "merchantId": { "type": "string" },
-          "provider": { "type": "string", "example": "fake_gateway" },
-          "environment": { "type": "string", "enum": ["sandbox", "test", "production"] },
-          "providerAccountRef": { "type": "string", "nullable": true, "description": "Provider's own account identifier. Safe to store and return in responses." },
-          "status": { "type": "string", "enum": ["active", "disabled"] },
-          "publicConfig": { "type": "object" },
-          "metadata": { "type": "object" }
+          "id": {
+            "type": "string"
+          },
+          "merchantId": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string",
+            "example": "fake_gateway"
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "sandbox",
+              "test",
+              "production"
+            ]
+          },
+          "providerAccountRef": {
+            "type": "string",
+            "nullable": true,
+            "description": "Provider's own account identifier. Safe to store and return in responses."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "disabled"
+            ]
+          },
+          "publicConfig": {
+            "type": "object"
+          },
+          "metadata": {
+            "type": "object"
+          }
+        }
+      },
+      "ProviderAccountMethod": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "merchantId": {
+            "type": "string"
+          },
+          "providerAccountId": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "methodType": {
+            "type": "string",
+            "enum": [
+              "qris",
+              "virtual_account",
+              "ewallet",
+              "card",
+              "retail_outlet",
+              "manual",
+              "other"
+            ]
+          },
+          "providerMethodCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "disabled",
+              "unsupported"
+            ]
+          },
+          "currency": {
+            "type": "string"
+          },
+          "minAmount": {
+            "type": "number",
+            "nullable": true
+          },
+          "maxAmount": {
+            "type": "number",
+            "nullable": true
+          },
+          "sortOrder": {
+            "type": "integer"
+          },
+          "publicConfig": {
+            "type": "object"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "UpsertProviderAccountMethodRequest": {
+        "type": "object",
+        "properties": {
+          "methodType": {
+            "type": "string"
+          },
+          "providerMethodCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "disabled",
+              "unsupported"
+            ]
+          },
+          "currency": {
+            "type": "string"
+          },
+          "minAmount": {
+            "type": "number",
+            "nullable": true
+          },
+          "maxAmount": {
+            "type": "number",
+            "nullable": true
+          },
+          "sortOrder": {
+            "type": "integer"
+          },
+          "publicConfig": {
+            "type": "object"
+          },
+          "metadata": {
+            "type": "object"
+          }
+        }
+      },
+      "PaymentOptionItem": {
+        "type": "object",
+        "properties": {
+          "method": {
+            "type": "string"
+          },
+          "methodType": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "providerAccountId": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "minAmount": {
+            "type": "number",
+            "nullable": true
+          },
+          "maxAmount": {
+            "type": "number",
+            "nullable": true
+          },
+          "publicConfig": {
+            "type": "object"
+          }
+        }
+      },
+      "AuditLogEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "clientId": {
+            "type": "string",
+            "nullable": true
+          },
+          "merchantId": {
+            "type": "string",
+            "nullable": true
+          },
+          "action": {
+            "type": "string"
+          },
+          "resourceType": {
+            "type": "string",
+            "nullable": true
+          },
+          "resourceId": {
+            "type": "string",
+            "nullable": true
+          },
+          "statusCode": {
+            "type": "integer",
+            "nullable": true
+          },
+          "errorCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "metadata": {
+            "type": "object",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ApiClientCredential": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "credentialId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "revoked",
+              "expired"
+            ]
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revokedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "ApiClientCredentialCreated": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiClientCredential"
+          },
+          {
+            "type": "object",
+            "required": [
+              "rawSecret"
+            ],
+            "properties": {
+              "rawSecret": {
+                "type": "string",
+                "description": "Raw credential secret. Returned once only. Never echoed again."
+              }
+            }
+          }
+        ]
+      },
+      "SigningKey": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "keyPrefix": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "revoked",
+              "expired"
+            ]
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "lastUsedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revokedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "metadata": {
+            "type": "object"
+          }
+        }
+      },
+      "SigningKeyCreated": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SigningKey"
+          },
+          {
+            "type": "object",
+            "required": [
+              "rawSigningSecret"
+            ],
+            "properties": {
+              "rawSigningSecret": {
+                "type": "string",
+                "description": "Raw signing secret. Returned once only. Never echoed again."
+              }
+            }
+          }
+        ]
+      },
+      "WebhookEventType": {
+        "type": "string",
+        "enum": [
+          "payment_intent.requires_payment",
+          "payment_intent.partially_paid",
+          "payment_intent.paid",
+          "payment_intent.failed",
+          "payment_intent.expired",
+          "payment_intent.cancelled",
+          "payment_intent.refunded",
+          "payment_intent.voided",
+          "payment_transaction.requires_action",
+          "payment_transaction.succeeded",
+          "payment_transaction.failed",
+          "payment_transaction.cancelled",
+          "payment_transaction.refunded",
+          "payment_transaction.voided"
+        ]
+      },
+      "WebhookEndpoint": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "merchantId": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "disabled"
+            ]
+          },
+          "subscribedEvents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WebhookEventType"
+            }
+          },
+          "secretPrefix": {
+            "type": "string",
+            "description": "First 8 chars of the secret (safe to display). Never the raw secret."
+          },
+          "metadata": {
+            "type": "object",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "disabledAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "WebhookDelivery": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "eventId": {
+            "type": "string"
+          },
+          "endpointId": {
+            "type": "string"
+          },
+          "merchantId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "delivering",
+              "succeeded",
+              "failed",
+              "dead"
+            ]
+          },
+          "attemptCount": {
+            "type": "integer"
+          },
+          "maxAttempts": {
+            "type": "integer"
+          },
+          "nextAttemptAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastAttemptAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "lastResponseStatus": {
+            "type": "integer",
+            "nullable": true
+          },
+          "lastResponseBodyTruncated": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastError": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deliveredAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
         }
       }
     },
@@ -118,41 +759,175 @@
         "name": "x-payment-merchant-id",
         "in": "header",
         "description": "Merchant ID header fallback. Used when merchantId is not in request body or query params.",
-        "schema": { "type": "string" }
+        "schema": {
+          "type": "string"
+        }
       }
     },
     "responses": {
       "400": {
         "description": "Bad Request",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
       },
       "401": {
-        "description": "Unauthorized — missing or invalid API key (for protected routes) or invalid webhook signature.",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+        "description": "Unauthorized \u2014 missing or invalid API key (for protected routes) or invalid webhook signature.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
       },
       "404": {
         "description": "Not Found",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
       },
       "409": {
-        "description": "Conflict — idempotency conflict.",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+        "description": "Conflict \u2014 idempotency conflict.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
       },
       "422": {
-        "description": "Unprocessable Entity — business logic error.",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+        "description": "Unprocessable Entity \u2014 business logic error.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
       },
       "500": {
         "description": "Internal Server Error",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "401 \u2014 Authentication required or credential invalid/revoked/expired",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            },
+            "example": {
+              "ok": false,
+              "error": {
+                "code": "UNAUTHORIZED",
+                "message": "Missing authentication credential.",
+                "details": null
+              }
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "403 \u2014 Scope denied or merchant access denied",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            },
+            "example": {
+              "ok": false,
+              "error": {
+                "code": "SCOPE_DENIED",
+                "message": "Missing required scope: payment:create",
+                "details": null
+              }
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "404 \u2014 Resource not found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            },
+            "example": {
+              "ok": false,
+              "error": {
+                "code": "NOT_FOUND",
+                "message": "Resource not found.",
+                "details": null
+              }
+            }
+          }
+        }
+      },
+      "ValidationError": {
+        "description": "422 \u2014 Validation or business rule failure",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            },
+            "example": {
+              "ok": false,
+              "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "amountDue must be a positive number.",
+                "details": null
+              }
+            }
+          }
+        }
+      },
+      "RateLimited": {
+        "description": "429 \u2014 Rate limit exceeded",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            },
+            "example": {
+              "ok": false,
+              "error": {
+                "code": "RATE_LIMITED",
+                "message": "Too many requests. Slow down and retry.",
+                "details": null
+              }
+            }
+          }
+        }
       }
     }
   },
-  "security": [{ "apiKey": [] }],
+  "security": [
+    {
+      "apiKey": []
+    }
+  ],
   "paths": {
     "/health": {
       "get": {
-        "tags": ["Health"],
+        "tags": [
+          "Health"
+        ],
         "summary": "Liveness check",
         "description": "Returns 200 when the service is up. Used by load balancers and health-check probes.",
         "security": [],
@@ -164,8 +939,16 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "ok": { "type": "boolean", "enum": [true] },
-                    "service": { "type": "string", "example": "payment-orchestration-service" }
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "service": {
+                      "type": "string",
+                      "example": "payment-orchestration-service"
+                    }
                   }
                 }
               }
@@ -176,7 +959,9 @@
     },
     "/version": {
       "get": {
-        "tags": ["Health"],
+        "tags": [
+          "Health"
+        ],
         "summary": "Version metadata",
         "security": [],
         "responses": {
@@ -187,11 +972,23 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "service": { "type": "string" },
-                    "version": { "type": "string", "example": "0.3.0" },
-                    "phase": { "type": "string", "example": "8K" },
-                    "description": { "type": "string" },
-                    "status": { "type": "string" }
+                    "service": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string",
+                      "example": "0.3.0"
+                    },
+                    "phase": {
+                      "type": "string",
+                      "example": "8K"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -202,7 +999,9 @@
     },
     "/ready": {
       "get": {
-        "tags": ["Health"],
+        "tags": [
+          "Health"
+        ],
         "summary": "Readiness check",
         "description": "Returns runtime readiness: DB configuration, registered providers, Xendit sandbox status. Does not expose secrets.",
         "security": [],
@@ -214,24 +1013,43 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "ok": { "type": "boolean", "description": "true if DB is configured, false if not." },
-                    "service": { "type": "string" },
+                    "ok": {
+                      "type": "boolean",
+                      "description": "true if DB is configured, false if not."
+                    },
+                    "service": {
+                      "type": "string"
+                    },
                     "providers": {
                       "type": "object",
                       "additionalProperties": {
                         "type": "object",
                         "properties": {
-                          "registered": { "type": "boolean" },
-                          "configured": { "type": "boolean" }
+                          "registered": {
+                            "type": "boolean"
+                          },
+                          "configured": {
+                            "type": "boolean"
+                          }
                         }
                       }
                     },
-                    "database": { "type": "string", "enum": ["configured", "unconfigured"] },
+                    "database": {
+                      "type": "string",
+                      "enum": [
+                        "configured",
+                        "unconfigured"
+                      ]
+                    },
                     "xenditSandbox": {
                       "type": "object",
                       "properties": {
-                        "enabled": { "type": "boolean" },
-                        "callbackTokenConfigured": { "type": "boolean" }
+                        "enabled": {
+                          "type": "boolean"
+                        },
+                        "callbackTokenConfigured": {
+                          "type": "boolean"
+                        }
                       }
                     }
                   }
@@ -244,7 +1062,9 @@
     },
     "/v1/merchants": {
       "post": {
-        "tags": ["Merchants"],
+        "tags": [
+          "Merchants"
+        ],
         "summary": "Create or return merchant",
         "description": "Idempotent by sourceApp + externalRef combination.",
         "requestBody": {
@@ -253,124 +1073,422 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["name"],
+                "required": [
+                  "name"
+                ],
                 "properties": {
-                  "id": { "type": "string", "description": "Optional explicit ID (UUID). Auto-generated if omitted." },
-                  "name": { "type": "string" },
-                  "legalName": { "type": "string", "nullable": true },
-                  "sourceApp": { "type": "string", "nullable": true },
-                  "externalRef": { "type": "string", "nullable": true },
-                  "metadata": { "type": "object" }
+                  "id": {
+                    "type": "string",
+                    "description": "Optional explicit ID (UUID). Auto-generated if omitted."
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "legalName": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "sourceApp": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "externalRef": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "metadata": {
+                    "type": "object"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Existing merchant returned", "content": { "application/json": { "schema": { "type": "object", "properties": { "ok": { "type": "boolean" }, "data": { "$ref": "#/components/schemas/Merchant" } } } } } },
-          "201": { "description": "New merchant created", "content": { "application/json": { "schema": { "type": "object", "properties": { "ok": { "type": "boolean" }, "data": { "$ref": "#/components/schemas/Merchant" } } } } } },
-          "400": { "$ref": "#/components/responses/400" }
-        }
+          "200": {
+            "description": "Existing merchant returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Merchant"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "New merchant created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Merchant"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          }
+        },
+        "security": [
+          {
+            "apiKey": [
+              "merchant:create"
+            ]
+          }
+        ]
       }
     },
     "/v1/merchants/{id}": {
       "get": {
-        "tags": ["Merchants"],
+        "tags": [
+          "Merchants"
+        ],
         "summary": "Get merchant by ID",
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
-          "200": { "description": "Merchant found", "content": { "application/json": { "schema": { "type": "object", "properties": { "ok": { "type": "boolean" }, "data": { "$ref": "#/components/schemas/Merchant" } } } } } },
-          "404": { "$ref": "#/components/responses/404" }
-        }
+          "200": {
+            "description": "Merchant found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Merchant"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          }
+        },
+        "security": [
+          {
+            "apiKey": [
+              "merchant:read"
+            ]
+          }
+        ]
       }
     },
     "/v1/merchants/{merchantId}/provider-accounts": {
       "post": {
-        "tags": ["Provider Accounts"],
+        "tags": [
+          "Provider Accounts"
+        ],
         "summary": "Create provider account",
         "description": "Creates a payment provider account. `credentialsRef` accepted in body but never returned in responses.",
-        "parameters": [{ "name": "merchantId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "parameters": [
+          {
+            "name": "merchantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["provider", "environment"],
+                "required": [
+                  "provider",
+                  "environment"
+                ],
                 "properties": {
-                  "provider": { "type": "string", "example": "fake_gateway" },
-                  "environment": { "type": "string", "enum": ["sandbox", "test", "production"] },
-                  "providerAccountRef": { "type": "string", "nullable": true },
-                  "credentialsRef": { "type": "string", "nullable": true, "description": "Env var name pointing to the secret. Never echoed in responses." },
-                  "publicConfig": { "type": "object" },
-                  "metadata": { "type": "object" }
+                  "provider": {
+                    "type": "string",
+                    "example": "fake_gateway"
+                  },
+                  "environment": {
+                    "type": "string",
+                    "enum": [
+                      "sandbox",
+                      "test",
+                      "production"
+                    ]
+                  },
+                  "providerAccountRef": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "credentialsRef": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Env var name pointing to the secret. Never echoed in responses."
+                  },
+                  "publicConfig": {
+                    "type": "object"
+                  },
+                  "metadata": {
+                    "type": "object"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "201": { "description": "Provider account created", "content": { "application/json": { "schema": { "type": "object", "properties": { "ok": { "type": "boolean" }, "data": { "$ref": "#/components/schemas/ProviderAccount" } } } } } },
-          "400": { "$ref": "#/components/responses/400" }
-        }
+          "201": {
+            "description": "Provider account created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ProviderAccount"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          }
+        },
+        "security": [
+          {
+            "apiKey": [
+              "provider_account:create"
+            ]
+          }
+        ]
       }
     },
     "/v1/merchants/{merchantId}/provider-accounts/{id}": {
       "get": {
-        "tags": ["Provider Accounts"],
+        "tags": [
+          "Provider Accounts"
+        ],
         "summary": "Get provider account",
         "parameters": [
-          { "name": "merchantId", "in": "path", "required": true, "schema": { "type": "string" } },
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+          {
+            "name": "merchantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
-          "200": { "description": "Provider account found", "content": { "application/json": { "schema": { "type": "object", "properties": { "ok": { "type": "boolean" }, "data": { "$ref": "#/components/schemas/ProviderAccount" } } } } } },
-          "404": { "$ref": "#/components/responses/404" }
-        }
+          "200": {
+            "description": "Provider account found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ProviderAccount"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          }
+        },
+        "security": [
+          {
+            "apiKey": [
+              "provider_account:read"
+            ]
+          }
+        ]
       }
     },
     "/v1/payment-intents": {
       "post": {
-        "tags": ["Payment Intents"],
+        "tags": [
+          "Payment Intents"
+        ],
         "summary": "Create payment intent",
-        "parameters": [{ "$ref": "#/components/parameters/merchantIdHeader" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/merchantIdHeader"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["externalPayableType", "externalPayableId", "amountDue"],
+                "required": [
+                  "externalPayableType",
+                  "externalPayableId",
+                  "amountDue"
+                ],
                 "properties": {
-                  "merchantId": { "type": "string", "description": "Falls back to x-payment-merchant-id header." },
-                  "externalPayableType": { "type": "string", "example": "order" },
-                  "externalPayableId": { "type": "string" },
-                  "currency": { "type": "string", "default": "IDR" },
-                  "amountDue": { "type": "integer", "description": "Amount in smallest currency unit (e.g. IDR cents)." },
-                  "allowPartial": { "type": "boolean", "default": false },
-                  "expiresAt": { "type": "string", "format": "date-time", "nullable": true },
-                  "idempotencyKey": { "type": "string", "nullable": true },
-                  "metadata": { "type": "object", "nullable": true }
+                  "merchantId": {
+                    "type": "string",
+                    "description": "Falls back to x-payment-merchant-id header."
+                  },
+                  "externalPayableType": {
+                    "type": "string",
+                    "example": "order"
+                  },
+                  "externalPayableId": {
+                    "type": "string"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "default": "IDR"
+                  },
+                  "amountDue": {
+                    "type": "integer",
+                    "description": "Amount in smallest currency unit (e.g. IDR cents)."
+                  },
+                  "allowPartial": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "expiresAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "nullable": true
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "nullable": true
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Idempotent replay — intent already exists", "content": { "application/json": { "schema": { "type": "object", "properties": { "ok": { "type": "boolean" }, "data": { "$ref": "#/components/schemas/PaymentIntent" } } } } } },
-          "201": { "description": "Payment intent created", "content": { "application/json": { "schema": { "type": "object", "properties": { "ok": { "type": "boolean" }, "data": { "$ref": "#/components/schemas/PaymentIntent" } } } } } },
-          "400": { "$ref": "#/components/responses/400" }
-        }
+          "200": {
+            "description": "Idempotent replay \u2014 intent already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PaymentIntent"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Payment intent created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PaymentIntent"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          }
+        },
+        "security": [
+          {
+            "apiKey": [
+              "intent:create"
+            ]
+          }
+        ]
       }
     },
     "/v1/payment-intents/{id}/status": {
       "get": {
-        "tags": ["Payment Intents"],
+        "tags": [
+          "Payment Intents"
+        ],
         "summary": "Get payment intent status",
         "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
-          { "name": "merchantId", "in": "query", "schema": { "type": "string" } },
-          { "$ref": "#/components/parameters/merchantIdHeader" }
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "merchantId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/merchantIdHeader"
+          }
         ],
         "responses": {
           "200": {
@@ -380,15 +1498,34 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "ok": { "type": "boolean" },
+                    "ok": {
+                      "type": "boolean"
+                    },
                     "data": {
                       "type": "object",
                       "properties": {
-                        "intent": { "$ref": "#/components/schemas/PaymentIntent" },
-                        "latestTransaction": { "oneOf": [{ "$ref": "#/components/schemas/PaymentTransaction" }, { "type": "null" }] },
-                        "isTerminal": { "type": "boolean" },
-                        "requiresAction": { "type": "boolean" },
-                        "canRetryPayment": { "type": "boolean" }
+                        "intent": {
+                          "$ref": "#/components/schemas/PaymentIntent"
+                        },
+                        "latestTransaction": {
+                          "oneOf": [
+                            {
+                              "$ref": "#/components/schemas/PaymentTransaction"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "isTerminal": {
+                          "type": "boolean"
+                        },
+                        "requiresAction": {
+                          "type": "boolean"
+                        },
+                        "canRetryPayment": {
+                          "type": "boolean"
+                        }
                       }
                     }
                   }
@@ -396,19 +1533,47 @@
               }
             }
           },
-          "400": { "$ref": "#/components/responses/400" },
-          "404": { "$ref": "#/components/responses/404" }
-        }
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          }
+        },
+        "security": [
+          {
+            "apiKey": [
+              "intent:read"
+            ]
+          }
+        ]
       }
     },
     "/v1/payment-intents/{id}/refundability": {
       "get": {
-        "tags": ["Payment Intents"],
+        "tags": [
+          "Payment Intents"
+        ],
         "summary": "Get refundability",
         "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
-          { "name": "merchantId", "in": "query", "schema": { "type": "string" } },
-          { "$ref": "#/components/parameters/merchantIdHeader" }
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "merchantId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/merchantIdHeader"
+          }
         ],
         "responses": {
           "200": {
@@ -418,25 +1583,47 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "ok": { "type": "boolean" },
+                    "ok": {
+                      "type": "boolean"
+                    },
                     "data": {
                       "type": "object",
                       "properties": {
-                        "intentId": { "type": "string" },
-                        "merchantId": { "type": "string" },
-                        "totalRefundable": { "type": "integer" },
-                        "currency": { "type": "string" },
+                        "intentId": {
+                          "type": "string"
+                        },
+                        "merchantId": {
+                          "type": "string"
+                        },
+                        "totalRefundable": {
+                          "type": "integer"
+                        },
+                        "currency": {
+                          "type": "string"
+                        },
                         "transactions": {
                           "type": "array",
                           "items": {
                             "type": "object",
                             "properties": {
-                              "transactionId": { "type": "string" },
-                              "amount": { "type": "integer" },
-                              "amountAlreadyRefunded": { "type": "integer" },
-                              "amountRefundable": { "type": "integer" },
-                              "provider": { "type": "string" },
-                              "method": { "type": "string" }
+                              "transactionId": {
+                                "type": "string"
+                              },
+                              "amount": {
+                                "type": "integer"
+                              },
+                              "amountAlreadyRefunded": {
+                                "type": "integer"
+                              },
+                              "amountRefundable": {
+                                "type": "integer"
+                              },
+                              "provider": {
+                                "type": "string"
+                              },
+                              "method": {
+                                "type": "string"
+                              }
                             }
                           }
                         }
@@ -447,19 +1634,41 @@
               }
             }
           },
-          "400": { "$ref": "#/components/responses/400" },
-          "404": { "$ref": "#/components/responses/404" }
-        }
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          }
+        },
+        "security": [
+          {
+            "apiKey": [
+              "intent:read"
+            ]
+          }
+        ]
       }
     },
     "/v1/payment-intents/{id}/gateway-payments": {
       "post": {
-        "tags": ["Payment Intents"],
+        "tags": [
+          "Payment Intents"
+        ],
         "summary": "Create gateway payment",
         "description": "Initiates a gateway payment for an existing intent. Returns transaction + updated intent.",
         "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
-          { "$ref": "#/components/parameters/merchantIdHeader" }
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/merchantIdHeader"
+          }
         ],
         "requestBody": {
           "required": true,
@@ -467,15 +1676,38 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["provider", "method", "amount"],
+                "required": [
+                  "provider",
+                  "method",
+                  "amount"
+                ],
                 "properties": {
-                  "merchantId": { "type": "string" },
-                  "provider": { "type": "string", "example": "fake_gateway" },
-                  "method": { "type": "string", "example": "qris" },
-                  "amount": { "type": "integer" },
-                  "idempotencyKey": { "type": "string", "nullable": true },
-                  "providerAccountId": { "type": "string", "nullable": true },
-                  "metadata": { "type": "object", "nullable": true }
+                  "merchantId": {
+                    "type": "string"
+                  },
+                  "provider": {
+                    "type": "string",
+                    "example": "fake_gateway"
+                  },
+                  "method": {
+                    "type": "string",
+                    "example": "qris"
+                  },
+                  "amount": {
+                    "type": "integer"
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "providerAccountId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "nullable": true
+                  }
                 }
               }
             }
@@ -489,13 +1721,21 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "ok": { "type": "boolean" },
+                    "ok": {
+                      "type": "boolean"
+                    },
                     "data": {
                       "type": "object",
                       "properties": {
-                        "transaction": { "$ref": "#/components/schemas/PaymentTransaction" },
-                        "intent": { "$ref": "#/components/schemas/PaymentIntent" },
-                        "idempotentReplay": { "type": "boolean" }
+                        "transaction": {
+                          "$ref": "#/components/schemas/PaymentTransaction"
+                        },
+                        "intent": {
+                          "$ref": "#/components/schemas/PaymentIntent"
+                        },
+                        "idempotentReplay": {
+                          "type": "boolean"
+                        }
                       }
                     }
                   }
@@ -510,13 +1750,21 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "ok": { "type": "boolean" },
+                    "ok": {
+                      "type": "boolean"
+                    },
                     "data": {
                       "type": "object",
                       "properties": {
-                        "transaction": { "$ref": "#/components/schemas/PaymentTransaction" },
-                        "intent": { "$ref": "#/components/schemas/PaymentIntent" },
-                        "idempotentReplay": { "type": "boolean" }
+                        "transaction": {
+                          "$ref": "#/components/schemas/PaymentTransaction"
+                        },
+                        "intent": {
+                          "$ref": "#/components/schemas/PaymentIntent"
+                        },
+                        "idempotentReplay": {
+                          "type": "boolean"
+                        }
                       }
                     }
                   }
@@ -524,20 +1772,44 @@
               }
             }
           },
-          "400": { "$ref": "#/components/responses/400" },
-          "409": { "$ref": "#/components/responses/409" },
-          "422": { "$ref": "#/components/responses/422" }
-        }
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          }
+        },
+        "security": [
+          {
+            "apiKey": [
+              "payment:create"
+            ]
+          }
+        ]
       }
     },
     "/v1/payment-intents/{id}/reconcile": {
       "post": {
-        "tags": ["Payment Intents"],
+        "tags": [
+          "Payment Intents"
+        ],
         "summary": "Reconcile intent totals",
         "description": "Crash-recovery endpoint. Recomputes intent totals from actual transaction state.",
         "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
-          { "$ref": "#/components/parameters/merchantIdHeader" }
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/merchantIdHeader"
+          }
         ],
         "requestBody": {
           "content": {
@@ -545,26 +1817,57 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "merchantId": { "type": "string" }
+                  "merchantId": {
+                    "type": "string"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Reconciliation result", "content": { "application/json": { "schema": { "type": "object" } } } },
-          "400": { "$ref": "#/components/responses/400" }
-        }
+          "200": {
+            "description": "Reconciliation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          }
+        },
+        "security": [
+          {
+            "apiKey": [
+              "payment:reconcile"
+            ]
+          }
+        ]
       }
     },
     "/v1/payment-transactions/{id}/refresh-provider-status": {
       "post": {
-        "tags": ["Payment Transactions"],
+        "tags": [
+          "Payment Transactions"
+        ],
         "summary": "Refresh provider status",
         "description": "Polls the payment provider for the current transaction status and updates the DB if changed.",
         "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
-          { "$ref": "#/components/parameters/merchantIdHeader" }
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/merchantIdHeader"
+          }
         ],
         "requestBody": {
           "content": {
@@ -572,7 +1875,9 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "merchantId": { "type": "string" }
+                  "merchantId": {
+                    "type": "string"
+                  }
                 }
               }
             }
@@ -586,14 +1891,31 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "ok": { "type": "boolean" },
+                    "ok": {
+                      "type": "boolean"
+                    },
                     "data": {
                       "type": "object",
                       "properties": {
-                        "transaction": { "$ref": "#/components/schemas/PaymentTransaction" },
-                        "intent": { "oneOf": [{ "$ref": "#/components/schemas/PaymentIntent" }, { "type": "null" }] },
-                        "providerStatus": { "type": "string" },
-                        "changed": { "type": "boolean" }
+                        "transaction": {
+                          "$ref": "#/components/schemas/PaymentTransaction"
+                        },
+                        "intent": {
+                          "oneOf": [
+                            {
+                              "$ref": "#/components/schemas/PaymentIntent"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "providerStatus": {
+                          "type": "string"
+                        },
+                        "changed": {
+                          "type": "boolean"
+                        }
                       }
                     }
                   }
@@ -601,20 +1923,49 @@
               }
             }
           },
-          "400": { "$ref": "#/components/responses/400" },
-          "404": { "$ref": "#/components/responses/404" }
-        }
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          }
+        },
+        "security": [
+          {
+            "apiKey": [
+              "intent:read"
+            ]
+          }
+        ]
       }
     },
     "/v1/payment-transactions/{transactionId}/refund": {
       "post": {
-        "tags": ["Payment Transactions"],
+        "tags": [
+          "Payment Transactions"
+        ],
         "summary": "Refund a payment transaction",
         "description": "Initiate a full or partial refund for a succeeded payment transaction. Creates an outgoing refund transaction and calls the provider's refund API if supported, manual provider records an offline refund; gateway/sandbox providers without refund support return PROVIDER_REFUND_UNSUPPORTED.",
-        "security": [{ "apiKey": [] }],
+        "security": [
+          {
+            "apiKey": [
+              "payment:refund"
+            ]
+          }
+        ],
         "parameters": [
-          { "name": "transactionId", "in": "path", "required": true, "description": "ID of the original payment transaction to refund", "schema": { "type": "string" } },
-          { "$ref": "#/components/parameters/merchantIdHeader" }
+          {
+            "name": "transactionId",
+            "in": "path",
+            "required": true,
+            "description": "ID of the original payment transaction to refund",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/merchantIdHeader"
+          }
         ],
         "requestBody": {
           "required": true,
@@ -622,13 +1973,35 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["merchantId", "amount"],
+                "required": [
+                  "merchantId",
+                  "amount"
+                ],
                 "properties": {
-                  "merchantId": { "type": "string", "description": "Owner merchant ID (can also be supplied via x-payment-merchant-id header)" },
-                  "amount": { "type": "integer", "minimum": 1, "description": "Refund amount in smallest currency unit (e.g. IDR sen). Must be > 0 and ≤ refundable amount." },
-                  "reason": { "type": "string", "nullable": true, "description": "Optional human-readable refund reason." },
-                  "idempotencyKey": { "type": "string", "nullable": true, "description": "Optional caller-supplied idempotency key for replay/conflict protection." },
-                  "metadata": { "type": "object", "nullable": true, "additionalProperties": true }
+                  "merchantId": {
+                    "type": "string",
+                    "description": "Owner merchant ID (can also be supplied via x-payment-merchant-id header)"
+                  },
+                  "amount": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Refund amount in smallest currency unit (e.g. IDR sen). Must be > 0 and \u2264 refundable amount."
+                  },
+                  "reason": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Optional human-readable refund reason."
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Optional caller-supplied idempotency key for replay/conflict protection."
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "nullable": true,
+                    "additionalProperties": true
+                  }
                 }
               }
             }
@@ -642,15 +2015,31 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "ok": { "type": "boolean", "enum": [true] },
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
                     "data": {
                       "type": "object",
                       "properties": {
-                        "refundTransaction": { "$ref": "#/components/schemas/PaymentTransaction" },
-                        "intent": { "$ref": "#/components/schemas/PaymentIntent" },
-                        "providerRefunded": { "type": "boolean", "description": "true if provider refund API was called; false for manual/offline replay/refund." },
-                        "idempotentReplay": { "type": "boolean" },
-                        "refundableRemaining": { "type": "integer" }
+                        "refundTransaction": {
+                          "$ref": "#/components/schemas/PaymentTransaction"
+                        },
+                        "intent": {
+                          "$ref": "#/components/schemas/PaymentIntent"
+                        },
+                        "providerRefunded": {
+                          "type": "boolean",
+                          "description": "true if provider refund API was called; false for manual/offline replay/refund."
+                        },
+                        "idempotentReplay": {
+                          "type": "boolean"
+                        },
+                        "refundableRemaining": {
+                          "type": "integer"
+                        }
                       }
                     }
                   }
@@ -658,28 +2047,62 @@
               }
             }
           },
-          "400": { "$ref": "#/components/responses/400" },
-          "404": { "$ref": "#/components/responses/404" },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
           "422": {
             "description": "Transaction not refundable or refund amount exceeds refundable",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
           },
           "502": {
             "description": "Provider rejected the refund",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
           }
         }
       }
     },
     "/v1/payment-transactions/{transactionId}/void": {
       "post": {
-        "tags": ["Payment Transactions"],
+        "tags": [
+          "Payment Transactions"
+        ],
         "summary": "Void (cancel) a payment transaction",
         "description": "Cancel a pending or requires_action payment transaction. Calls the provider's cancel API if supported, manual provider voids directly; gateway/sandbox providers without cancel support return PROVIDER_CANCEL_UNSUPPORTED. Intent totals are not changed (the transaction was never succeeded).",
-        "security": [{ "apiKey": [] }],
+        "security": [
+          {
+            "apiKey": [
+              "payment:void"
+            ]
+          }
+        ],
         "parameters": [
-          { "name": "transactionId", "in": "path", "required": true, "description": "ID of the payment transaction to void", "schema": { "type": "string" } },
-          { "$ref": "#/components/parameters/merchantIdHeader" }
+          {
+            "name": "transactionId",
+            "in": "path",
+            "required": true,
+            "description": "ID of the payment transaction to void",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/merchantIdHeader"
+          }
         ],
         "requestBody": {
           "required": true,
@@ -687,12 +2110,29 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["merchantId"],
+                "required": [
+                  "merchantId"
+                ],
                 "properties": {
-                  "merchantId": { "type": "string", "description": "Owner merchant ID (can also be supplied via x-payment-merchant-id header)" },
-                  "reason": { "type": "string", "nullable": true, "description": "Optional human-readable void reason." },
-                  "idempotencyKey": { "type": "string", "nullable": true, "description": "Optional caller-supplied idempotency key for replay/conflict protection." },
-                  "metadata": { "type": "object", "nullable": true, "additionalProperties": true }
+                  "merchantId": {
+                    "type": "string",
+                    "description": "Owner merchant ID (can also be supplied via x-payment-merchant-id header)"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Optional human-readable void reason."
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Optional caller-supplied idempotency key for replay/conflict protection."
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "nullable": true,
+                    "additionalProperties": true
+                  }
                 }
               }
             }
@@ -706,14 +2146,35 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "ok": { "type": "boolean", "enum": [true] },
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
                     "data": {
                       "type": "object",
                       "properties": {
-                        "transaction": { "$ref": "#/components/schemas/PaymentTransaction" },
-                        "intent": { "oneOf": [{ "$ref": "#/components/schemas/PaymentIntent" }, { "type": "null" }] },
-                        "providerCancelled": { "type": "boolean", "description": "true if provider cancel API was called; false for manual/offline replay/cancel." },
-                        "idempotentReplay": { "type": "boolean" }
+                        "transaction": {
+                          "$ref": "#/components/schemas/PaymentTransaction"
+                        },
+                        "intent": {
+                          "oneOf": [
+                            {
+                              "$ref": "#/components/schemas/PaymentIntent"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "providerCancelled": {
+                          "type": "boolean",
+                          "description": "true if provider cancel API was called; false for manual/offline replay/cancel."
+                        },
+                        "idempotentReplay": {
+                          "type": "boolean"
+                        }
                       }
                     }
                   }
@@ -721,32 +2182,71 @@
               }
             }
           },
-          "400": { "$ref": "#/components/responses/400" },
-          "404": { "$ref": "#/components/responses/404" },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
           "422": {
             "description": "Transaction not voidable in current state",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
           },
           "502": {
             "description": "Provider rejected the cancellation",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
           }
         }
       }
     },
     "/v1/webhooks/{provider}": {
       "post": {
-        "tags": ["Webhooks"],
+        "tags": [
+          "Webhooks"
+        ],
         "summary": "Ingest provider webhook",
         "description": "Accepts webhook events from payment providers. Does NOT require a service token. Provider identity is verified via HMAC signature (when secret configured).",
         "security": [],
         "parameters": [
-          { "name": "provider", "in": "path", "required": true, "schema": { "type": "string", "example": "fake_gateway" } },
-          { "name": "x-fakegateway-signature", "in": "header", "description": "HMAC-SHA256 signature for fake_gateway webhooks. Required when PAYMENT_ORCHESTRATION_FAKEGATEWAY_WEBHOOK_SECRET is set.", "schema": { "type": "string" } }
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "fake_gateway"
+            }
+          },
+          {
+            "name": "x-fakegateway-signature",
+            "in": "header",
+            "description": "HMAC-SHA256 signature for fake_gateway webhooks. Required when PAYMENT_ORCHESTRATION_FAKEGATEWAY_WEBHOOK_SECRET is set.",
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "schema": { "type": "object" } } }
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
         },
         "responses": {
           "200": {
@@ -756,33 +2256,80 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "ok": { "type": "boolean" },
-                    "eventId": { "type": "string" },
-                    "provider": { "type": "string" },
-                    "providerReference": { "type": "string" },
-                    "processingStatus": { "type": "string", "enum": ["processed", "skipped", "failed"] },
-                    "idempotentReplay": { "type": "boolean" },
-                    "transaction": { "nullable": true, "type": "object" },
-                    "intent": { "nullable": true, "type": "object" }
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "eventId": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    },
+                    "providerReference": {
+                      "type": "string"
+                    },
+                    "processingStatus": {
+                      "type": "string",
+                      "enum": [
+                        "processed",
+                        "skipped",
+                        "failed"
+                      ]
+                    },
+                    "idempotentReplay": {
+                      "type": "boolean"
+                    },
+                    "transaction": {
+                      "nullable": true,
+                      "type": "object"
+                    },
+                    "intent": {
+                      "nullable": true,
+                      "type": "object"
+                    }
                   }
                 }
               }
             }
           },
-          "401": { "$ref": "#/components/responses/401" },
-          "403": { "$ref": "#/components/responses/401" },
-          "422": { "description": "Webhook processing failed", "content": { "application/json": { "schema": { "type": "object" } } } }
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/401"
+          },
+          "422": {
+            "description": "Webhook processing failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
         }
       }
     },
     "/v1/dev/fake-gateway/transactions/{id}/confirm": {
       "post": {
-        "tags": ["Dev"],
+        "tags": [
+          "Dev"
+        ],
         "summary": "Confirm FakeGateway payment (dev/test only)",
         "description": "Simulates a FakeGateway payment confirmation. NOT available in NODE_ENV=production.",
         "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
-          { "$ref": "#/components/parameters/merchantIdHeader" }
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/merchantIdHeader"
+          }
         ],
         "requestBody": {
           "content": {
@@ -790,7 +2337,9 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "merchantId": { "type": "string" }
+                  "merchantId": {
+                    "type": "string"
+                  }
                 }
               }
             }
@@ -804,13 +2353,21 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "ok": { "type": "boolean" },
+                    "ok": {
+                      "type": "boolean"
+                    },
                     "data": {
                       "type": "object",
                       "properties": {
-                        "alreadyConfirmed": { "type": "boolean" },
-                        "transaction": { "$ref": "#/components/schemas/PaymentTransaction" },
-                        "intent": { "$ref": "#/components/schemas/PaymentIntent" }
+                        "alreadyConfirmed": {
+                          "type": "boolean"
+                        },
+                        "transaction": {
+                          "$ref": "#/components/schemas/PaymentTransaction"
+                        },
+                        "intent": {
+                          "$ref": "#/components/schemas/PaymentIntent"
+                        }
                       }
                     }
                   }
@@ -818,8 +2375,1585 @@
               }
             }
           },
-          "400": { "$ref": "#/components/responses/400" },
-          "403": { "description": "Forbidden in production", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } } }
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "403": {
+            "description": "Forbidden in production",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "apiKey": [
+              "payment:create"
+            ]
+          }
+        ]
+      }
+    },
+    "/v1/merchants/{merchantId}/provider-accounts/{providerAccountId}/methods": {
+      "get": {
+        "tags": [
+          "Payment Methods"
+        ],
+        "summary": "List provider account payment methods",
+        "operationId": "listProviderAccountMethods",
+        "security": [
+          {
+            "apiKey": [
+              "payment_method:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "merchantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "providerAccountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-payment-merchant-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ProviderAccountMethod"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/v1/merchants/{merchantId}/provider-accounts/{providerAccountId}/methods/{method}": {
+      "put": {
+        "tags": [
+          "Payment Methods"
+        ],
+        "summary": "Upsert a provider account payment method",
+        "operationId": "upsertProviderAccountMethod",
+        "security": [
+          {
+            "apiKey": [
+              "payment_method:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "merchantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "providerAccountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "method",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-payment-merchant-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertProviderAccountMethodRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/ProviderAccountMethod"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "created": {
+                              "type": "boolean",
+                              "example": false
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/ProviderAccountMethod"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "created": {
+                              "type": "boolean",
+                              "example": true
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/v1/merchants/{merchantId}/provider-accounts/{providerAccountId}/methods/sync": {
+      "post": {
+        "tags": [
+          "Payment Methods"
+        ],
+        "summary": "Sync provider account payment methods from provider",
+        "operationId": "syncProviderAccountMethods",
+        "security": [
+          {
+            "apiKey": [
+              "payment_method:sync"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "merchantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "providerAccountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-payment-merchant-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "methods": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ProviderAccountMethod"
+                          }
+                        },
+                        "syncedCount": {
+                          "type": "integer"
+                        },
+                        "skippedCount": {
+                          "type": "integer"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/v1/merchants/{merchantId}/payment-methods": {
+      "get": {
+        "tags": [
+          "Payment Methods"
+        ],
+        "summary": "List active payment methods for a merchant (across all provider accounts)",
+        "operationId": "listMerchantPaymentMethods",
+        "security": [
+          {
+            "apiKey": [
+              "payment_method:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "merchantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-payment-merchant-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ProviderAccountMethod"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/v1/payment-intents/{intentId}/payment-options": {
+      "get": {
+        "tags": [
+          "Payment Intents"
+        ],
+        "summary": "Get available payment options for a payment intent",
+        "operationId": "getPaymentOptions",
+        "security": [
+          {
+            "apiKey": [
+              "payment_method:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "merchantId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-payment-merchant-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "intentId": {
+                          "type": "string"
+                        },
+                        "merchantId": {
+                          "type": "string"
+                        },
+                        "currency": {
+                          "type": "string"
+                        },
+                        "amountRemaining": {
+                          "type": "number"
+                        },
+                        "options": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/PaymentOptionItem"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/v1/audit-logs": {
+      "get": {
+        "tags": [
+          "Audit Logs"
+        ],
+        "summary": "List audit log entries",
+        "operationId": "listAuditLogs",
+        "security": [
+          {
+            "apiKey": [
+              "audit_log:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "merchantId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "resourceType",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "resourceId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AuditLogEntry"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/v1/api-clients/{clientId}/credentials": {
+      "post": {
+        "tags": [
+          "API Clients"
+        ],
+        "summary": "Create a new API client credential",
+        "operationId": "createApiClientCredential",
+        "security": [
+          {
+            "apiKey": [
+              "api_client:credential:create"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "clientId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expiresAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "nullable": true
+                  },
+                  "scopes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "metadata": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ApiClientCredentialCreated"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "API Clients"
+        ],
+        "summary": "List API client credentials",
+        "operationId": "listApiClientCredentials",
+        "security": [
+          {
+            "apiKey": [
+              "api_client:credential:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "clientId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "credentials": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ApiClientCredential"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/v1/api-clients/{clientId}/credentials/rotate": {
+      "post": {
+        "tags": [
+          "API Clients"
+        ],
+        "summary": "Rotate an API client credential",
+        "operationId": "rotateApiClientCredential",
+        "security": [
+          {
+            "apiKey": [
+              "api_client:credential:rotate"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "clientId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "revokeOldCredentialId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "expiresAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "newCredential": {
+                          "$ref": "#/components/schemas/ApiClientCredentialCreated"
+                        },
+                        "revokedCredential": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiClientCredential"
+                            },
+                            {
+                              "nullable": true
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/v1/api-clients/{clientId}/credentials/{credentialId}/revoke": {
+      "post": {
+        "tags": [
+          "API Clients"
+        ],
+        "summary": "Revoke an API client credential",
+        "operationId": "revokeApiClientCredential",
+        "security": [
+          {
+            "apiKey": [
+              "api_client:credential:revoke"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "clientId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "credentialId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ApiClientCredential"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/v1/api-clients/{clientId}/signing-keys": {
+      "post": {
+        "tags": [
+          "API Clients"
+        ],
+        "summary": "Create a signing key for HMAC request signing",
+        "operationId": "createSigningKey",
+        "security": [
+          {
+            "apiKey": [
+              "api_client:signing_key:create"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "clientId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expiresAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/SigningKeyCreated"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "API Clients"
+        ],
+        "summary": "List signing keys",
+        "operationId": "listSigningKeys",
+        "security": [
+          {
+            "apiKey": [
+              "api_client:signing_key:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "clientId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "keys": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/SigningKey"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/v1/api-clients/{clientId}/signing-keys/rotate": {
+      "post": {
+        "tags": [
+          "API Clients"
+        ],
+        "summary": "Rotate a signing key",
+        "operationId": "rotateSigningKey",
+        "security": [
+          {
+            "apiKey": [
+              "api_client:signing_key:rotate"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "clientId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "revokeOldKeyId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "expiresAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "newSigningKey": {
+                          "$ref": "#/components/schemas/SigningKeyCreated"
+                        },
+                        "revokedSigningKey": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/SigningKey"
+                            },
+                            {
+                              "nullable": true
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/v1/api-clients/{clientId}/signing-keys/{signingKeyId}/revoke": {
+      "post": {
+        "tags": [
+          "API Clients"
+        ],
+        "summary": "Revoke a signing key",
+        "operationId": "revokeSigningKey",
+        "security": [
+          {
+            "apiKey": [
+              "api_client:signing_key:revoke"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "clientId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "signingKeyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/SigningKey"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/v1/merchants/{merchantId}/webhooks/endpoints": {
+      "post": {
+        "tags": [
+          "Merchant Webhooks"
+        ],
+        "summary": "Create a merchant outbound webhook endpoint",
+        "operationId": "createMerchantWebhookEndpoint",
+        "security": [
+          {
+            "apiKey": [
+              "webhook:manage"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "merchantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-payment-merchant-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "url"
+                ],
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "subscribedEvents": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/WebhookEventType"
+                    }
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "endpoint": {
+                          "$ref": "#/components/schemas/WebhookEndpoint"
+                        },
+                        "rawSecret": {
+                          "type": "string",
+                          "description": "Raw webhook secret. Returned once only. Store in a backend secret manager. Never echoed again."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Merchant Webhooks"
+        ],
+        "summary": "List merchant outbound webhook endpoints",
+        "operationId": "listMerchantWebhookEndpoints",
+        "security": [
+          {
+            "apiKey": [
+              "webhook:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "merchantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-payment-merchant-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "endpoints": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/WebhookEndpoint"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/v1/merchants/{merchantId}/webhooks/endpoints/{endpointId}/disable": {
+      "post": {
+        "tags": [
+          "Merchant Webhooks"
+        ],
+        "summary": "Disable a merchant outbound webhook endpoint",
+        "operationId": "disableMerchantWebhookEndpoint",
+        "security": [
+          {
+            "apiKey": [
+              "webhook:manage"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "merchantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "endpointId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "endpoint": {
+                          "$ref": "#/components/schemas/WebhookEndpoint"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/v1/merchants/{merchantId}/webhooks/endpoints/{endpointId}/rotate-secret": {
+      "post": {
+        "tags": [
+          "Merchant Webhooks"
+        ],
+        "summary": "Rotate merchant webhook endpoint secret",
+        "operationId": "rotateMerchantWebhookEndpointSecret",
+        "security": [
+          {
+            "apiKey": [
+              "webhook:manage"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "merchantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "endpointId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "endpoint": {
+                          "$ref": "#/components/schemas/WebhookEndpoint"
+                        },
+                        "rawSecret": {
+                          "type": "string",
+                          "description": "New raw secret returned once only."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/v1/merchants/{merchantId}/webhooks/deliveries": {
+      "get": {
+        "tags": [
+          "Merchant Webhooks"
+        ],
+        "summary": "List merchant webhook deliveries",
+        "operationId": "listMerchantWebhookDeliveries",
+        "security": [
+          {
+            "apiKey": [
+              "webhook:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "merchantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "endpointId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "deliveries": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/WebhookDelivery"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/v1/merchants/{merchantId}/webhooks/replay": {
+      "post": {
+        "tags": [
+          "Merchant Webhooks"
+        ],
+        "summary": "Replay a webhook delivery or re-fan-out an event",
+        "operationId": "replayMerchantWebhook",
+        "security": [
+          {
+            "apiKey": [
+              "webhook:manage"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "merchantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "deliveryId": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Replay a specific delivery by ID"
+                  },
+                  "eventId": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Re-fan-out an event to all active endpoints"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Replay queued"
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
         }
       }
     }

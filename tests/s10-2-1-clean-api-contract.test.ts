@@ -24,11 +24,11 @@ test('S10.2.1 client SDK removed pre-launch aliases and argument guessing helper
 
   assert.match(client, /listProviderAccountMethods\(merchantId: string, providerAccountId: string\)/);
   assert.match(client, /upsertProviderAccountMethod\(merchantId: string, providerAccountId: string, input: UpsertProviderAccountMethodRequest\)/);
-  assert.match(client, /deleteProviderAccountMethod\(merchantId: string, providerAccountId: string, method: string\)/);
+  // deleteProviderAccountMethod removed in S10.4 (no backing route)
   assert.match(client, /syncProviderAccountMethods\(merchantId: string, providerAccountId: string\)/);
   assert.doesNotMatch(client, /listProviderAccountMethods\(providerAccountId: string\)/);
   assert.doesNotMatch(client, /upsertProviderAccountMethod\(providerAccountId: string, input:/);
-  assert.doesNotMatch(client, /deleteProviderAccountMethod\(providerAccountId: string, method: string\)/);
+  assert.doesNotMatch(client, /deleteProviderAccountMethod/);  // must not appear
   assert.doesNotMatch(client, /syncProviderAccountMethods\(providerAccountId: string\)/);
 });
 

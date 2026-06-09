@@ -40,6 +40,14 @@ import type {
   RotateSigningKeyRequest,
   RotateSigningKeyResponse,
   ClientSigningKeyResponse,
+  CreateMerchantWebhookEndpointRequest,
+  CreateMerchantWebhookEndpointResponse,
+  ListMerchantWebhookEndpointsResponse,
+  RotateMerchantWebhookEndpointSecretResponse,
+  ListMerchantWebhookDeliveriesResponse,
+  ReplayMerchantWebhookRequest,
+  ReplayMerchantWebhookResponse,
+  MerchantWebhookEndpointResponse,
 } from './types.ts';
 
 interface SigningHeaders {
@@ -275,10 +283,6 @@ export class PaymentOrchestrationClient {
     return this.request<UpsertProviderAccountMethodResponse>('PUT', `/v1/merchants/${encodeURIComponent(merchantId)}/provider-accounts/${encodeURIComponent(providerAccountId)}/methods/${encodeURIComponent(input.method)}`, input, this.merchantHeader(merchantId));
   }
 
-  async deleteProviderAccountMethod(merchantId: string, providerAccountId: string, method: string): Promise<{ ok: true }> {
-    return this.request<{ ok: true }>('DELETE', `/v1/merchants/${encodeURIComponent(merchantId)}/provider-accounts/${encodeURIComponent(providerAccountId)}/methods/${encodeURIComponent(method)}`, undefined, this.merchantHeader(merchantId));
-  }
-
   async syncProviderAccountMethods(merchantId: string, providerAccountId: string): Promise<SyncProviderAccountMethodsResponse> {
     return this.request<SyncProviderAccountMethodsResponse>('POST', `/v1/merchants/${encodeURIComponent(merchantId)}/provider-accounts/${encodeURIComponent(providerAccountId)}/methods/sync`, undefined, this.merchantHeader(merchantId));
   }
@@ -301,6 +305,36 @@ export class PaymentOrchestrationClient {
 
   async confirmFakeGatewayPayment(input: ConfirmFakeGatewayPaymentRequest): Promise<ConfirmFakeGatewayPaymentResponse> {
     return this.request<ConfirmFakeGatewayPaymentResponse>('POST', '/v1/dev/fake-gateway/confirm', this.withMerchantId(input));
+  }
+
+  // ── S10.3: Merchant outbound webhook management ─────────────────────────────
+
+  async createMerchantWebhookEndpoint(merchantId: string, input: CreateMerchantWebhookEndpointRequest): Promise<CreateMerchantWebhookEndpointResponse> {
+    return this.request<CreateMerchantWebhookEndpointResponse>('POST', `/v1/merchants/${encodeURIComponent(merchantId)}/webhooks/endpoints`, input, this.merchantHeader(merchantId));
+  }
+
+  async listMerchantWebhookEndpoints(merchantId: string): Promise<ListMerchantWebhookEndpointsResponse> {
+    return this.request<ListMerchantWebhookEndpointsResponse>('GET', `/v1/merchants/${encodeURIComponent(merchantId)}/webhooks/endpoints`, undefined, this.merchantHeader(merchantId));
+  }
+
+  async disableMerchantWebhookEndpoint(merchantId: string, endpointId: string): Promise<{ endpoint: MerchantWebhookEndpointResponse }> {
+    return this.request<{ endpoint: MerchantWebhookEndpointResponse }>('POST', `/v1/merchants/${encodeURIComponent(merchantId)}/webhooks/endpoints/${encodeURIComponent(endpointId)}/disable`, {}, this.merchantHeader(merchantId));
+  }
+
+  async rotateMerchantWebhookEndpointSecret(merchantId: string, endpointId: string): Promise<RotateMerchantWebhookEndpointSecretResponse> {
+    return this.request<RotateMerchantWebhookEndpointSecretResponse>('POST', `/v1/merchants/${encodeURIComponent(merchantId)}/webhooks/endpoints/${encodeURIComponent(endpointId)}/rotate-secret`, {}, this.merchantHeader(merchantId));
+  }
+
+  async listMerchantWebhookDeliveries(merchantId: string, opts?: { endpointId?: string; limit?: number }): Promise<ListMerchantWebhookDeliveriesResponse> {
+    const params = new URLSearchParams();
+    if (opts?.endpointId) params.set('endpointId', opts.endpointId);
+    if (opts?.limit != null) params.set('limit', String(opts.limit));
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return this.request<ListMerchantWebhookDeliveriesResponse>('GET', `/v1/merchants/${encodeURIComponent(merchantId)}/webhooks/deliveries${qs}`, undefined, this.merchantHeader(merchantId));
+  }
+
+  async replayMerchantWebhook(merchantId: string, input: ReplayMerchantWebhookRequest): Promise<ReplayMerchantWebhookResponse> {
+    return this.request<ReplayMerchantWebhookResponse>('POST', `/v1/merchants/${encodeURIComponent(merchantId)}/webhooks/replay`, input, this.merchantHeader(merchantId));
   }
 
   async getReadiness(): Promise<ReadinessResponse> {
