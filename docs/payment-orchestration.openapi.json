@@ -2410,6 +2410,11 @@
             "apiKey": [
               "payment_method:read"
             ]
+          },
+          {
+            "apiKey": [
+              "provider_account:read"
+            ]
           }
         ],
         "parameters": [
@@ -2481,6 +2486,11 @@
           {
             "apiKey": [
               "payment_method:write"
+            ]
+          },
+          {
+            "apiKey": [
+              "provider_account:create"
             ]
           }
         ],
@@ -2614,6 +2624,11 @@
             "apiKey": [
               "payment_method:sync"
             ]
+          },
+          {
+            "apiKey": [
+              "provider_account:create"
+            ]
           }
         ],
         "parameters": [
@@ -2700,6 +2715,16 @@
             "apiKey": [
               "payment_method:read"
             ]
+          },
+          {
+            "apiKey": [
+              "provider_account:read"
+            ]
+          },
+          {
+            "apiKey": [
+              "intent:read"
+            ]
           }
         ],
         "parameters": [
@@ -2763,6 +2788,11 @@
           {
             "apiKey": [
               "payment_method:read"
+            ]
+          },
+          {
+            "apiKey": [
+              "intent:read"
             ]
           }
         ],

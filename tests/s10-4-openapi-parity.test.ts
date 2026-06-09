@@ -190,4 +190,63 @@ describe('S10.4 — OpenAPI ↔ Service parity', () => {
     const missing = required.filter(t => !tagNames.has(t));
     assert.deepEqual(missing, [], `Missing tags: ${missing.join(', ')}`);
   });
+
+  // ── S10.4.1 correction assertions ──────────────────────────────────────────
+
+  it('OA12: one-of routes declare multiple security requirement objects (not single)', () => {
+    const oneOfRoutes: Array<[string, string, number]> = [
+      ['/v1/merchants/{merchantId}/provider-accounts/{providerAccountId}/methods', 'get', 2],
+      ['/v1/merchants/{merchantId}/provider-accounts/{providerAccountId}/methods/{method}', 'put', 2],
+      ['/v1/merchants/{merchantId}/provider-accounts/{providerAccountId}/methods/sync', 'post', 2],
+      ['/v1/merchants/{merchantId}/payment-methods', 'get', 3],
+      ['/v1/payment-intents/{intentId}/payment-options', 'get', 2],
+    ];
+    for (const [path, method, expectedCount] of oneOfRoutes) {
+      const op = (spec.paths[path] as Record<string, { security?: unknown[] }>)[method];
+      assert.ok(op, `Missing path: ${method.toUpperCase()} ${path}`);
+      const security = op.security ?? [];
+      assert.equal(security.length, expectedCount,
+        `${method.toUpperCase()} ${path} — expected ${expectedCount} security alternatives (one-of), got ${security.length}`);
+    }
+  });
+
+  it('OA13: one-of security requirements each contain exactly one scope (not combined)', () => {
+    const oneOfPaths = [
+      '/v1/merchants/{merchantId}/provider-accounts/{providerAccountId}/methods',
+      '/v1/merchants/{merchantId}/provider-accounts/{providerAccountId}/methods/{method}',
+      '/v1/merchants/{merchantId}/provider-accounts/{providerAccountId}/methods/sync',
+      '/v1/merchants/{merchantId}/payment-methods',
+      '/v1/payment-intents/{intentId}/payment-options',
+    ];
+    for (const p of oneOfPaths) {
+      for (const [method, op] of Object.entries(spec.paths[p] as Record<string, { security?: Array<Record<string, string[]>> }>)) {
+        for (const [idx, secReq] of (op.security ?? []).entries()) {
+          const scopeArrays = Object.values(secReq);
+          assert.equal(scopeArrays.length, 1,
+            `${method.toUpperCase()} ${p} — security[${idx}] should have exactly 1 key`);
+          assert.equal(scopeArrays[0]!.length, 1,
+            `${method.toUpperCase()} ${p} — security[${idx}].apiKey should have exactly 1 scope`);
+        }
+      }
+    }
+  });
+
+  it('OA14: non-one-of /v1/* routes still have exactly one security requirement object', () => {
+    const oneOfPaths = new Set([
+      '/v1/merchants/{merchantId}/provider-accounts/{providerAccountId}/methods',
+      '/v1/merchants/{merchantId}/provider-accounts/{providerAccountId}/methods/{method}',
+      '/v1/merchants/{merchantId}/provider-accounts/{providerAccountId}/methods/sync',
+      '/v1/merchants/{merchantId}/payment-methods',
+      '/v1/payment-intents/{intentId}/payment-options',
+      '/v1/webhooks/{provider}', // no auth
+    ]);
+    for (const [path, methods] of Object.entries(spec.paths)) {
+      if (!path.startsWith('/v1/') || oneOfPaths.has(path)) continue;
+      for (const [method, op] of Object.entries(methods as Record<string, { security?: unknown[] }>)) {
+        const security = op?.security ?? [];
+        assert.equal(security.length, 1,
+          `${method.toUpperCase()} ${path} — expected exactly 1 security requirement, got ${security.length}`);
+      }
+    }
+  });
 });

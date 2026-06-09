@@ -122,6 +122,12 @@ api_client:credential:create
 api_client:credential:read
 api_client:credential:revoke
 api_client:credential:rotate
+api_client:signing_key:create
+api_client:signing_key:read
+api_client:signing_key:rotate
+api_client:signing_key:revoke
+webhook:manage
+webhook:read
 ```
 
 ## Legacy Token Policy
