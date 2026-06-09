@@ -232,7 +232,7 @@ export function createProviderAccountMethodsSubRouter(container: ServiceContaine
           statusCode: result.created ? 201 : 200,
           metadata: { method },
         });
-        res.status(result.created ? 201 : 200).json({ ok: true, data: serializeMethod(result.method), created: result.created });
+        res.status(result.created ? 201 : 200).json({ ok: true, data: { ...serializeMethod(result.method), created: result.created } });
       } catch (err) {
         void auditError(req, container, {
           action: AuditAction.PAYMENT_METHOD_UPSERT,

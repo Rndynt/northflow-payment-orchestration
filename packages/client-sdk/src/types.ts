@@ -414,23 +414,32 @@ export interface UpsertProviderAccountMethodRequest {
   metadata?: Record<string, unknown>;
 }
 
-export interface UpsertProviderAccountMethodResponse {
-  data: ProviderAccountMethodResponse;
+/**
+ * UpsertProviderAccountMethodResponse — unwrapped shape after SDK `{ ok, data }` unwrap.
+ * Service returns `{ ok: true, data: { ...method, created } }`.
+ * `created` is true when the method was newly created, false when updated.
+ */
+export interface UpsertProviderAccountMethodResponse extends ProviderAccountMethodResponse {
   created: boolean;
 }
 
+/**
+ * SyncProviderAccountMethodsResponse — unwrapped shape after SDK `{ ok, data }` unwrap.
+ * Service returns `{ ok: true, data: { methods, syncedCount, skippedCount, message } }`.
+ */
 export interface SyncProviderAccountMethodsResponse {
-  data: {
-    methods: ProviderAccountMethodResponse[];
-    syncedCount: number;
-    skippedCount: number;
-    message: string;
-  };
+  methods: ProviderAccountMethodResponse[];
+  syncedCount: number;
+  skippedCount: number;
+  message: string;
 }
 
-export interface ListProviderAccountMethodsResponse {
-  data: ProviderAccountMethodResponse[];
-}
+/**
+ * ListProviderAccountMethodsResponse — unwrapped shape after SDK `{ ok, data }` unwrap.
+ * Service returns `{ ok: true, data: ProviderAccountMethodResponse[] }`.
+ * The unwrapped value is the array directly.
+ */
+export type ListProviderAccountMethodsResponse = ProviderAccountMethodResponse[];
 
 export interface PaymentOptionItem {
   method: string;
@@ -444,23 +453,119 @@ export interface PaymentOptionItem {
   publicConfig: Record<string, unknown>;
 }
 
+/**
+ * PaymentIntentPaymentOptionsResponse — unwrapped shape after SDK `{ ok, data }` unwrap.
+ * Service returns `{ ok: true, data: { intentId, merchantId, currency, amountRemaining, options } }`.
+ */
 export interface PaymentIntentPaymentOptionsResponse {
-  data: {
-    intentId: string;
-    merchantId: string;
-    currency: string;
-    amountRemaining: number;
-    options: PaymentOptionItem[];
-  };
+  intentId: string;
+  merchantId: string;
+  currency: string;
+  amountRemaining: number;
+  options: PaymentOptionItem[];
 }
 
-// ── Compatibility response aliases ───────────────────────────────────────────
+// ── Provider action response ─────────────────────────────────────────────────
 
-/** Compatibility shape for provider actions returned by older integrations. */
+/** Shape for provider action descriptors returned by gateway payment responses. */
 export interface ProviderActionResponse {
   type: string;
   descriptor: string;
   label: string;
   value: string | null;
   url: string | null;
+}
+
+// ── S10.3: Merchant outbound webhook types ────────────────────────────────────
+
+export type MerchantWebhookEventType =
+  | 'payment_intent.requires_payment'
+  | 'payment_intent.partially_paid'
+  | 'payment_intent.paid'
+  | 'payment_intent.failed'
+  | 'payment_intent.expired'
+  | 'payment_intent.cancelled'
+  | 'payment_intent.refunded'
+  | 'payment_intent.voided'
+  | 'payment_transaction.requires_action'
+  | 'payment_transaction.succeeded'
+  | 'payment_transaction.failed'
+  | 'payment_transaction.cancelled'
+  | 'payment_transaction.refunded'
+  | 'payment_transaction.voided';
+
+export type MerchantWebhookEndpointStatus = 'active' | 'disabled';
+export type MerchantWebhookDeliveryStatus = 'queued' | 'delivering' | 'succeeded' | 'failed' | 'dead';
+
+export interface MerchantWebhookEndpointResponse {
+  id: string;
+  merchantId: string;
+  url: string;
+  status: MerchantWebhookEndpointStatus;
+  subscribedEvents: MerchantWebhookEventType[];
+  /** Prefix of the raw secret (safe to store/display). Never the raw secret. */
+  secretPrefix: string;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+  disabledAt: string | null;
+}
+
+export interface CreateMerchantWebhookEndpointRequest {
+  url: string;
+  subscribedEvents?: MerchantWebhookEventType[];
+  metadata?: Record<string, unknown> | null;
+}
+
+/** Returned only once on create or rotate. Store rawSecret in a backend secret manager. */
+export interface CreateMerchantWebhookEndpointResponse {
+  endpoint: MerchantWebhookEndpointResponse;
+  /** Raw secret returned ONCE. Never echoed again. */
+  rawSecret: string;
+}
+
+export interface ListMerchantWebhookEndpointsResponse {
+  endpoints: MerchantWebhookEndpointResponse[];
+}
+
+export interface RotateMerchantWebhookEndpointSecretResponse {
+  endpoint: MerchantWebhookEndpointResponse;
+  /** New raw secret returned ONCE. Never echoed again. */
+  rawSecret: string;
+}
+
+export interface MerchantWebhookDeliveryResponse {
+  id: string;
+  eventId: string;
+  endpointId: string;
+  merchantId: string;
+  status: MerchantWebhookDeliveryStatus;
+  attemptCount: number;
+  maxAttempts: number;
+  nextAttemptAt: string;
+  lastAttemptAt: string | null;
+  lastResponseStatus: number | null;
+  lastResponseBodyTruncated: string | null;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deliveredAt: string | null;
+}
+
+export interface ListMerchantWebhookDeliveriesResponse {
+  deliveries: MerchantWebhookDeliveryResponse[];
+}
+
+export interface ReplayMerchantWebhookRequest {
+  /** Replay a specific delivery by ID. */
+  deliveryId?: string | null;
+  /** Replay all active endpoints for an event by ID. */
+  eventId?: string | null;
+}
+
+export interface ReplayMerchantWebhookResponse {
+  /** Present when replaying by deliveryId. */
+  delivery?: MerchantWebhookDeliveryResponse;
+  /** Present when replaying by eventId. */
+  deliveries?: MerchantWebhookDeliveryResponse[];
 }

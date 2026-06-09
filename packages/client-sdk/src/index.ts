@@ -85,4 +85,17 @@ export type {
   ListProviderAccountMethodsResponse,
   PaymentOptionItem,
   PaymentIntentPaymentOptionsResponse,
+  // S10.3: Merchant outbound webhook
+  MerchantWebhookEventType,
+  MerchantWebhookEndpointStatus,
+  MerchantWebhookDeliveryStatus,
+  MerchantWebhookEndpointResponse,
+  CreateMerchantWebhookEndpointRequest,
+  CreateMerchantWebhookEndpointResponse,
+  ListMerchantWebhookEndpointsResponse,
+  RotateMerchantWebhookEndpointSecretResponse,
+  MerchantWebhookDeliveryResponse,
+  ListMerchantWebhookDeliveriesResponse,
+  ReplayMerchantWebhookRequest,
+  ReplayMerchantWebhookResponse,
 } from './types.ts';
