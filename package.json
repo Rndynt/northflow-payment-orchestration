@@ -15,7 +15,9 @@
     "db:migrate": "pnpm --filter @northflow/payment-orchestration-service db:migrate",
     "db:generate": "pnpm --filter @northflow/payment-orchestration-service db:generate",
     "worker": "pnpm --filter @northflow/payment-orchestration-service worker",
-    "extraction-check": "npx tsx --tsconfig tests/tsconfig.json scripts/extraction-check.ts"
+    "extraction-check": "npx tsx --tsconfig tests/tsconfig.json scripts/extraction-check.ts",
+    "s10:readiness": "npx tsx scripts/s10-5-runtime-readiness-check.ts",
+    "s10:smoke": "npx tsx scripts/s10-5-bootstrap-smoke.ts"
   },
   "devDependencies": {
     "@types/node": "20.16.11",
