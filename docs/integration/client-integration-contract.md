@@ -73,27 +73,63 @@ void:<transactionId>
 - `getProviderAccount`
 - `listProviderAccountMethods`
 - `upsertProviderAccountMethod`
-- `deleteProviderAccountMethod`
 - `syncProviderAccountMethods`
 - `createSigningKey`
 - `listSigningKeys`
 - `rotateSigningKey`
 - `revokeSigningKey`
+- `createMerchantWebhookEndpoint`
+- `listMerchantWebhookEndpoints`
+- `disableMerchantWebhookEndpoint`
+- `rotateMerchantWebhookEndpointSecret`
+- `listMerchantWebhookDeliveries`
+- `replayMerchantWebhook`
 - `confirmFakeGatewayPayment`
 - `getReadiness`
 
 ## REST route families
 
+Payment Intents & Transactions:
 - `/v1/payment-intents`
 - `/v1/payment-intents/:id/status`
 - `/v1/payment-intents/:id/refundability`
 - `/v1/payment-intents/:id/gateway-payments`
+- `/v1/payment-intents/:id/reconcile`
 - `/v1/payment-intents/:intentId/payment-options`
+- `/v1/payment-transactions/:id/refresh-provider-status`
 - `/v1/payment-transactions/:id/refund`
 - `/v1/payment-transactions/:id/void`
+
+Merchants & Provider Accounts:
+- `/v1/merchants`
+- `/v1/merchants/:id`
 - `/v1/merchants/:merchantId/provider-accounts`
+- `/v1/merchants/:merchantId/provider-accounts/:id`
 - `/v1/merchants/:merchantId/provider-accounts/:providerAccountId/methods`
+- `/v1/merchants/:merchantId/provider-accounts/:providerAccountId/methods/:method`
+- `/v1/merchants/:merchantId/provider-accounts/:providerAccountId/methods/sync`
+- `/v1/merchants/:merchantId/payment-methods`
+
+Merchant Outbound Webhooks (S10.3):
+- `/v1/merchants/:merchantId/webhooks/endpoints`
+- `/v1/merchants/:merchantId/webhooks/endpoints/:endpointId/disable`
+- `/v1/merchants/:merchantId/webhooks/endpoints/:endpointId/rotate-secret`
+- `/v1/merchants/:merchantId/webhooks/deliveries`
+- `/v1/merchants/:merchantId/webhooks/replay`
+
+API Client Key Management:
 - `/v1/api-clients/:clientId/signing-keys`
+- `/v1/api-clients/:clientId/signing-keys/rotate`
+- `/v1/api-clients/:clientId/signing-keys/:signingKeyId/revoke`
+- `/v1/api-clients/:clientId/credentials`
+- `/v1/api-clients/:clientId/credentials/rotate`
+- `/v1/api-clients/:clientId/credentials/:credentialId/revoke`
+
+Audit & Health:
+- `/v1/audit-logs`
+- `/health`
+- `/version`
+- `/ready`
 
 ## Current status model
 
