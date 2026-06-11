@@ -27,10 +27,8 @@ describe('S10.5.1 Fix 2 — Payment method upsert uses PUT', () => {
     assert.ok(/put\s*\(\s*`[^`]*\/methods\/\$\{SMOKE_METHOD\}/.test(smoke), 'put() must target /methods/${SMOKE_METHOD}');
   });
   it('F2b: step 4 comment section uses put not post', () => {
-    // Match from "Step 4:" header comment to "Step 5:" header comment — inside the IIFE
     const step4 = smoke.match(/\/\/ ── Step 4:[\s\S]*?\/\/ ── Step 5:/)?.[0] ?? '';
     assert.ok(step4.length > 0, 'Step 4 section not found');
-    // The section should call put() not post() for the upsert
     assert.ok(!step4.match(/\bpost\s*\(\s*`[^`]*\/methods\//), 'post() must not be used for /methods/ upsert in step 4');
   });
 });
@@ -44,6 +42,32 @@ describe('S10.5.1 Fix 3 — Status from intent.status', () => {
   });
   it('F3c: fails clearly when intent.status absent', () => {
     assert.ok(smoke.includes('intent.status missing'));
+  });
+});
+
+describe('S10.5.1 Fix 3b — Gateway payment transaction response', () => {
+  const step6 = smoke.match(/Step 6:[\s\S]*?Step 7:/)?.[0] ?? '';
+
+  it('F3b.1: step 6 section exists', () => {
+    assert.ok(step6.length > 0, 'Step 6 gateway payment section not found');
+  });
+
+  it('F3b.2: reads transaction id from data.transaction.id', () => {
+    assert.ok(
+      step6.includes('gatewayPaymentData.transaction?.id'),
+      'gateway payment transaction id must be parsed from data.transaction.id',
+    );
+  });
+
+  it('F3b.3: fails clearly when transaction.id is missing', () => {
+    assert.ok(step6.includes('transaction.id missing'), 'missing transaction.id must be a FAIL condition');
+  });
+
+  it('F3b.4: does not parse gateway payment transaction id from top-level data.id', () => {
+    assert.ok(
+      !step6.includes("(data as Record<string, unknown>)?.id"),
+      'gateway payment must not parse transactionId from top-level data.id',
+    );
   });
 });
 
@@ -137,7 +161,7 @@ describe('S10.5.1 Fix 9 — request() helper contract', () => {
     assert.ok(smoke.includes('x-payment-merchant-id'));
   });
   it('F9d: unwraps ok:true data envelope', () => {
-    assert.ok(smoke.includes("envelope?.ok === true"));
+    assert.ok(smoke.includes('envelope?.ok === true'));
   });
   it('F9e: GET passes undefined body', () => {
     assert.ok(smoke.includes("request('GET', path, undefined"));
