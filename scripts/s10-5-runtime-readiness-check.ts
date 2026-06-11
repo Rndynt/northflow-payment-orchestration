@@ -112,127 +112,130 @@ function hasSecretLeak(body: unknown): boolean {
     /Bearer\s+nf\./.test(text);
 }
 
-// ── Checks ────────────────────────────────────────────────────────────────────
-
-await check('GET /health', async () => {
-  const { status, body } = await fetchJson(`${BASE_URL}/health`);
-  if (status !== 200) return { ok: false, detail: `HTTP ${status}` };
-  const b = body as Record<string, unknown>;
-  if (!b?.ok) return { ok: false, detail: 'ok != true' };
-  if (hasSecretLeak(body)) return { ok: false, detail: 'SECURITY: secret-looking value in response' };
-  return { ok: true, detail: `service=${b.service}` };
-});
-
-await check('GET /version', async () => {
-  const { status, body } = await fetchJson(`${BASE_URL}/version`);
-  if (status !== 200) return { ok: false, detail: `HTTP ${status}` };
-  const b = body as Record<string, unknown>;
-  if (hasSecretLeak(body)) return { ok: false, detail: 'SECURITY: secret-looking value in response' };
-  return { ok: true, detail: `v${b.version ?? '?'} phase=${b.phase ?? '?'}` };
-});
-
-await check('GET /ready', async () => {
-  const headers: Record<string, string> = {};
-  if (READY_TOKEN) headers['x-nf-ready-token'] = READY_TOKEN;
-  const { status, body } = await fetchJson(`${BASE_URL}/ready`, { headers });
-  if (READY_TOKEN && status === 401) return { ok: false, detail: 'Token rejected — verify NORTHFLOW_READY_TOKEN' };
-  if (!READY_TOKEN && status === 401) return { ok: false, detail: '/ready is token-protected but NORTHFLOW_READY_TOKEN not set' };
-  if (status !== 200) return { ok: false, detail: `HTTP ${status}` };
-  const b = body as Record<string, unknown>;
-  if (!b?.ok) return { ok: false, detail: `ok=false: ${JSON.stringify(b)}` };
-  if (hasSecretLeak(body)) return { ok: false, detail: 'SECURITY: secret-looking value in response' };
-  const db = b.database as string;
-  if (db !== 'configured') return { ok: false, detail: `database=${db} — DATABASE_URL may not be set` };
-  return { ok: true, detail: `database=${db}` };
-});
-
-await check('Dev routes absent in production', async () => {
-  const { status } = await fetchJson(`${BASE_URL}/v1/dev/fake-gateway/transactions/smoke-check/confirm`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: '{}',
+// ── Run checks ──────────────────────────────────────────────────────────────
+void (async () => {
+  // ── Checks ────────────────────────────────────────────────────────────────────
+  
+  await check('GET /health', async () => {
+    const { status, body } = await fetchJson(`${BASE_URL}/health`);
+    if (status !== 200) return { ok: false, detail: `HTTP ${status}` };
+    const b = body as Record<string, unknown>;
+    if (!b?.ok) return { ok: false, detail: 'ok != true' };
+    if (hasSecretLeak(body)) return { ok: false, detail: 'SECURITY: secret-looking value in response' };
+    return { ok: true, detail: `service=${b.service}` };
   });
-  // In production, dev routes should not exist (404). In dev/staging they might (200, 400, 401, 403).
-  // We don't fail this check — just report what we found.
-  const isProduction = status === 404;
-  return {
-    ok: true,
-    detail: isProduction
-      ? 'route absent (production-safe)'
-      : `route exists with status ${status} (dev/staging environment)`,
-  };
-});
-
-if (!API_KEY) {
-  skip('Authenticated read (GET /v1/merchants/:id)', 'NORTHFLOW_API_KEY not set');
-} else if (!MERCHANT_ID) {
-  skip('Authenticated read (GET /v1/merchants/:id)', 'NORTHFLOW_MERCHANT_ID not set');
-} else {
-  await check('Authenticated read (GET /v1/merchants/:id)', async () => {
-    const { status, body } = await fetchJson(
-      `${BASE_URL}/v1/merchants/${encodeURIComponent(MERCHANT_ID)}`,
-      {
-        headers: {
-          Authorization: `Bearer ${API_KEY}`,
-          'x-payment-merchant-id': MERCHANT_ID,
-          'x-source-app': SOURCE_APP,
-        },
-      },
-    );
-    if (status === 401) return { ok: false, detail: 'UNAUTHORIZED — check NORTHFLOW_API_KEY' };
-    if (status === 403) return { ok: false, detail: 'FORBIDDEN — check merchant access grant and scopes' };
-    if (status === 404) return { ok: false, detail: 'Merchant not found — check NORTHFLOW_MERCHANT_ID' };
+  
+  await check('GET /version', async () => {
+    const { status, body } = await fetchJson(`${BASE_URL}/version`);
     if (status !== 200) return { ok: false, detail: `HTTP ${status}` };
     const b = body as Record<string, unknown>;
     if (hasSecretLeak(body)) return { ok: false, detail: 'SECURITY: secret-looking value in response' };
-    return { ok: true, detail: `merchant accessible` };
+    return { ok: true, detail: `v${b.version ?? '?'} phase=${b.phase ?? '?'}` };
   });
-
-  await check('Invalid key → 401 (auth guard working)', async () => {
-    const { status } = await fetchJson(
-      `${BASE_URL}/v1/merchants/${encodeURIComponent(MERCHANT_ID)}`,
-      {
-        headers: {
-          Authorization: 'Bearer nf.test.invalid.READINESS_CHECK_INVALID_KEY',
-          'x-payment-merchant-id': MERCHANT_ID,
+  
+  await check('GET /ready', async () => {
+    const headers: Record<string, string> = {};
+    if (READY_TOKEN) headers['x-nf-ready-token'] = READY_TOKEN;
+    const { status, body } = await fetchJson(`${BASE_URL}/ready`, { headers });
+    if (READY_TOKEN && status === 401) return { ok: false, detail: 'Token rejected — verify NORTHFLOW_READY_TOKEN' };
+    if (!READY_TOKEN && status === 401) return { ok: false, detail: '/ready is token-protected but NORTHFLOW_READY_TOKEN not set' };
+    if (status !== 200) return { ok: false, detail: `HTTP ${status}` };
+    const b = body as Record<string, unknown>;
+    if (!b?.ok) return { ok: false, detail: `ok=false: ${JSON.stringify(b)}` };
+    if (hasSecretLeak(body)) return { ok: false, detail: 'SECURITY: secret-looking value in response' };
+    const db = b.database as string;
+    if (db !== 'configured') return { ok: false, detail: `database=${db} — DATABASE_URL may not be set` };
+    return { ok: true, detail: `database=${db}` };
+  });
+  
+  await check('Dev routes absent in production', async () => {
+    const { status } = await fetchJson(`${BASE_URL}/v1/dev/fake-gateway/transactions/smoke-check/confirm`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+    // In production, dev routes should not exist (404). In dev/staging they might (200, 400, 401, 403).
+    // We don't fail this check — just report what we found.
+    const isProduction = status === 404;
+    return {
+      ok: true,
+      detail: isProduction
+        ? 'route absent (production-safe)'
+        : `route exists with status ${status} (dev/staging environment)`,
+    };
+  });
+  
+  if (!API_KEY) {
+    skip('Authenticated read (GET /v1/merchants/:id)', 'NORTHFLOW_API_KEY not set');
+  } else if (!MERCHANT_ID) {
+    skip('Authenticated read (GET /v1/merchants/:id)', 'NORTHFLOW_MERCHANT_ID not set');
+  } else {
+    await check('Authenticated read (GET /v1/merchants/:id)', async () => {
+      const { status, body } = await fetchJson(
+        `${BASE_URL}/v1/merchants/${encodeURIComponent(MERCHANT_ID)}`,
+        {
+          headers: {
+            Authorization: `Bearer ${API_KEY}`,
+            'x-payment-merchant-id': MERCHANT_ID,
+            'x-source-app': SOURCE_APP,
+          },
         },
-      },
-    );
-    if (status !== 401) return { ok: false, detail: `Expected 401, got ${status}` };
-    return { ok: true, detail: 'invalid key correctly rejected' };
-  });
-}
-
-// ── Summary ───────────────────────────────────────────────────────────────────
-console.log('');
-console.log('─────────────────────────────────────────────────────');
-console.log('S10.5 Readiness Summary');
-console.log('─────────────────────────────────────────────────────');
-
-const failed = results.filter(r => r.status === 'FAIL');
-const passed = results.filter(r => r.status === 'PASS');
-const skipped = results.filter(r => r.status === 'SKIP');
-
-for (const r of results) {
-  const icon = r.status === 'PASS' ? '✅' : r.status === 'FAIL' ? '❌' : '⏭ ';
-  console.log(`  ${icon} ${r.name.padEnd(45)} ${r.status}`);
-}
-
-console.log('─────────────────────────────────────────────────────');
-console.log(`  PASS: ${passed.length}  FAIL: ${failed.length}  SKIP: ${skipped.length}`);
-console.log('─────────────────────────────────────────────────────');
-
-if (failed.length > 0) {
-  console.log('');
-  console.log('FAILED checks:');
-  for (const r of failed) {
-    console.log(`  ❌ ${r.name}: ${r.detail ?? ''}`);
+      );
+      if (status === 401) return { ok: false, detail: 'UNAUTHORIZED — check NORTHFLOW_API_KEY' };
+      if (status === 403) return { ok: false, detail: 'FORBIDDEN — check merchant access grant and scopes' };
+      if (status === 404) return { ok: false, detail: 'Merchant not found — check NORTHFLOW_MERCHANT_ID' };
+      if (status !== 200) return { ok: false, detail: `HTTP ${status}` };
+      const b = body as Record<string, unknown>;
+      if (hasSecretLeak(body)) return { ok: false, detail: 'SECURITY: secret-looking value in response' };
+      return { ok: true, detail: `merchant accessible` };
+    });
+  
+    await check('Invalid key → 401 (auth guard working)', async () => {
+      const { status } = await fetchJson(
+        `${BASE_URL}/v1/merchants/${encodeURIComponent(MERCHANT_ID)}`,
+        {
+          headers: {
+            Authorization: 'Bearer nf.test.invalid.READINESS_CHECK_INVALID_KEY',
+            'x-payment-merchant-id': MERCHANT_ID,
+          },
+        },
+      );
+      if (status !== 401) return { ok: false, detail: `Expected 401, got ${status}` };
+      return { ok: true, detail: 'invalid key correctly rejected' };
+    });
   }
+  
+  // ── Summary ───────────────────────────────────────────────────────────────────
   console.log('');
-  process.exit(1);
-} else {
-  console.log('');
-  console.log('All readiness checks passed.');
-  console.log('');
-  process.exit(0);
-}
+  console.log('─────────────────────────────────────────────────────');
+  console.log('S10.5 Readiness Summary');
+  console.log('─────────────────────────────────────────────────────');
+  
+  const failed = results.filter(r => r.status === 'FAIL');
+  const passed = results.filter(r => r.status === 'PASS');
+  const skipped = results.filter(r => r.status === 'SKIP');
+  
+  for (const r of results) {
+    const icon = r.status === 'PASS' ? '✅' : r.status === 'FAIL' ? '❌' : '⏭ ';
+    console.log(`  ${icon} ${r.name.padEnd(45)} ${r.status}`);
+  }
+  
+  console.log('─────────────────────────────────────────────────────');
+  console.log(`  PASS: ${passed.length}  FAIL: ${failed.length}  SKIP: ${skipped.length}`);
+  console.log('─────────────────────────────────────────────────────');
+  
+  if (failed.length > 0) {
+    console.log('');
+    console.log('FAILED checks:');
+    for (const r of failed) {
+      console.log(`  ❌ ${r.name}: ${r.detail ?? ''}`);
+    }
+    console.log('');
+    process.exit(1);
+  } else {
+    console.log('');
+    console.log('All readiness checks passed.');
+    console.log('');
+    process.exit(0);
+  }
+})();
