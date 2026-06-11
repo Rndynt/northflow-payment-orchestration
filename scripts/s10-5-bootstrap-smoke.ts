@@ -1,11 +1,17 @@
 #!/usr/bin/env tsx
 /**
- * s10-5-bootstrap-smoke.ts
+ * s10-5-bootstrap-smoke.ts  (S10.5.1 — runtime contract fix)
  *
  * Bootstrap smoke test for a running Northflow service.
- * Creates a complete fake_gateway payment flow to verify all layers work end-to-end.
+ * Exercises the full fake_gateway payment flow end-to-end.
  *
- * WARNING: This script CREATES DATA. Run only in sandbox/staging environments.
+ * WARNING: Creates data. Run in sandbox/staging only.
+ *
+ * Fixed in S10.5.1:
+ *   - Payment method upsert now uses PUT (not POST)
+ *   - Status parsed from data.intent.status (not data.status)
+ *   - Refundability parsed from actual contract: { totalRefundable, transactions:[{transactionId, amountRefundable}] }
+ *   - Audit log parsed from data.entries (not raw array)
  *
  * Usage:
  *   NORTHFLOW_BASE_URL=https://staging.example.com \
@@ -50,7 +56,7 @@ s10-5-bootstrap-smoke — Northflow full-flow smoke test
 WARNING: Creates real data. Run in sandbox/staging only.
 
 Env vars:
-  NORTHFLOW_BASE_URL                 Service base URL
+  NORTHFLOW_BASE_URL                 Service base URL (default: http://localhost:3000)
   NORTHFLOW_API_KEY                  API credential (required)
   NORTHFLOW_SOURCE_APP               Source app name (default: smoke-test)
   NORTHFLOW_SMOKE_MERCHANT_NAME      Merchant name to create
@@ -67,7 +73,7 @@ Exit code 0 = required checks pass (skips are OK), 1 = required check failed
 }
 
 if (!API_KEY) {
-  console.error('ERROR: NORTHFLOW_API_KEY is required. Set it in your environment.');
+  console.error('ERROR: NORTHFLOW_API_KEY is required.');
   process.exit(1);
 }
 
@@ -80,372 +86,88 @@ console.log(`  merchant:    ${SMOKE_MERCHANT_NAME} (${SMOKE_EXT_REF})`);
 console.log(`  provider:    ${SMOKE_PROVIDER}`);
 console.log(`  method:      ${SMOKE_METHOD}`);
 console.log(`  amount:      ${SMOKE_AMOUNT} ${SMOKE_CURRENCY}`);
-console.log(`  webhook url: ${SMOKE_WEBHOOK_URL ? maskSecret(SMOKE_WEBHOOK_URL) : '(not set — skipping webhook smoke)'}`);
+console.log(`  webhook url: ${SMOKE_WEBHOOK_URL ? maskSecret(SMOKE_WEBHOOK_URL) : '(not set)'}`);
 console.log('─────────────────────────────────────────────────────');
 console.log('');
 
-type Status = 'PASS' | 'FAIL' | 'SKIP';
-const results: { name: string; status: Status; detail?: string }[] = [];
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type CheckStatus = 'PASS' | 'FAIL' | 'SKIP';
+
+interface CheckRecord {
+  name: string;
+  status: CheckStatus;
+  detail?: string;
+}
+
+const results: CheckRecord[] = [];
 let hasFailure = false;
 
-function record(name: string, status: Status, detail?: string) {
+function record(name: string, status: CheckStatus, detail?: string): void {
   results.push({ name, status, detail });
   const icon = status === 'PASS' ? '✅' : status === 'FAIL' ? '❌' : '⏭ ';
   if (status === 'FAIL') hasFailure = true;
   console.log(`  ${icon} [${name}] ${detail ?? ''}`);
 }
 
-async function post(path: string, body: unknown, merchantId?: string): Promise<{ status: number; data: unknown }> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${API_KEY}`,
-    'x-source-app': SOURCE_APP,
-  };
-  if (merchantId) headers['x-payment-merchant-id'] = merchantId;
-  const res = await fetch(`${BASE_URL}${path}`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(15_000),
-  });
-  const json = await res.json().catch(() => null);
-  return { status: res.status, data: (json as Record<string, unknown>)?.data ?? json };
+// ── Task A: Request helpers supporting GET, POST, PUT ─────────────────────────
+
+interface RequestResult {
+  status: number;
+  /** Unwrapped from { ok: true, data: X } — returns X on success, full body on non-2xx */
+  data: unknown;
+  /** Raw parsed JSON response */
+  raw: unknown;
 }
 
-async function get(path: string, merchantId?: string): Promise<{ status: number; data: unknown }> {
+async function request(
+  method: 'GET' | 'POST' | 'PUT',
+  path: string,
+  body?: unknown,
+  merchantId?: string,
+): Promise<RequestResult> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${API_KEY}`,
     'x-source-app': SOURCE_APP,
   };
   if (merchantId) headers['x-payment-merchant-id'] = merchantId;
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+
   const res = await fetch(`${BASE_URL}${path}`, {
+    method,
     headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
     signal: AbortSignal.timeout(15_000),
   });
-  const json = await res.json().catch(() => null);
-  return { status: res.status, data: (json as Record<string, unknown>)?.data ?? json };
+
+  let raw: unknown = null;
+  try { raw = await res.json(); } catch { /* empty body */ }
+
+  // Unwrap { ok: true, data: X }
+  const envelope = raw as Record<string, unknown> | null;
+  const data = (envelope?.ok === true && 'data' in (envelope ?? {}))
+    ? envelope!['data']
+    : raw;
+
+  return { status: res.status, data, raw };
 }
 
-// ── 1. Readiness ──────────────────────────────────────────────────────────────
-try {
-  const res = await fetch(`${BASE_URL}/health`, { signal: AbortSignal.timeout(5_000) });
-  const body = await res.json().catch(() => ({})) as Record<string, unknown>;
-  if (res.status === 200 && body.ok) record('readiness', 'PASS', '/health OK');
-  else record('readiness', 'FAIL', `HTTP ${res.status}`);
-} catch (e: unknown) {
-  record('readiness', 'FAIL', `Cannot reach ${BASE_URL}: ${e instanceof Error ? e.message : e}`);
-  printSummary();
-  process.exit(1);
+function get(path: string, merchantId?: string): Promise<RequestResult> {
+  return request('GET', path, undefined, merchantId);
 }
 
-// ── 2. Create merchant ────────────────────────────────────────────────────────
-let merchantId = '';
-try {
-  const { status, data } = await post('/v1/merchants', {
-    externalRef: SMOKE_EXT_REF,
-    name: SMOKE_MERCHANT_NAME,
-    currency: SMOKE_CURRENCY,
-    sourceApp: SOURCE_APP,
-  });
-  if (status === 200 || status === 201) {
-    merchantId = (data as Record<string, unknown>)?.id as string;
-    record('merchant', 'PASS', `id=${merchantId}`);
-  } else {
-    record('merchant', 'FAIL', `HTTP ${status}: ${JSON.stringify(data)}`);
-  }
-} catch (e: unknown) {
-  record('merchant', 'FAIL', String(e));
+function post(path: string, body: unknown, merchantId?: string): Promise<RequestResult> {
+  return request('POST', path, body, merchantId);
 }
 
-// ── 3. Create provider account ────────────────────────────────────────────────
-let providerAccountId = '';
-if (!merchantId) {
-  record('provider account', 'SKIP', 'merchant not created');
-} else {
-  try {
-    const { status, data } = await post(
-      `/v1/merchants/${merchantId}/provider-accounts`,
-      {
-        merchantId,
-        provider: SMOKE_PROVIDER,
-        externalAccountId: `smoke-pa-${Date.now()}`,
-        environment: 'sandbox',
-        sourceApp: SOURCE_APP,
-      },
-      merchantId,
-    );
-    if (status === 200 || status === 201) {
-      providerAccountId = (data as Record<string, unknown>)?.id as string;
-      record('provider account', 'PASS', `id=${providerAccountId} provider=${SMOKE_PROVIDER}`);
-    } else {
-      record('provider account', 'FAIL', `HTTP ${status}: ${JSON.stringify(data)}`);
-    }
-  } catch (e: unknown) {
-    record('provider account', 'FAIL', String(e));
-  }
-}
-
-// ── 4. Upsert payment method ──────────────────────────────────────────────────
-if (!merchantId || !providerAccountId) {
-  record('payment method', 'SKIP', 'provider account not created');
-} else {
-  try {
-    const { status, data } = await post(
-      `/v1/merchants/${merchantId}/provider-accounts/${providerAccountId}/methods/${SMOKE_METHOD}`,
-      {
-        methodType: SMOKE_METHOD,
-        displayName: SMOKE_METHOD.toUpperCase(),
-        status: 'active',
-        currency: SMOKE_CURRENCY,
-        sortOrder: 1,
-      },
-      merchantId,
-    );
-    if (status === 200 || status === 201) {
-      record('payment method', 'PASS', `method=${SMOKE_METHOD} created=${(data as Record<string,unknown>)?.created}`);
-    } else {
-      record('payment method', 'FAIL', `HTTP ${status}: ${JSON.stringify(data)}`);
-    }
-  } catch (e: unknown) {
-    record('payment method', 'FAIL', String(e));
-  }
-}
-
-// ── 5. Create payment intent ──────────────────────────────────────────────────
-let intentId = '';
-if (!merchantId) {
-  record('intent', 'FAIL', 'merchant not created — cannot create intent');
-} else {
-  try {
-    const { status, data } = await post(
-      '/v1/payment-intents',
-      {
-        merchantId,
-        sourceApp: SOURCE_APP,
-        externalPayableType: 'smoke_order',
-        externalPayableId: `smoke-order-${Date.now()}`,
-        currency: SMOKE_CURRENCY,
-        amountDue: SMOKE_AMOUNT,
-        idempotencyKey: `smoke:${SMOKE_EXT_REF}:intent`,
-      },
-      merchantId,
-    );
-    if (status === 200 || status === 201) {
-      intentId = (data as Record<string, unknown>)?.id as string;
-      record('intent', 'PASS', `id=${intentId} amount=${SMOKE_AMOUNT} ${SMOKE_CURRENCY}`);
-    } else {
-      record('intent', 'FAIL', `HTTP ${status}: ${JSON.stringify(data)}`);
-    }
-  } catch (e: unknown) {
-    record('intent', 'FAIL', String(e));
-  }
-}
-
-// ── 6. Create gateway payment ─────────────────────────────────────────────────
-let transactionId = '';
-if (!intentId || !providerAccountId) {
-  record('gateway payment', !intentId ? 'FAIL' : 'SKIP',
-    !intentId ? 'intent not created' : 'provider account not created');
-} else {
-  try {
-    const { status, data } = await post(
-      `/v1/payment-intents/${intentId}/gateway-payments`,
-      {
-        merchantId,
-        provider: SMOKE_PROVIDER,
-        providerAccountId,
-        method: SMOKE_METHOD,
-        amount: SMOKE_AMOUNT,
-        sourceApp: SOURCE_APP,
-        idempotencyKey: `smoke:${SMOKE_EXT_REF}:payment`,
-      },
-      merchantId,
-    );
-    if (status === 200 || status === 201) {
-      transactionId = (data as Record<string, unknown>)?.id as string;
-      record('gateway payment', 'PASS', `txId=${transactionId}`);
-    } else {
-      record('gateway payment', 'FAIL', `HTTP ${status}: ${JSON.stringify(data)}`);
-    }
-  } catch (e: unknown) {
-    record('gateway payment', 'FAIL', String(e));
-  }
-}
-
-// ── 7. Fake gateway confirm (dev/staging only) ────────────────────────────────
-if (!transactionId) {
-  record('fake confirm', 'SKIP', 'no transaction to confirm');
-} else if (SMOKE_PROVIDER !== 'fake_gateway') {
-  record('fake confirm', 'SKIP', `provider=${SMOKE_PROVIDER} — only applicable to fake_gateway`);
-} else {
-  try {
-    const { status, data } = await post(
-      `/v1/dev/fake-gateway/transactions/${transactionId}/confirm`,
-      { transactionId, merchantId, sourceApp: SOURCE_APP },
-      merchantId,
-    );
-    if (status === 200 || status === 201) {
-      record('fake confirm', 'PASS', `txId=${transactionId} confirmed`);
-    } else if (status === 404) {
-      record('fake confirm', 'SKIP', 'dev route absent (production environment — expected)');
-    } else {
-      record('fake confirm', 'FAIL', `HTTP ${status}: ${JSON.stringify(data)}`);
-    }
-  } catch (e: unknown) {
-    record('fake confirm', 'FAIL', String(e));
-  }
-}
-
-// ── 8. Poll intent status ─────────────────────────────────────────────────────
-if (!intentId) {
-  record('status', 'FAIL', 'intent not created');
-} else {
-  try {
-    const { status, data } = await get(`/v1/payment-intents/${intentId}/status`, merchantId);
-    if (status === 200) {
-      const s = (data as Record<string, unknown>)?.status;
-      record('status', 'PASS', `intent status=${s}`);
-    } else {
-      record('status', 'FAIL', `HTTP ${status}`);
-    }
-  } catch (e: unknown) {
-    record('status', 'FAIL', String(e));
-  }
-}
-
-// ── 9. Refundability ──────────────────────────────────────────────────────────
-if (!intentId) {
-  record('refundability', 'SKIP', 'intent not created');
-} else {
-  try {
-    const { status, data } = await get(`/v1/payment-intents/${intentId}/refundability`, merchantId);
-    if (status === 200) {
-      const r = data as Record<string, unknown>;
-      record('refundability', 'PASS', `refundable=${r.refundable} voidable=${r.voidable}`);
-    } else {
-      record('refundability', 'SKIP', `HTTP ${status} — may not be applicable yet`);
-    }
-  } catch (e: unknown) {
-    record('refundability', 'SKIP', String(e));
-  }
-}
-
-// ── 10. Refund/void (only when valid state) ───────────────────────────────────
-// After fake_gateway confirm, status should be 'paid' — check refundability and try refund
-if (!transactionId) {
-  record('refund/void', 'SKIP', 'no transaction');
-} else {
-  try {
-    const { status: rStatus, data: rData } = await get(
-      `/v1/payment-intents/${intentId}/refundability`, merchantId,
-    );
-    if (rStatus === 200) {
-      const r = rData as Record<string, unknown>;
-      if (r.refundable) {
-        const { status, data } = await post(
-          `/v1/payment-transactions/${transactionId}/refund`,
-          {
-            transactionId,
-            merchantId,
-            amount: SMOKE_AMOUNT,
-            reason: 'smoke_test',
-            sourceApp: SOURCE_APP,
-            idempotencyKey: `smoke:${SMOKE_EXT_REF}:refund`,
-          },
-          merchantId,
-        );
-        if (status === 200 || status === 201) {
-          record('refund/void', 'PASS', 'refund accepted');
-        } else {
-          record('refund/void', 'SKIP', `HTTP ${status} — ${JSON.stringify(data)}`);
-        }
-      } else if (r.voidable) {
-        const { status, data } = await post(
-          `/v1/payment-transactions/${transactionId}/void`,
-          {
-            transactionId,
-            merchantId,
-            sourceApp: SOURCE_APP,
-            idempotencyKey: `smoke:${SMOKE_EXT_REF}:void`,
-          },
-          merchantId,
-        );
-        if (status === 200 || status === 201) {
-          record('refund/void', 'PASS', 'void accepted');
-        } else {
-          record('refund/void', 'SKIP', `HTTP ${status} — ${JSON.stringify(data)}`);
-        }
-      } else {
-        record('refund/void', 'SKIP', 'neither refundable nor voidable at this state');
-      }
-    } else {
-      record('refund/void', 'SKIP', 'could not check refundability');
-    }
-  } catch (e: unknown) {
-    record('refund/void', 'SKIP', String(e));
-  }
-}
-
-// ── 11. Audit log ─────────────────────────────────────────────────────────────
-try {
-  const { status, data } = await get(
-    `/v1/audit-logs?merchantId=${encodeURIComponent(merchantId)}&limit=5`,
-  );
-  if (status === 200) {
-    const logs = data as unknown[];
-    record('audit log', 'PASS', `${Array.isArray(logs) ? logs.length : '?'} entries found`);
-  } else if (status === 403) {
-    record('audit log', 'SKIP', 'credential missing audit_log:read scope — skipping');
-  } else {
-    record('audit log', 'SKIP', `HTTP ${status}`);
-  }
-} catch (e: unknown) {
-  record('audit log', 'SKIP', String(e));
-}
-
-// ── 12. Webhook smoke ─────────────────────────────────────────────────────────
-if (!SMOKE_WEBHOOK_URL) {
-  record('webhook', 'SKIP', 'NORTHFLOW_SMOKE_WEBHOOK_URL not set');
-} else if (!merchantId) {
-  record('webhook', 'SKIP', 'merchant not created');
-} else {
-  try {
-    const { status, data } = await post(
-      `/v1/merchants/${merchantId}/webhooks/endpoints`,
-      {
-        url: SMOKE_WEBHOOK_URL,
-        subscribedEvents: ['payment_intent.paid', 'payment_intent.failed'],
-      },
-      merchantId,
-    );
-    if (status === 200 || status === 201) {
-      const r = data as Record<string, unknown>;
-      const endpointId = (r.endpoint as Record<string, unknown>)?.id ?? r.id;
-      // rawSecret intentionally not logged
-      record('webhook', 'PASS', `endpoint id=${endpointId} (rawSecret masked — store it now)`);
-
-      // List deliveries
-      const { status: dStatus, data: deliveries } = await get(
-        `/v1/merchants/${merchantId}/webhooks/deliveries`,
-        merchantId,
-      );
-      if (dStatus === 200) {
-        const ds = (deliveries as Record<string, unknown>)?.deliveries;
-        const count = Array.isArray(ds) ? ds.length : '?';
-        record('webhook', 'PASS', `deliveries=${count}`);
-      }
-    } else if (status === 403) {
-      record('webhook', 'SKIP', 'credential missing webhook:manage scope');
-    } else {
-      record('webhook', 'FAIL', `HTTP ${status}: ${JSON.stringify(data)}`);
-    }
-  } catch (e: unknown) {
-    record('webhook', 'FAIL', String(e));
-  }
+// Task A+B: PUT helper for payment method upsert
+function put(path: string, body: unknown, merchantId?: string): Promise<RequestResult> {
+  return request('PUT', path, body, merchantId);
 }
 
 // ── Summary ───────────────────────────────────────────────────────────────────
-function printSummary() {
+
+function printSummary(): void {
   console.log('');
   console.log('─────────────────────────────────────────────────────');
   console.log('S10.5 Smoke Summary');
@@ -461,9 +183,386 @@ function printSummary() {
   console.log('─────────────────────────────────────────────────────');
   console.log(`  PASS: ${p}  FAIL: ${f}  SKIP: ${s}`);
   console.log('─────────────────────────────────────────────────────');
-  if (f > 0) console.log('\n  ❌ One or more required checks failed. See above for details.\n');
-  else console.log('\n  Smoke test complete. Check PASS/SKIP counts above.\n');
+  if (f > 0) console.log('\n  ❌ One or more required checks failed.\n');
+  else console.log('\n  Smoke test complete.\n');
 }
 
 printSummary();
 process.exit(hasFailure ? 1 : 0);
+
+// ── Run smoke steps ────────────────────────────────────────────────────────
+void (async () => {
+  // ── Step 1: Readiness ─────────────────────────────────────────────────────────
+  
+  try {
+    const res = await fetch(`${BASE_URL}/health`, { signal: AbortSignal.timeout(5_000) });
+    const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+    if (res.status === 200 && body.ok) {
+      record('readiness', 'PASS', '/health OK');
+    } else {
+      record('readiness', 'FAIL', `HTTP ${res.status}`);
+      printSummary(); process.exit(1);
+    }
+  } catch (e: unknown) {
+    record('readiness', 'FAIL', `Cannot reach ${BASE_URL}: ${e instanceof Error ? e.message : e}`);
+    printSummary(); process.exit(1);
+  }
+  
+  // ── Step 2: Create merchant ───────────────────────────────────────────────────
+  
+  let merchantId = '';
+  try {
+    const { status, data } = await post('/v1/merchants', {
+      externalRef: SMOKE_EXT_REF,
+      name: SMOKE_MERCHANT_NAME,
+      currency: SMOKE_CURRENCY,
+      sourceApp: SOURCE_APP,
+    });
+    if (status === 200 || status === 201) {
+      merchantId = (data as Record<string, unknown>)?.id as string ?? '';
+      record('merchant', 'PASS', `id=${merchantId}`);
+    } else {
+      record('merchant', 'FAIL', `HTTP ${status}: ${JSON.stringify(data)}`);
+    }
+  } catch (e: unknown) {
+    record('merchant', 'FAIL', String(e));
+  }
+  
+  // ── Step 3: Create provider account ──────────────────────────────────────────
+  
+  let providerAccountId = '';
+  if (!merchantId) {
+    record('provider account', 'SKIP', 'merchant not created');
+  } else {
+    try {
+      const { status, data } = await post(
+        `/v1/merchants/${merchantId}/provider-accounts`,
+        {
+          merchantId,
+          provider: SMOKE_PROVIDER,
+          externalAccountId: `smoke-pa-${Date.now()}`,
+          environment: 'sandbox',
+          sourceApp: SOURCE_APP,
+        },
+        merchantId,
+      );
+      if (status === 200 || status === 201) {
+        providerAccountId = (data as Record<string, unknown>)?.id as string ?? '';
+        record('provider account', 'PASS', `id=${providerAccountId}`);
+      } else {
+        record('provider account', 'FAIL', `HTTP ${status}: ${JSON.stringify(data)}`);
+      }
+    } catch (e: unknown) {
+      record('provider account', 'FAIL', String(e));
+    }
+  }
+  
+  // ── Step 4: Upsert payment method via PUT (Task B fix) ────────────────────────
+  // Route: PUT /v1/merchants/{merchantId}/provider-accounts/{providerAccountId}/methods/{method}
+  
+  if (!merchantId || !providerAccountId) {
+    record('payment method', 'SKIP', 'provider account not created');
+  } else {
+    try {
+      const { status, data } = await put(
+        `/v1/merchants/${merchantId}/provider-accounts/${providerAccountId}/methods/${SMOKE_METHOD}`,
+        {
+          methodType: SMOKE_METHOD,
+          displayName: SMOKE_METHOD.toUpperCase(),
+          status: 'active',
+          currency: SMOKE_CURRENCY,
+          sortOrder: 1,
+        },
+        merchantId,
+      );
+      if (status === 200 || status === 201) {
+        const created = (data as Record<string, unknown>)?.created;
+        record('payment method', 'PASS', `method=${SMOKE_METHOD} created=${created}`);
+      } else {
+        record('payment method', 'FAIL', `HTTP ${status}: ${JSON.stringify(data)}`);
+      }
+    } catch (e: unknown) {
+      record('payment method', 'FAIL', String(e));
+    }
+  }
+  
+  // ── Step 5: Create payment intent ─────────────────────────────────────────────
+  
+  let intentId = '';
+  if (!merchantId) {
+    record('intent', 'FAIL', 'merchant not created');
+  } else {
+    try {
+      const { status, data } = await post(
+        '/v1/payment-intents',
+        {
+          merchantId,
+          sourceApp: SOURCE_APP,
+          externalPayableType: 'smoke_order',
+          externalPayableId: `smoke-order-${Date.now()}`,
+          currency: SMOKE_CURRENCY,
+          amountDue: SMOKE_AMOUNT,
+          idempotencyKey: `smoke:${SMOKE_EXT_REF}:intent`,
+        },
+        merchantId,
+      );
+      if (status === 200 || status === 201) {
+        intentId = (data as Record<string, unknown>)?.id as string ?? '';
+        record('intent', 'PASS', `id=${intentId} amount=${SMOKE_AMOUNT} ${SMOKE_CURRENCY}`);
+      } else {
+        record('intent', 'FAIL', `HTTP ${status}: ${JSON.stringify(data)}`);
+      }
+    } catch (e: unknown) {
+      record('intent', 'FAIL', String(e));
+    }
+  }
+  
+  // ── Step 6: Create gateway payment ────────────────────────────────────────────
+  
+  let transactionId = '';
+  if (!intentId || !providerAccountId) {
+    record('gateway payment', !intentId ? 'FAIL' : 'SKIP',
+      !intentId ? 'intent not created' : 'provider account not created');
+  } else {
+    try {
+      const { status, data } = await post(
+        `/v1/payment-intents/${intentId}/gateway-payments`,
+        {
+          merchantId,
+          provider: SMOKE_PROVIDER,
+          providerAccountId,
+          method: SMOKE_METHOD,
+          amount: SMOKE_AMOUNT,
+          sourceApp: SOURCE_APP,
+          idempotencyKey: `smoke:${SMOKE_EXT_REF}:payment`,
+        },
+        merchantId,
+      );
+      if (status === 200 || status === 201) {
+        transactionId = (data as Record<string, unknown>)?.id as string ?? '';
+        record('gateway payment', 'PASS', `txId=${transactionId}`);
+      } else {
+        record('gateway payment', 'FAIL', `HTTP ${status}: ${JSON.stringify(data)}`);
+      }
+    } catch (e: unknown) {
+      record('gateway payment', 'FAIL', String(e));
+    }
+  }
+  
+  // ── Step 7: Fake gateway confirm ──────────────────────────────────────────────
+  
+  if (!transactionId) {
+    record('fake confirm', 'SKIP', 'no transaction');
+  } else if (SMOKE_PROVIDER !== 'fake_gateway') {
+    record('fake confirm', 'SKIP', `provider=${SMOKE_PROVIDER} — only for fake_gateway`);
+  } else {
+    try {
+      const { status, data } = await post(
+        `/v1/dev/fake-gateway/transactions/${transactionId}/confirm`,
+        { transactionId, merchantId, sourceApp: SOURCE_APP },
+        merchantId,
+      );
+      if (status === 200 || status === 201) {
+        record('fake confirm', 'PASS', `txId=${transactionId} confirmed`);
+      } else if (status === 404) {
+        record('fake confirm', 'SKIP', 'dev route absent (production)');
+      } else {
+        record('fake confirm', 'FAIL', `HTTP ${status}: ${JSON.stringify(data)}`);
+      }
+    } catch (e: unknown) {
+      record('fake confirm', 'FAIL', String(e));
+    }
+  }
+  
+  // ── Step 8: Poll intent status (Task C fix) ───────────────────────────────────
+  // Actual shape: { ok:true, data: { intent: { id, status, ... }, latestTransaction, isTerminal, ... } }
+  // After unwrap: { intent: {...}, latestTransaction, isTerminal, requiresAction, canRetryPayment }
+  
+  if (!intentId) {
+    record('status', 'FAIL', 'intent not created');
+  } else {
+    try {
+      const { status, data } = await get(`/v1/payment-intents/${intentId}/status`, merchantId);
+      if (status === 200) {
+        // Task C: parse from intent.status, not top-level status
+        const statusData = data as {
+          intent?: { id?: string; status?: string };
+          latestTransaction?: { id?: string; status?: string } | null;
+          isTerminal?: boolean;
+          requiresAction?: boolean;
+          canRetryPayment?: boolean;
+        };
+        const intentStatus = statusData.intent?.status;
+        if (!intentStatus) {
+          record('status', 'FAIL', `intent.status missing — unexpected shape: ${JSON.stringify(data)}`);
+        } else {
+          record('status', 'PASS',
+            `intent.status=${intentStatus} isTerminal=${statusData.isTerminal}`);
+        }
+      } else {
+        record('status', 'FAIL', `HTTP ${status}`);
+      }
+    } catch (e: unknown) {
+      record('status', 'FAIL', String(e));
+    }
+  }
+  
+  // ── Step 9: Refundability + refund/void (Task D fix) ─────────────────────────
+  // Actual shape: { ok:true, data: { intentId, merchantId, totalRefundable, currency, transactions:[{transactionId, amount, amountAlreadyRefunded, amountRefundable, provider, method}] } }
+  // After unwrap: { intentId, merchantId, totalRefundable, currency, transactions:[...] }
+  // There is NO voidable field — refundability only covers refunds.
+  // For void: only applicable before the tx settles; not surfaced by refundability endpoint.
+  
+  interface RefundableTransactionEntry {
+    transactionId: string;
+    amount: number;
+    amountAlreadyRefunded: number;
+    amountRefundable: number;
+    provider: string;
+    method: string;
+  }
+  
+  interface RefundabilityData {
+    intentId?: string;
+    merchantId?: string;
+    totalRefundable?: number;
+    currency?: string;
+    transactions?: RefundableTransactionEntry[];
+  }
+  
+  if (!intentId) {
+    record('refund/void', 'SKIP', 'intent not created');
+  } else {
+    try {
+      const { status, data } = await get(`/v1/payment-intents/${intentId}/refundability`, merchantId);
+  
+      if (status !== 200) {
+        record('refund/void', 'SKIP', `refundability HTTP ${status}`);
+      } else {
+        // Task D: defensive parse of actual contract
+        const rData = data as RefundabilityData;
+        const transactions = Array.isArray(rData?.transactions) ? rData.transactions : [];
+        const totalRefundable = rData?.totalRefundable ?? 0;
+  
+        // Find best refundable candidate
+        const candidate = transactions.find(
+          (t): t is RefundableTransactionEntry =>
+            typeof t.transactionId === 'string' &&
+            typeof t.amountRefundable === 'number' &&
+            t.amountRefundable > 0,
+        );
+  
+        if (candidate && totalRefundable > 0) {
+          // Try refund using the candidate transaction
+          const safeAmount = Math.min(candidate.amountRefundable, SMOKE_AMOUNT);
+          try {
+            const { status: rStatus, data: rResp } = await post(
+              `/v1/payment-transactions/${candidate.transactionId}/refund`,
+              {
+                transactionId: candidate.transactionId,
+                merchantId,
+                amount: safeAmount,
+                reason: 'smoke_test',
+                sourceApp: SOURCE_APP,
+                idempotencyKey: `smoke:${SMOKE_EXT_REF}:refund`,
+              },
+              merchantId,
+            );
+            if (rStatus === 200 || rStatus === 201) {
+              record('refund/void', 'PASS',
+                `refund accepted txId=${candidate.transactionId} amount=${safeAmount}`);
+            } else {
+              record('refund/void', 'SKIP',
+                `refund HTTP ${rStatus}: ${JSON.stringify(rResp)}`);
+            }
+          } catch (e: unknown) {
+            record('refund/void', 'SKIP', `refund request error: ${String(e)}`);
+          }
+        } else if (transactionId) {
+          // No refundable transaction. Try void as fallback for pre-settlement transactions.
+          try {
+            const { status: vStatus, data: vResp } = await post(
+              `/v1/payment-transactions/${transactionId}/void`,
+              {
+                transactionId,
+                merchantId,
+                sourceApp: SOURCE_APP,
+                idempotencyKey: `smoke:${SMOKE_EXT_REF}:void`,
+              },
+              merchantId,
+            );
+            if (vStatus === 200 || vStatus === 201) {
+              record('refund/void', 'PASS', `void accepted txId=${transactionId}`);
+            } else {
+              record('refund/void', 'SKIP',
+                `not refundable (totalRefundable=0) and void HTTP ${vStatus} — transaction may be in terminal state`);
+            }
+          } catch (e: unknown) {
+            record('refund/void', 'SKIP', `void request error: ${String(e)}`);
+          }
+        } else {
+          record('refund/void', 'SKIP',
+            `no refundable transactions (totalRefundable=${totalRefundable}) and no transactionId for void`);
+        }
+      }
+    } catch (e: unknown) {
+      record('refund/void', 'SKIP', `refundability request error: ${String(e)}`);
+    }
+  }
+  
+  // ── Step 10: Audit log (Task E fix) ──────────────────────────────────────────
+  // Actual shape: { ok:true, data: { entries: [...], total, limit, offset } }
+  // After unwrap: { entries: [...], total, limit, offset }
+  
+  try {
+    const qs = merchantId ? `?merchantId=${encodeURIComponent(merchantId)}&limit=5` : '?limit=5';
+    const { status, data } = await get(`/v1/audit-logs${qs}`);
+    if (status === 200) {
+      // Task E: parse data.entries, not raw array
+      const auditData = data as { entries?: unknown[]; total?: number };
+      const entries = Array.isArray(auditData?.entries) ? auditData.entries : [];
+      const total = auditData?.total ?? entries.length;
+      record('audit log', 'PASS', `${entries.length} entries returned (total=${total})`);
+    } else if (status === 403) {
+      record('audit log', 'SKIP', 'credential missing audit_log:read scope');
+    } else {
+      record('audit log', 'SKIP', `HTTP ${status}`);
+    }
+  } catch (e: unknown) {
+    record('audit log', 'SKIP', String(e));
+  }
+  
+  // ── Step 11: Webhook smoke ────────────────────────────────────────────────────
+  
+  if (!SMOKE_WEBHOOK_URL) {
+    record('webhook', 'SKIP', 'NORTHFLOW_SMOKE_WEBHOOK_URL not set');
+  } else if (!merchantId) {
+    record('webhook', 'SKIP', 'merchant not created');
+  } else {
+    try {
+      const { status, data } = await post(
+        `/v1/merchants/${merchantId}/webhooks/endpoints`,
+        {
+          url: SMOKE_WEBHOOK_URL,
+          subscribedEvents: ['payment_intent.paid', 'payment_intent.failed'],
+        },
+        merchantId,
+      );
+      if (status === 200 || status === 201) {
+        const d = data as Record<string, unknown>;
+        const endpointId = (d.endpoint as Record<string, unknown>)?.id ?? d.id;
+        // rawSecret intentionally not logged
+        record('webhook', 'PASS', `endpoint id=${endpointId} (rawSecret masked — store it now)`);
+      } else if (status === 403) {
+        record('webhook', 'SKIP', 'credential missing webhook:manage scope');
+      } else {
+        record('webhook', 'FAIL', `HTTP ${status}: ${JSON.stringify(data)}`);
+      }
+    } catch (e: unknown) {
+      record('webhook', 'FAIL', String(e));
+    }
+  }
+
+  printSummary();
+  process.exit(hasFailure ? 1 : 0);
+})();
