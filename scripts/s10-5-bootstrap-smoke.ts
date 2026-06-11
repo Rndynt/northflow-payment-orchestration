@@ -1,43 +1,32 @@
 #!/usr/bin/env tsx
 /**
- * s10-5-bootstrap-smoke.ts  (S10.5.1 — runtime contract fix)
+ * s10-5-bootstrap-smoke.ts
  *
  * Bootstrap smoke test for a running Northflow service.
  * Exercises the full fake_gateway payment flow end-to-end.
  *
  * WARNING: Creates data. Run in sandbox/staging only.
  *
- * Fixes applied in S10.5.1:
- *   - Step 4 (payment method upsert): POST → PUT
- *   - Step 8 (status): parse from data.intent.status, not data.status
- *   - Step 9 (refundability): use actual contract { totalRefundable, transactions:[{transactionId, amountRefundable}] }
- *   - Step 10 (audit log): read data.entries, not raw array
- *   - Top-level await wrapped in async IIFE for CJS compatibility
- *
- * Usage:
- *   NORTHFLOW_BASE_URL=https://staging.example.com \
- *   NORTHFLOW_API_KEY=nf.staging.cred_xxx.<secret> \
- *   NORTHFLOW_SOURCE_APP=aura_pos \
- *   NORTHFLOW_SMOKE_MERCHANT_NAME="Smoke Test Merchant" \
- *   NORTHFLOW_SMOKE_EXTERNAL_REF="smoke_$(date +%s)" \
- *   NORTHFLOW_SMOKE_PROVIDER=fake_gateway \
- *   NORTHFLOW_SMOKE_METHOD=qris \
- *   NORTHFLOW_SMOKE_CURRENCY=IDR \
- *   NORTHFLOW_SMOKE_AMOUNT=10000 \
- *   pnpm s10:smoke
- *
- * Exit codes:
- *   0 — all required checks passed (skips are acceptable)
- *   1 — one or more required checks failed
+ * Runtime contract fixes:
+ *   - Payment method upsert uses PUT.
+ *   - Gateway payment transaction id is parsed from data.transaction.id.
+ *   - Status is parsed from data.intent.status.
+ *   - Refundability uses the actual { totalRefundable, transactions[] } contract.
+ *   - Audit log reads data.entries defensively.
+ *   - Wrapped in async IIFE for CJS compatibility.
  */
 
 const MASK = '***';
+
 function maskSecret(v: string | undefined): string {
   if (!v) return '(not set)';
   if (v.length <= 8) return MASK;
   return v.slice(0, 4) + MASK;
 }
-function env(k: string): string | undefined { return process.env[k]; }
+
+function env(k: string): string | undefined {
+  return process.env[k];
+}
 
 const BASE_URL = (env('NORTHFLOW_BASE_URL') ?? 'http://localhost:3000').replace(/\/$/, '');
 const API_KEY = env('NORTHFLOW_API_KEY') ?? '';
@@ -54,7 +43,7 @@ if (process.argv.includes('--help') || process.argv.includes('-h')) {
   console.log(`
 s10-5-bootstrap-smoke — Northflow full-flow smoke test
 
-WARNING: Creates real data. Run in sandbox/staging only.
+WARNING: Creates data. Run in sandbox/staging only.
 
 Env vars:
   NORTHFLOW_BASE_URL                 Service base URL (default: http://localhost:3000)
@@ -78,10 +67,9 @@ if (!API_KEY) {
   process.exit(1);
 }
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
 type CheckStatus = 'PASS' | 'FAIL' | 'SKIP';
 interface CheckRecord { name: string; status: CheckStatus; detail?: string; }
+interface RequestResult { status: number; data: unknown; raw: unknown; }
 
 const results: CheckRecord[] = [];
 let hasFailure = false;
@@ -92,10 +80,6 @@ function record(name: string, status: CheckStatus, detail?: string): void {
   if (status === 'FAIL') hasFailure = true;
   console.log(`  ${icon} [${name}] ${detail ?? ''}`);
 }
-
-// ── Task A: unified request helper supporting GET, POST, PUT ─────────────────
-
-interface RequestResult { status: number; data: unknown; }
 
 async function request(
   method: 'GET' | 'POST' | 'PUT',
@@ -118,29 +102,35 @@ async function request(
   });
 
   let raw: unknown = null;
-  try { raw = await res.json(); } catch { /* empty body */ }
+  try {
+    raw = await res.json();
+  } catch {
+    raw = null;
+  }
 
-  // Unwrap { ok: true, data: X } envelope
   const envelope = raw as Record<string, unknown> | null;
-  const data = (envelope?.ok === true && 'data' in (envelope ?? {}))
-    ? envelope!['data']
+  const data = envelope?.ok === true && 'data' in (envelope ?? {})
+    ? envelope['data']
     : raw;
 
-  return { status: res.status, data };
+  return { status: res.status, data, raw };
 }
 
 function get(path: string, merchantId?: string): Promise<RequestResult> {
   return request('GET', path, undefined, merchantId);
 }
+
 function post(path: string, body: unknown, merchantId?: string): Promise<RequestResult> {
   return request('POST', path, body, merchantId);
 }
-// Task B: PUT for payment method upsert
+
 function put(path: string, body: unknown, merchantId?: string): Promise<RequestResult> {
   return request('PUT', path, body, merchantId);
 }
 
-// ── Summary ───────────────────────────────────────────────────────────────────
+function extractId(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
 
 function printSummary(): void {
   console.log('');
@@ -161,10 +151,7 @@ function printSummary(): void {
   else console.log('\n  Smoke test complete.\n');
 }
 
-// ── Smoke steps (wrapped in async IIFE for CJS compatibility) ─────────────────
-
 void (async () => {
-
   console.log('S10.5 Bootstrap Smoke Test');
   console.log('─────────────────────────────────────────────────────');
   console.log(`  base URL:    ${BASE_URL}`);
@@ -178,7 +165,6 @@ void (async () => {
   console.log('─────────────────────────────────────────────────────');
   console.log('');
 
-  // ── Step 1: Readiness ───────────────────────────────────────────────────────
   try {
     const res = await fetch(`${BASE_URL}/health`, { signal: AbortSignal.timeout(5_000) });
     const body = await res.json().catch(() => ({})) as Record<string, unknown>;
@@ -186,14 +172,15 @@ void (async () => {
       record('readiness', 'PASS', '/health OK');
     } else {
       record('readiness', 'FAIL', `HTTP ${res.status}`);
-      printSummary(); process.exit(1);
+      printSummary();
+      process.exit(1);
     }
   } catch (e: unknown) {
     record('readiness', 'FAIL', `Cannot reach ${BASE_URL}: ${e instanceof Error ? e.message : e}`);
-    printSummary(); process.exit(1);
+    printSummary();
+    process.exit(1);
   }
 
-  // ── Step 2: Create merchant ─────────────────────────────────────────────────
   let merchantId = '';
   try {
     const { status, data } = await post('/v1/merchants', {
@@ -203,14 +190,16 @@ void (async () => {
       sourceApp: SOURCE_APP,
     });
     if (status === 200 || status === 201) {
-      merchantId = (data as Record<string, unknown>)?.id as string ?? '';
-      record('merchant', 'PASS', `id=${merchantId}`);
+      merchantId = extractId((data as Record<string, unknown>)?.id);
+      if (!merchantId) record('merchant', 'FAIL', `id missing from response: ${JSON.stringify(data)}`);
+      else record('merchant', 'PASS', `id=${merchantId}`);
     } else {
       record('merchant', 'FAIL', `HTTP ${status}: ${JSON.stringify(data)}`);
     }
-  } catch (e: unknown) { record('merchant', 'FAIL', String(e)); }
+  } catch (e: unknown) {
+    record('merchant', 'FAIL', String(e));
+  }
 
-  // ── Step 3: Create provider account ────────────────────────────────────────
   let providerAccountId = '';
   if (!merchantId) {
     record('provider account', 'SKIP', 'merchant not created');
@@ -218,27 +207,41 @@ void (async () => {
     try {
       const { status, data } = await post(
         `/v1/merchants/${merchantId}/provider-accounts`,
-        { merchantId, provider: SMOKE_PROVIDER, externalAccountId: `smoke-pa-${Date.now()}`, environment: 'sandbox', sourceApp: SOURCE_APP },
+        {
+          merchantId,
+          provider: SMOKE_PROVIDER,
+          providerAccountRef: `smoke-pa-${Date.now()}`,
+          environment: 'sandbox',
+          sourceApp: SOURCE_APP,
+        },
         merchantId,
       );
       if (status === 200 || status === 201) {
-        providerAccountId = (data as Record<string, unknown>)?.id as string ?? '';
-        record('provider account', 'PASS', `id=${providerAccountId}`);
+        providerAccountId = extractId((data as Record<string, unknown>)?.id);
+        if (!providerAccountId) record('provider account', 'FAIL', `id missing from response: ${JSON.stringify(data)}`);
+        else record('provider account', 'PASS', `id=${providerAccountId}`);
       } else {
         record('provider account', 'FAIL', `HTTP ${status}: ${JSON.stringify(data)}`);
       }
-    } catch (e: unknown) { record('provider account', 'FAIL', String(e)); }
+    } catch (e: unknown) {
+      record('provider account', 'FAIL', String(e));
+    }
   }
 
-  // ── Step 4: Upsert payment method via PUT (Task B fix) ──────────────────────
-  // Route: PUT /v1/merchants/{merchantId}/provider-accounts/{providerAccountId}/methods/{method}
+  // Payment method upsert must use PUT, not POST.
   if (!merchantId || !providerAccountId) {
     record('payment method', 'SKIP', 'provider account not created');
   } else {
     try {
       const { status, data } = await put(
         `/v1/merchants/${merchantId}/provider-accounts/${providerAccountId}/methods/${SMOKE_METHOD}`,
-        { methodType: SMOKE_METHOD, displayName: SMOKE_METHOD.toUpperCase(), status: 'active', currency: SMOKE_CURRENCY, sortOrder: 1 },
+        {
+          methodType: SMOKE_METHOD,
+          displayName: SMOKE_METHOD.toUpperCase(),
+          status: 'active',
+          currency: SMOKE_CURRENCY,
+          sortOrder: 1,
+        },
         merchantId,
       );
       if (status === 200 || status === 201) {
@@ -246,17 +249,19 @@ void (async () => {
       } else {
         record('payment method', 'FAIL', `HTTP ${status}: ${JSON.stringify(data)}`);
       }
-    } catch (e: unknown) { record('payment method', 'FAIL', String(e)); }
+    } catch (e: unknown) {
+      record('payment method', 'FAIL', String(e));
+    }
   }
 
-  // ── Step 5: Create payment intent ──────────────────────────────────────────
   let intentId = '';
   if (!merchantId) {
     record('intent', 'FAIL', 'merchant not created');
   } else {
     try {
       const { status, data } = await post('/v1/payment-intents', {
-        merchantId, sourceApp: SOURCE_APP,
+        merchantId,
+        sourceApp: SOURCE_APP,
         externalPayableType: 'smoke_order',
         externalPayableId: `smoke-order-${Date.now()}`,
         currency: SMOKE_CURRENCY,
@@ -264,36 +269,48 @@ void (async () => {
         idempotencyKey: `smoke:${SMOKE_EXT_REF}:intent`,
       }, merchantId);
       if (status === 200 || status === 201) {
-        intentId = (data as Record<string, unknown>)?.id as string ?? '';
-        record('intent', 'PASS', `id=${intentId}`);
+        intentId = extractId((data as Record<string, unknown>)?.id);
+        if (!intentId) record('intent', 'FAIL', `id missing from response: ${JSON.stringify(data)}`);
+        else record('intent', 'PASS', `id=${intentId}`);
       } else {
         record('intent', 'FAIL', `HTTP ${status}: ${JSON.stringify(data)}`);
       }
-    } catch (e: unknown) { record('intent', 'FAIL', String(e)); }
+    } catch (e: unknown) {
+      record('intent', 'FAIL', String(e));
+    }
   }
 
-  // ── Step 6: Create gateway payment ─────────────────────────────────────────
   let transactionId = '';
   if (!intentId || !providerAccountId) {
     record('gateway payment', !intentId ? 'FAIL' : 'SKIP', !intentId ? 'intent not created' : 'no provider account');
   } else {
     try {
       const { status, data } = await post(`/v1/payment-intents/${intentId}/gateway-payments`, {
-        merchantId, provider: SMOKE_PROVIDER, providerAccountId,
-        method: SMOKE_METHOD, amount: SMOKE_AMOUNT,
+        merchantId,
+        provider: SMOKE_PROVIDER,
+        providerAccountId,
+        method: SMOKE_METHOD,
+        amount: SMOKE_AMOUNT,
         sourceApp: SOURCE_APP,
         idempotencyKey: `smoke:${SMOKE_EXT_REF}:payment`,
       }, merchantId);
+
       if (status === 200 || status === 201) {
-        transactionId = (data as Record<string, unknown>)?.id as string ?? '';
-        record('gateway payment', 'PASS', `txId=${transactionId}`);
+        const gatewayPaymentData = data as { transaction?: { id?: string; status?: string }; intent?: { id?: string; status?: string } };
+        transactionId = extractId(gatewayPaymentData.transaction?.id);
+        if (!transactionId) {
+          record('gateway payment', 'FAIL', `transaction.id missing from response: ${JSON.stringify(data)}`);
+        } else {
+          record('gateway payment', 'PASS', `txId=${transactionId} txStatus=${gatewayPaymentData.transaction?.status ?? '?'}`);
+        }
       } else {
         record('gateway payment', 'FAIL', `HTTP ${status}: ${JSON.stringify(data)}`);
       }
-    } catch (e: unknown) { record('gateway payment', 'FAIL', String(e)); }
+    } catch (e: unknown) {
+      record('gateway payment', 'FAIL', String(e));
+    }
   }
 
-  // ── Step 7: Fake gateway confirm ────────────────────────────────────────────
   if (!transactionId) {
     record('fake confirm', 'SKIP', 'no transaction');
   } else if (SMOKE_PROVIDER !== 'fake_gateway') {
@@ -305,18 +322,14 @@ void (async () => {
         { transactionId, merchantId, sourceApp: SOURCE_APP },
         merchantId,
       );
-      if (status === 200 || status === 201) {
-        record('fake confirm', 'PASS', `txId=${transactionId} confirmed`);
-      } else if (status === 404) {
-        record('fake confirm', 'SKIP', 'dev route absent (production)');
-      } else {
-        record('fake confirm', 'FAIL', `HTTP ${status}: ${JSON.stringify(data)}`);
-      }
-    } catch (e: unknown) { record('fake confirm', 'FAIL', String(e)); }
+      if (status === 200 || status === 201) record('fake confirm', 'PASS', `txId=${transactionId} confirmed`);
+      else if (status === 404) record('fake confirm', 'SKIP', 'dev route absent (production)');
+      else record('fake confirm', 'FAIL', `HTTP ${status}: ${JSON.stringify(data)}`);
+    } catch (e: unknown) {
+      record('fake confirm', 'FAIL', String(e));
+    }
   }
 
-  // ── Step 8: Intent status (Task C fix) ─────────────────────────────────────
-  // Actual shape: { ok:true, data: { intent:{id,status,...}, latestTransaction, isTerminal, requiresAction, canRetryPayment } }
   if (!intentId) {
     record('status', 'FAIL', 'intent not created');
   } else {
@@ -325,6 +338,7 @@ void (async () => {
       if (status === 200) {
         const statusData = data as {
           intent?: { id?: string; status?: string };
+          latestTransaction?: { id?: string; status?: string } | null;
           isTerminal?: boolean;
           requiresAction?: boolean;
           canRetryPayment?: boolean;
@@ -333,17 +347,17 @@ void (async () => {
         if (!intentStatus) {
           record('status', 'FAIL', `intent.status missing — unexpected shape: ${JSON.stringify(data)}`);
         } else {
-          record('status', 'PASS', `intent.status=${intentStatus} isTerminal=${statusData.isTerminal}`);
+          const latest = statusData.latestTransaction;
+          const latestDetail = latest?.id ? ` latestTx=${latest.id}:${latest.status ?? '?'}` : '';
+          record('status', 'PASS', `intent.status=${intentStatus} isTerminal=${statusData.isTerminal} requiresAction=${statusData.requiresAction}${latestDetail}`);
         }
       } else {
         record('status', 'FAIL', `HTTP ${status}`);
       }
-    } catch (e: unknown) { record('status', 'FAIL', String(e)); }
+    } catch (e: unknown) {
+      record('status', 'FAIL', String(e));
+    }
   }
-
-  // ── Step 9: Refundability + refund/void (Task D fix) ────────────────────────
-  // Actual shape: { ok:true, data: { intentId, merchantId, totalRefundable, currency, transactions:[{transactionId, amount, amountAlreadyRefunded, amountRefundable, provider, method}] } }
-  // There is NO voidable field — void is attempted as fallback when nothing refundable.
 
   interface RefundableTx {
     transactionId: string;
@@ -365,45 +379,46 @@ void (async () => {
         const rData = data as { intentId?: string; totalRefundable?: number; currency?: string; transactions?: RefundableTx[] };
         const transactions = Array.isArray(rData?.transactions) ? rData.transactions : [];
         const totalRefundable = rData?.totalRefundable ?? 0;
-
         const candidate = transactions.find(t => typeof t.transactionId === 'string' && t.amountRefundable > 0);
 
         if (candidate && totalRefundable > 0) {
           const safeAmount = Math.min(candidate.amountRefundable, SMOKE_AMOUNT);
           try {
             const { status: rs, data: rd } = await post(`/v1/payment-transactions/${candidate.transactionId}/refund`, {
-              transactionId: candidate.transactionId, merchantId,
-              amount: safeAmount, reason: 'smoke_test', sourceApp: SOURCE_APP,
+              transactionId: candidate.transactionId,
+              merchantId,
+              amount: safeAmount,
+              reason: 'smoke_test',
+              sourceApp: SOURCE_APP,
               idempotencyKey: `smoke:${SMOKE_EXT_REF}:refund`,
             }, merchantId);
-            if (rs === 200 || rs === 201) {
-              record('refund/void', 'PASS', `refund accepted txId=${candidate.transactionId} amount=${safeAmount}`);
-            } else {
-              record('refund/void', 'SKIP', `refund HTTP ${rs}: ${JSON.stringify(rd)}`);
-            }
-          } catch (e: unknown) { record('refund/void', 'SKIP', `refund error: ${String(e)}`); }
+            if (rs === 200 || rs === 201) record('refund/void', 'PASS', `refund accepted txId=${candidate.transactionId} amount=${safeAmount}`);
+            else record('refund/void', 'SKIP', `refund HTTP ${rs}: ${JSON.stringify(rd)}`);
+          } catch (e: unknown) {
+            record('refund/void', 'SKIP', `refund error: ${String(e)}`);
+          }
         } else if (transactionId) {
-          // Void as fallback for pre-settlement transactions
           try {
             const { status: vs } = await post(`/v1/payment-transactions/${transactionId}/void`, {
-              transactionId, merchantId, sourceApp: SOURCE_APP,
+              transactionId,
+              merchantId,
+              sourceApp: SOURCE_APP,
               idempotencyKey: `smoke:${SMOKE_EXT_REF}:void`,
             }, merchantId);
-            if (vs === 200 || vs === 201) {
-              record('refund/void', 'PASS', `void accepted txId=${transactionId}`);
-            } else {
-              record('refund/void', 'SKIP', `not refundable (totalRefundable=${totalRefundable}) and void HTTP ${vs}`);
-            }
-          } catch (e: unknown) { record('refund/void', 'SKIP', `void error: ${String(e)}`); }
+            if (vs === 200 || vs === 201) record('refund/void', 'PASS', `void accepted txId=${transactionId}`);
+            else record('refund/void', 'SKIP', `not refundable (totalRefundable=${totalRefundable}) and void HTTP ${vs}`);
+          } catch (e: unknown) {
+            record('refund/void', 'SKIP', `void error: ${String(e)}`);
+          }
         } else {
           record('refund/void', 'SKIP', `no refundable transactions (totalRefundable=${totalRefundable})`);
         }
       }
-    } catch (e: unknown) { record('refund/void', 'SKIP', String(e)); }
+    } catch (e: unknown) {
+      record('refund/void', 'SKIP', String(e));
+    }
   }
 
-  // ── Step 10: Audit log (Task E fix) ────────────────────────────────────────
-  // Actual shape: { ok:true, data: { entries:[...], total, limit, offset } }
   try {
     const qs = merchantId ? `?merchantId=${encodeURIComponent(merchantId)}&limit=5` : '?limit=5';
     const { status, data } = await get(`/v1/audit-logs${qs}`);
@@ -416,9 +431,10 @@ void (async () => {
     } else {
       record('audit log', 'SKIP', `HTTP ${status}`);
     }
-  } catch (e: unknown) { record('audit log', 'SKIP', String(e)); }
+  } catch (e: unknown) {
+    record('audit log', 'SKIP', String(e));
+  }
 
-  // ── Step 11: Webhook smoke ──────────────────────────────────────────────────
   if (!SMOKE_WEBHOOK_URL) {
     record('webhook', 'SKIP', 'NORTHFLOW_SMOKE_WEBHOOK_URL not set');
   } else if (!merchantId) {
@@ -439,10 +455,11 @@ void (async () => {
       } else {
         record('webhook', 'FAIL', `HTTP ${status}: ${JSON.stringify(data)}`);
       }
-    } catch (e: unknown) { record('webhook', 'FAIL', String(e)); }
+    } catch (e: unknown) {
+      record('webhook', 'FAIL', String(e));
+    }
   }
 
   printSummary();
   process.exit(hasFailure ? 1 : 0);
-
 })();
