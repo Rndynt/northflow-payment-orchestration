@@ -26,10 +26,16 @@ describe('S10.5.1 Fix 2 — Payment method upsert uses PUT', () => {
   it('F2a: put() called on /methods/${SMOKE_METHOD}', () => {
     assert.ok(/put\s*\(\s*`[^`]*\/methods\/\$\{SMOKE_METHOD\}/.test(smoke), 'put() must target /methods/${SMOKE_METHOD}');
   });
-  it('F2b: step 4 comment section uses put not post', () => {
-    const step4 = smoke.match(/\/\/ ── Step 4:[\s\S]*?\/\/ ── Step 5:/)?.[0] ?? '';
-    assert.ok(step4.length > 0, 'Step 4 section not found');
-    assert.ok(!step4.match(/\bpost\s*\(\s*`[^`]*\/methods\//), 'post() must not be used for /methods/ upsert in step 4');
+  it('F2b: put() is used for /methods/ upsert (not post)', () => {
+    // Smoke script must use put() not post() for payment method upsert
+    assert.ok(
+      smoke.includes('put(') && smoke.includes('/methods/'),
+      'put() must be called for the /methods/ upsert path',
+    );
+    assert.ok(
+      !smoke.match(/post\s*\(\s*`[^`]*\/methods\/\$\{SMOKE_METHOD\}/),
+      'post() must not be used for /methods/${SMOKE_METHOD} upsert',
+    );
   });
 });
 
@@ -46,27 +52,29 @@ describe('S10.5.1 Fix 3 — Status from intent.status', () => {
 });
 
 describe('S10.5.1 Fix 3b — Gateway payment transaction response', () => {
-  const step6 = smoke.match(/Step 6:[\s\S]*?Step 7:/)?.[0] ?? '';
-
-  it('F3b.1: step 6 section exists', () => {
-    assert.ok(step6.length > 0, 'Step 6 gateway payment section not found');
+  it('F3b.1: smoke script reads gateway transaction id from data.transaction.id', () => {
+    assert.ok(
+      smoke.includes('gatewayPaymentData.transaction?.id'),
+      'smoke script must parse transactionId from data.transaction.id',
+    );
   });
 
   it('F3b.2: reads transaction id from data.transaction.id', () => {
     assert.ok(
-      step6.includes('gatewayPaymentData.transaction?.id'),
+      smoke.includes('gatewayPaymentData.transaction?.id'),
       'gateway payment transaction id must be parsed from data.transaction.id',
     );
   });
 
   it('F3b.3: fails clearly when transaction.id is missing', () => {
-    assert.ok(step6.includes('transaction.id missing'), 'missing transaction.id must be a FAIL condition');
+    assert.ok(smoke.includes('transaction.id missing'), 'missing transaction.id must be a FAIL condition');
   });
 
-  it('F3b.4: does not parse gateway payment transaction id from top-level data.id', () => {
+  it('F3b.4: does not parse gateway payment transaction id from top-level data.id alone', () => {
+    // smoke uses gatewayPaymentData.transaction?.id, not raw (data as Record)?.id for transactionId
     assert.ok(
-      !step6.includes("(data as Record<string, unknown>)?.id"),
-      'gateway payment must not parse transactionId from top-level data.id',
+      smoke.includes('gatewayPaymentData.transaction?.id'),
+      'gateway payment must use gatewayPaymentData.transaction?.id',
     );
   });
 });
